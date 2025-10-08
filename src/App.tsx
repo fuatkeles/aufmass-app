@@ -49,10 +49,16 @@ function App() {
   };
 
   const updateNestedData = (section: string, field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [section]: { ...prev[section as keyof FormData], [field]: value }
-    }));
+    setFormData(prev => {
+      const sectionData = prev[section as keyof FormData];
+      if (typeof sectionData === 'object' && sectionData !== null && !Array.isArray(sectionData)) {
+        return {
+          ...prev,
+          [section]: { ...sectionData, [field]: value }
+        };
+      }
+      return prev;
+    });
   };
 
   const steps = [

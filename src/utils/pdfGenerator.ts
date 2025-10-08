@@ -7,13 +7,6 @@ export const generatePDF = (formData: FormData) => {
   const margin = 20;
   let yPos = 20;
 
-  // Helper function to add text with word wrap
-  const addText = (text: string, x: number, y: number, maxWidth: number, fontSize: number = 10) => {
-    pdf.setFontSize(fontSize);
-    const lines = pdf.splitTextToSize(text, maxWidth);
-    pdf.text(lines, x, y);
-    return y + (lines.length * fontSize * 0.5);
-  };
 
   // Header - AYLUX Logo
   pdf.setFillColor(127, 169, 61);
