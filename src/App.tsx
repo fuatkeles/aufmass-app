@@ -1,90 +1,170 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
-import FormSection from './components/FormSection';
-import ProductSection from './components/ProductSection';
-import ExtrasSection from './components/ExtrasSection';
-import BeschattungSection from './components/BeschattungSection';
+import GrunddatenSection from './components/GrunddatenSection';
+import ProductSelectionSection from './components/ProductSelectionSection';
+import DynamicSpecificationForm from './components/DynamicSpecificationForm';
+import FinalSection from './components/FinalSection';
+import StepIcon from './components/StepIcon';
 import { FormData } from './types';
+import { DynamicFormData } from './types/productConfig';
 import { generatePDF } from './utils/pdfGenerator';
 
 function App() {
   const [formData, setFormData] = useState<FormData>({
+    datum: new Date().toISOString().split('T')[0],
     aufmasser: '',
     montageteam: '',
-    kunde: '',
-    datum: '',
-    anzahlStutzen: '',
-    hoheStutzen: '',
-    gestellfarbe: '',
-    eindeckung: '8mm',
-    produkte: [],
-    extras: {
-      statiktrager: '',
-      freistehend: '',
-      ledBeleuchtung: '',
-      fundament: '',
-      wasserablauf: [],
-      bauform: '',
-      stutzen: ''
+    kundeVorname: '',
+    kundeNachname: '',
+    kundenlokation: '',
+    productSelection: {
+      category: '',
+      productType: '',
+      model: ''
     },
-    beschattung: {
-      ancUnterglas: false,
-      ancAufglas: false,
-      capri: false,
-      markise: '',
-      breite: '',
-      tiefe: '',
-      volanTyp: '',
-      antrieb: '',
-      antriebsseite: ''
-    },
-    zeichnung: ''
+    specifications: {},
+    bilder: [],
+    bemerkungen: ''
   });
 
   const [currentStep, setCurrentStep] = useState(0);
 
-  const updateFormData = (field: string, value: any) => {
+  // Update grunddaten fields
+  const updateGrunddatenField = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const updateNestedData = (section: string, field: string, value: any) => {
-    setFormData(prev => {
-      const sectionData = prev[section as keyof FormData];
-      if (typeof sectionData === 'object' && sectionData !== null && !Array.isArray(sectionData)) {
-        return {
-          ...prev,
-          [section]: { ...sectionData, [field]: value }
-        };
+  // Update product selection
+  const updateProductSelection = (field: 'category' | 'productType' | 'model', value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      productSelection: {
+        ...prev.productSelection,
+        [field]: value
+      },
+      // Reset specifications when product changes
+      specifications: field === 'productType' || field === 'category' ? {} : prev.specifications
+    }));
+  };
+
+  // Update specification field
+  const updateSpecificationField = (fieldName: string, value: string | number | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      specifications: {
+        ...prev.specifications,
+        [fieldName]: value
       }
-      return prev;
-    });
+    }));
+  };
+
+  // Update bemerkungen
+  const updateBemerkungen = (value: string) => {
+    setFormData(prev => ({ ...prev, bemerkungen: value }));
   };
 
   const steps = [
-    { title: 'Grunddaten', component: FormSection },
-    { title: 'Produkte', component: ProductSection },
-    { title: 'Extras', component: ExtrasSection },
-    { title: 'Beschattung', component: BeschattungSection }
+    {
+      title: 'Grunddaten',
+      icon: '1',
+      component: GrunddatenSection,
+      canProceed: () => {
+        return formData.datum && formData.aufmasser && formData.montageteam &&
+               formData.kundeVorname && formData.kundeNachname;
+      }
+    },
+    {
+      title: 'Produktauswahl',
+      icon: '2',
+      component: ProductSelectionSection,
+      canProceed: () => {
+        return formData.productSelection.category &&
+               formData.productSelection.productType &&
+               formData.productSelection.model;
+      }
+    },
+    {
+      title: 'Spezifikationen',
+      icon: '3',
+      component: DynamicSpecificationForm,
+      canProceed: () => true // TODO: Add validation
+    },
+    {
+      title: 'Abschluss',
+      icon: '4',
+      component: FinalSection,
+      canProceed: () => true
+    }
   ];
 
-  const StepComponent = steps[currentStep].component;
+  const currentStepInfo = steps[currentStep];
 
   const nextStep = () => {
-    if (currentStep < steps.length - 1) {
+    if (currentStep < steps.length - 1 && currentStepInfo.canProceed()) {
       setCurrentStep(currentStep + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const prevStep = () => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   const handleExport = () => {
     generatePDF(formData);
   };
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 0:
+        return (
+          <GrunddatenSection
+            formData={{
+              datum: formData.datum,
+              aufmasser: formData.aufmasser,
+              montageteam: formData.montageteam,
+              kundeVorname: formData.kundeVorname,
+              kundeNachname: formData.kundeNachname,
+              kundenlokation: formData.kundenlokation
+            }}
+            updateField={updateGrunddatenField}
+          />
+        );
+      case 1:
+        return (
+          <ProductSelectionSection
+            selection={formData.productSelection}
+            updateSelection={updateProductSelection}
+          />
+        );
+      case 2:
+        return (
+          <DynamicSpecificationForm
+            category={formData.productSelection.category}
+            productType={formData.productSelection.productType}
+            model={formData.productSelection.model}
+            formData={formData.specifications}
+            updateField={updateSpecificationField}
+          />
+        );
+      case 3:
+        return (
+          <FinalSection
+            bemerkungen={formData.bemerkungen}
+            updateBemerkungen={updateBemerkungen}
+            onExport={handleExport}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  const canProceed = currentStepInfo.canProceed();
 
   return (
     <div className="app-container">
@@ -111,6 +191,7 @@ function App() {
         </div>
       </header>
 
+      {/* Progress indicator */}
       <div className="progress-container">
         <div className="progress-steps">
           {steps.map((step, index) => (
@@ -120,8 +201,16 @@ function App() {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3, delay: index * 0.1 }}
+              onClick={() => {
+                if (index < currentStep) {
+                  setCurrentStep(index);
+                }
+              }}
+              style={{ cursor: index < currentStep ? 'pointer' : 'default' }}
             >
-              <div className="step-number">{index + 1}</div>
+              <div className="step-number">
+                <StepIcon step={index + 1} />
+              </div>
               <div className="step-title">{step.title}</div>
             </motion.div>
           ))}
@@ -146,11 +235,7 @@ function App() {
             transition={{ duration: 0.4 }}
             className="form-wrapper"
           >
-            <StepComponent
-              formData={formData}
-              updateFormData={updateFormData}
-              updateNestedData={updateNestedData}
-            />
+            {renderStepContent()}
           </motion.div>
         </AnimatePresence>
 
@@ -165,21 +250,13 @@ function App() {
             ← Zurück
           </motion.button>
 
-          {currentStep === steps.length - 1 ? (
+          {currentStep < steps.length - 1 && (
             <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="btn btn-export"
-              onClick={handleExport}
-            >
-              PDF Exportieren
-            </motion.button>
-          ) : (
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="btn btn-primary"
+              whileHover={canProceed ? { scale: 1.05 } : {}}
+              whileTap={canProceed ? { scale: 0.95 } : {}}
+              className={`btn btn-primary ${!canProceed ? 'disabled' : ''}`}
               onClick={nextStep}
+              disabled={!canProceed}
             >
               Weiter →
             </motion.button>

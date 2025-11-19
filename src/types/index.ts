@@ -1,18 +1,26 @@
+import { ProductSelection, DynamicFormData } from './productConfig';
+
 export interface FormData {
+  // Grunddaten (Common data for all products)
+  datum: string;
   aufmasser: string;
   montageteam: string;
-  kunde: string;
-  datum: string;
-  anzahlStutzen: string;
-  hoheStutzen: string;
-  gestellfarbe: string;
-  eindeckung: string;
-  produkte: string[];
-  extras: ExtrasData;
-  beschattung: BeschattungData;
-  zeichnung: string;
+  kundeVorname: string;
+  kundeNachname: string;
+  kundenlokation: string;
+
+  // Product Selection
+  productSelection: ProductSelection;
+
+  // Dynamic product-specific fields
+  specifications: DynamicFormData;
+
+  // Additional data
+  bilder: string[]; // Image URLs or base64
+  bemerkungen: string; // Notes/remarks
 }
 
+// Legacy interfaces (keeping for backward compatibility during migration)
 export interface ExtrasData {
   statiktrager: string;
   freistehend: string;

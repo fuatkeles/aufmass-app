@@ -1,12 +1,26 @@
 import { jsPDF } from 'jspdf';
 import { FormData } from '../types';
+import productConfigData from '../config/productConfig.json';
+import type { ProductConfig, FieldConfig } from '../types/productConfig';
+
+const productConfig = productConfigData as ProductConfig;
 
 export const generatePDF = (formData: FormData) => {
   const pdf = new jsPDF();
   const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 20;
   let yPos = 20;
 
+  // Helper function to check if new page is needed
+  const checkNewPage = (requiredSpace: number = 15) => {
+    if (yPos + requiredSpace > pageHeight - 20) {
+      pdf.addPage();
+      yPos = 20;
+      return true;
+    }
+    return false;
+  };
 
   // Header - AYLUX Logo
   pdf.setFillColor(127, 169, 61);
@@ -24,202 +38,171 @@ export const generatePDF = (formData: FormData) => {
   pdf.setFont('helvetica', 'bold');
   pdf.text('AUFMASS - DATENBLATT', margin, 25);
 
-  yPos = 40;
+  yPos = 45;
 
-  // Basic Information
+  // ============ GRUNDDATEN ============
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('Grunddaten', margin, yPos);
-  yPos += 8;
+  pdf.setFillColor(127, 169, 61);
+  pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+  pdf.setTextColor(255, 255, 255);
+  pdf.text('GRUNDDATEN', margin + 2, yPos);
+  yPos += 10;
 
+  pdf.setTextColor(0, 0, 0);
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
 
-  const basicInfo = [
+  const grunddaten = [
+    ['Datum:', formData.datum || '-'],
     ['Aufmasser / Berater:', formData.aufmasser || '-'],
     ['Montageteam:', formData.montageteam || '-'],
-    ['Kunde:', formData.kunde || '-'],
-    ['Datum:', formData.datum || '-'],
+    ['Kunde:', `${formData.kundeVorname || ''} ${formData.kundeNachname || ''}`.trim() || '-'],
+    ['Kundenlokation:', formData.kundenlokation || '-'],
   ];
 
-  basicInfo.forEach(([label, value]) => {
+  grunddaten.forEach(([label, value]) => {
+    checkNewPage();
     pdf.setFont('helvetica', 'bold');
-    pdf.text(label, margin, yPos);
+    pdf.text(label, margin + 2, yPos);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(value, margin + 50, yPos);
-    yPos += 6;
+    const lines = pdf.splitTextToSize(value, pageWidth - margin - 60);
+    pdf.text(lines, margin + 52, yPos);
+    yPos += 6 * lines.length;
   });
 
-  yPos += 5;
+  yPos += 8;
 
-  // Dimensions
-  pdf.setFontSize(12);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Abmessungen', margin, yPos);
-  yPos += 7;
-
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'normal');
-
-  const dimensions = [
-    ['Anzahl Stützen:', formData.anzahlStutzen || '-'],
-    ['Höhe Stützen:', formData.hoheStutzen ? `${formData.hoheStutzen} cm` : '-'],
-    ['Gestellfarbe:', formData.gestellfarbe || '-'],
-  ];
-
-  dimensions.forEach(([label, value]) => {
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(label, margin, yPos);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(value, margin + 50, yPos);
-    yPos += 6;
-  });
-
-  yPos += 5;
-
-  // Eindeckung
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Eindeckung:', margin, yPos);
-  pdf.setFont('helvetica', 'normal');
-  const eindeckungMap: { [key: string]: string } = {
-    '8mm': '8mm VSG (klar / milchig)',
-    '10mm': '10mm VSG (klar / milchig)',
-    '16mm': '16mm PCS (klar / milchig)'
-  };
-  pdf.text(eindeckungMap[formData.eindeckung] || formData.eindeckung || '-', margin + 50, yPos);
-  yPos += 10;
-
-  // Products
-  if (yPos > 250) {
-    pdf.addPage();
-    yPos = 20;
-  }
-
+  // ============ PRODUKTAUSWAHL ============
+  checkNewPage(25);
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('Produkte', margin, yPos);
-  yPos += 7;
-
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'normal');
-  if (formData.produkte && formData.produkte.length > 0) {
-    const productNames: { [key: string]: string } = {
-      'trendline': 'Trendline',
-      'topline': 'Topline',
-      'designline': 'Designline',
-      'ultraline': 'Ultraline',
-      'm-integrale': 'M. Integrale',
-      'm-integrale-z': 'M. Integrale Z',
-      'm-vetro': 'M. Vetro',
-      'm-puro': 'M. Puro',
-      'sqope': 'Sqope',
-      'lamellendach': 'Lamellendach',
-      'premiumline': 'Premiumline',
-      'pergola': 'Pergola'
-    };
-    formData.produkte.forEach((product) => {
-      pdf.text(`• ${productNames[product] || product}`, margin + 5, yPos);
-      yPos += 5;
-    });
-  } else {
-    pdf.text('Keine Produkte ausgewählt', margin + 5, yPos);
-    yPos += 5;
-  }
-
-  yPos += 5;
-
-  // Extras
-  if (yPos > 240) {
-    pdf.addPage();
-    yPos = 20;
-  }
-
-  pdf.setFontSize(14);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Extras', margin, yPos);
-  yPos += 7;
-
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'normal');
-
-  const extras = [
-    ['Statikträger:', formData.extras.statiktrager ? (formData.extras.statiktrager === 'ja' ? 'Ja' : 'Nein') : '-'],
-    ['Freistehend:', formData.extras.freistehend ? (formData.extras.freistehend === 'ja' ? 'Ja' : 'Nein') : '-'],
-    ['LED-Beleuchtung:', formData.extras.ledBeleuchtung || '-'],
-    ['Fundament:', formData.extras.fundament || '-'],
-    ['Wasserablauf:', formData.extras.wasserablauf?.join(', ') || '-'],
-    ['Bauform:', formData.extras.bauform || '-'],
-    ['Stützen:', formData.extras.stutzen || '-'],
-  ];
-
-  extras.forEach(([label, value]) => {
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(label, margin, yPos);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(value, margin + 50, yPos);
-    yPos += 6;
-  });
-
+  pdf.setFillColor(127, 169, 61);
+  pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+  pdf.setTextColor(255, 255, 255);
+  pdf.text('PRODUKTAUSWAHL', margin + 2, yPos);
   yPos += 10;
 
-  // Beschattung
-  if (yPos > 230) {
-    pdf.addPage();
-    yPos = 20;
-  }
-
-  pdf.setFontSize(14);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Beschattung', margin, yPos);
-  yPos += 7;
-
+  pdf.setTextColor(0, 0, 0);
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
 
-  const beschattungTypes = [];
-  if (formData.beschattung.ancUnterglas) beschattungTypes.push('Anc. Unterglas');
-  if (formData.beschattung.ancAufglas) beschattungTypes.push('Anc. Aufglas');
-  if (formData.beschattung.capri) beschattungTypes.push('Capri');
-
-  const beschattung = [
-    ['Typ:', beschattungTypes.join(', ') || '-'],
-    ['Markise:', formData.beschattung.markise || '-'],
-    ['Breite:', formData.beschattung.breite || '-'],
-    ['Tiefe:', formData.beschattung.tiefe || '-'],
-    ['Volan Typ:', formData.beschattung.volanTyp ? (formData.beschattung.volanTyp === 'f-motor' ? 'F-Motor mit Handsender' : 'E-Motor') : '-'],
-    ['Antrieb:', formData.beschattung.antrieb || '-'],
-    ['Antriebsseite:', formData.beschattung.antriebsseite || '-'],
+  const produktauswahl = [
+    ['Kategorie:', formData.productSelection.category || '-'],
+    ['Produkttyp:', formData.productSelection.productType || '-'],
+    ['Modell:', formData.productSelection.model || '-'],
   ];
 
-  beschattung.forEach(([label, value]) => {
+  produktauswahl.forEach(([label, value]) => {
+    checkNewPage();
     pdf.setFont('helvetica', 'bold');
-    pdf.text(label, margin, yPos);
+    pdf.text(label, margin + 2, yPos);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(value, margin + 50, yPos);
-    yPos += 6;
+    const lines = pdf.splitTextToSize(value, pageWidth - margin - 60);
+    pdf.text(lines, margin + 52, yPos);
+    yPos += 6 * lines.length;
   });
 
-  yPos += 10;
+  yPos += 8;
 
-  // Zeichnung & Bemerkung
-  if (formData.zeichnung) {
-    if (yPos > 220) {
-      pdf.addPage();
-      yPos = 20;
+  // ============ SPEZIFIKATIONEN ============
+  if (formData.productSelection.category && formData.productSelection.productType) {
+    const fields = productConfig[formData.productSelection.category]?.[formData.productSelection.productType]?.fields || [];
+
+    if (fields.length > 0 && Object.keys(formData.specifications).length > 0) {
+      checkNewPage(25);
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFillColor(127, 169, 61);
+      pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('SPEZIFIKATIONEN', margin + 2, yPos);
+      yPos += 10;
+
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+
+      fields.forEach((field: FieldConfig) => {
+        const value = formData.specifications[field.name];
+
+        if (value !== undefined && value !== null && value !== '') {
+          checkNewPage();
+
+          let displayValue = '';
+
+          if (typeof value === 'boolean') {
+            displayValue = value ? 'Ja' : 'Nein';
+          } else if (typeof value === 'number') {
+            displayValue = field.unit ? `${value} ${field.unit}` : String(value);
+          } else if (Array.isArray(value)) {
+            displayValue = value.join(', ');
+          } else {
+            displayValue = String(value);
+          }
+
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(`${field.label}:`, margin + 2, yPos);
+          pdf.setFont('helvetica', 'normal');
+
+          const lines = pdf.splitTextToSize(displayValue, pageWidth - margin - 60);
+          pdf.text(lines, margin + 52, yPos);
+          yPos += 6 * lines.length;
+        }
+      });
+
+      yPos += 8;
     }
+  }
 
-    pdf.setFontSize(12);
+  // ============ BEMERKUNGEN ============
+  if (formData.bemerkungen && formData.bemerkungen.trim()) {
+    checkNewPage(25);
+    pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('Zeichnung & Bemerkung', margin, yPos);
-    yPos += 7;
+    pdf.setFillColor(127, 169, 61);
+    pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text('BEMERKUNGEN', margin + 2, yPos);
+    yPos += 10;
 
+    pdf.setTextColor(0, 0, 0);
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
-    const lines = pdf.splitTextToSize(formData.zeichnung, pageWidth - 2 * margin);
-    pdf.text(lines, margin, yPos);
+
+    const lines = pdf.splitTextToSize(formData.bemerkungen, pageWidth - 2 * margin - 4);
+
+    lines.forEach((line: string) => {
+      checkNewPage();
+      pdf.text(line, margin + 2, yPos);
+      yPos += 6;
+    });
+  }
+
+  // Footer
+  const pageCount = (pdf as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    pdf.setPage(i);
+    pdf.setFontSize(8);
+    pdf.setTextColor(128, 128, 128);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(
+      `Seite ${i} von ${pageCount}`,
+      pageWidth / 2,
+      pageHeight - 10,
+      { align: 'center' }
+    );
+    pdf.text(
+      `Erstellt am: ${new Date().toLocaleDateString('de-DE')}`,
+      margin,
+      pageHeight - 10
+    );
   }
 
   // Save PDF
-  const fileName = `Aufmass_${formData.kunde || 'Kunde'}_${formData.datum || new Date().toISOString().split('T')[0]}.pdf`;
+  const customerName = `${formData.kundeVorname || ''}_${formData.kundeNachname || ''}`.trim().replace(/\s+/g, '_') || 'Kunde';
+  const date = formData.datum || new Date().toISOString().split('T')[0];
+  const fileName = `Aufmass_${customerName}_${date}.pdf`;
+
   pdf.save(fileName);
 };

@@ -127,50 +127,69 @@ body {
 }
 
 .step-number {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: var(--surface-light);
-  border: 3px solid var(--border-color);
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 3px solid #dee2e6;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 1.25rem;
-  color: var(--text-secondary);
+  font-size: 1.5rem;
+  color: #495057;
   transition: all 0.3s ease;
   z-index: 2;
   position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.step-number svg {
+  color: #495057;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
 .progress-step.active .step-number {
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
   border-color: var(--primary-light);
   color: white;
-  box-shadow: 0 0 20px rgba(127, 169, 61, 0.4);
-  transform: scale(1.1);
+  box-shadow: 0 8px 24px rgba(127, 169, 61, 0.6);
+  transform: scale(1.15);
+}
+
+.progress-step.active .step-number svg {
+  color: white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 .progress-step.completed .step-number {
-  background: var(--success-color);
-  border-color: var(--success-color);
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  border-color: #4CAF50;
   color: white;
+  box-shadow: 0 4px 16px rgba(76, 175, 80, 0.4);
+}
+
+.progress-step.completed .step-number svg {
+  color: white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
 
 .step-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: #F5F5F5;
   transition: color 0.3s ease;
   text-align: center;
 }
 
 .progress-step.active .step-title {
-  color: var(--primary-light);
+  color: #99BD5A;
+  font-weight: 700;
 }
 
 .progress-step.completed .step-title {
-  color: var(--success-color);
+  color: #81C784;
+  font-weight: 700;
 }
 
 .progress-bar {
@@ -272,6 +291,14 @@ body {
   opacity: 0.4;
   cursor: not-allowed;
   transform: none;
+}
+
+.btn-primary.disabled,
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 4px 15px rgba(127, 169, 61, 0.2);
 }
 
 .btn-export {

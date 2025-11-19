@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm run dev:*)",
+      "Bash(dir \"C:\\Users\\fuatk\\OneDrive\\Masaüstü\" /b)",
+      "Bash(findstr:*)",
+      "Bash(npm install:*)",
+      "Bash(node parse-excel.js:*)",
+      "Bash(node:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

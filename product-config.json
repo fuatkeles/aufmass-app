@@ -1,0 +1,382 @@
+{
+  "ÜBERDACHUNG": [
+    {
+      "name": "Glasdach",
+      "fields": {
+        "Title": "Glasdach",
+        "Überdachung": true,
+        "Markisenbreite": true
+      }
+    },
+    {
+      "name": "Lamellendach",
+      "fields": {
+        "Title": "Lamellendach",
+        "Überdachung": true,
+        "Markisenbreite": true
+      }
+    },
+    {
+      "name": "Pergola",
+      "fields": {
+        "Title": "Pergola",
+        "Überdachung": true,
+        "Markisenbreite": true
+      }
+    },
+    {
+      "name": "Vordach",
+      "fields": {
+        "Title": "Vordach",
+        "Überdachung": true,
+        "Markisenbreite": true
+      }
+    },
+    {
+      "name": "Modell Glasdach",
+      "fields": {
+        "Title": "Modell Glasdach",
+        "Glasdach": true,
+        "Modell": [
+          "Premiumline",
+          "Orangeline    Trendline",
+          "Topline                                                           Designline                      Ultraline                            Skyline                          Murano Puro               Murano Int. Zip"
+        ],
+        "Breite": true,
+        "Tiefe": true,
+        "Oberkante": true,
+        "Unterkante": true,
+        "Anzahl Stützen": true,
+        "Höhe Stützen": true,
+        "Gestellfarbe": true,
+        "Überstand": true,
+        "Befestingugnsart": "Wand             Decke               Freistehend         Untenbalkon ",
+        "Êindeckung": "8 MM KLAR                      8 MM MILCH         10MM KLAR          10MM MILCH         16MM PCS KLAR         16MM PCS MILCH",
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Statikträger": "Für Übestand  Für Decke     Wand Extra",
+        "Freistehend (JA/NEIN)": "JA                         NEIN",
+        "LED Belechtung": "6 Stück            9 Stück         12 Stück",
+        "Fundament": "Aylux / Kunde",
+        "Wasserablauf (Links/Rechts)": "Links                Rechts",
+        "Bauform": "BUNDIG                  EINGERUCKT LINKS 50 CM  EINGERUCKT RECHTS 50 CM",
+        "Stützen": "2                           3                          4                             5",
+        "Markisenbreite": true
+      }
+    },
+    {
+      "name": "Modell Lammel",
+      "fields": {
+        "Title": "Modell Lammel",
+        "Lamellendach": true,
+        "Modell": "X Roof                          Tarasola Essential                         Tarasole Technik         Tarasola Puro                      Brustor                        ",
+        "Breite": true,
+        "Tiefe": true,
+        "Oberkante": true,
+        "Unterkante": true,
+        "Anzahl Stützen": true,
+        "Höhe Stützen": true,
+        "Gestellfarbe": true,
+        "Überstand": true,
+        "Befestingugnsart": "Wand             Decke               Freistehend         Untenbalkon ",
+        "Êindeckung": true,
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Statikträger": "Für Übestand  Für Decke     Wand Extra",
+        "Freistehend (JA/NEIN)": "JA                         NEIN",
+        "LED Belechtung": "6 Stück            9 Stück         12 Stück",
+        "Fundament": "Aylux / Kunde",
+        "Wasserablauf (Links/Rechts)": "Links                Rechts",
+        "Bauform": "BUNDIG                  EINGERUCKT LINKS 50 CM  EINGERUCKT RECHTS 50 CM",
+        "Stützen": "2                           3                          4                             5",
+        "Antriebsseite": true,
+        "Bemerkungen": true
+      }
+    },
+    {
+      "name": "Model Pergola",
+      "fields": {
+        "Title": "Model Pergola",
+        "Pergola": true,
+        "Modell": "Flat 125                       Flat 135                            Pergola Markise              ",
+        "Breite": true,
+        "Tiefe": true,
+        "Oberkante": true,
+        "Unterkante": true,
+        "Anzahl Stützen": true,
+        "Höhe Stützen": true,
+        "Gestellfarbe": true,
+        "Befestingugnsart": "Wand             Decke               Freistehend         Untenbalkon ",
+        "Êindeckung": true,
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Statikträger": "Für Übestand  Für Decke     Wand Extra",
+        "Freistehend (JA/NEIN)": "JA                         NEIN",
+        "LED Belechtung": "6 Stück            9 Stück         12 Stück",
+        "Fundament": "Aylux / Kunde",
+        "Wasserablauf (Links/Rechts)": "Links                Rechts",
+        "Bauform": "BUNDIG                  EINGERUCKT LINKS 50 CM  EINGERUCKT RECHTS 50 CM",
+        "Stützen": "2                           3                          4                             5",
+        "Antriebsseite": true,
+        "Bemerkungen": true,
+        "Markisenbreite": true
+      }
+    },
+    {
+      "name": "Modell Vordach",
+      "fields": {
+        "Title": "Modell Vordach",
+        "Vordach": true,
+        "Modell": "Premiumline Vordach  Panther              Tarasola Vordach             ",
+        "Breite": true,
+        "Tiefe": true,
+        "Oberkante": true,
+        "Unterkante": true,
+        "Anzahl Stützen": true,
+        "Höhe Stützen": true,
+        "Gestellfarbe": true,
+        "Überstand": true,
+        "Befestingugnsart": "Wand             Decke               Freistehend         Untenbalkon ",
+        "Êindeckung": true,
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Statikträger": "Für Übestand  Für Decke     Wand Extra",
+        "Freistehend (JA/NEIN)": "JA                         NEIN",
+        "LED Belechtung": "6 Stück            9 Stück         12 Stück",
+        "Fundament": "Aylux / Kunde",
+        "Wasserablauf (Links/Rechts)": "Links                Rechts",
+        "Bauform": "BUNDIG                  EINGERUCKT LINKS 50 CM  EINGERUCKT RECHTS 50 CM",
+        "Stützen": "2                           3                          4                             5"
+      }
+    }
+  ],
+  "MARKISE": [
+    {
+      "name": "AUFGLAS",
+      "fields": {
+        "Title": "AUFGLAS",
+        "Markise": true,
+        "Modell": "W350                           ANCONA AG",
+        "Breite": true,
+        "Tiefe": true,
+        "Gestellfarbe": true,
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Antrieb": true,
+        "Antriebsseite": true,
+        "Bemerkungen": true,
+        "Markisenbreite": true,
+        "Markisenlänge": true,
+        "Stoff Nummer": true,
+        "ZIP (JA/NEIN)": true
+      }
+    },
+    {
+      "name": "UNTERGLAS",
+      "fields": {
+        "Title": "UNTERGLAS",
+        "Markise": true,
+        "Modell": "T350                              ANCONA UG",
+        "Breite": true,
+        "Tiefe": true,
+        "Gestellfarbe": true,
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Antrieb": true,
+        "Antriebsseite": true,
+        "Bemerkungen": true,
+        "Markisenbreite": true,
+        "Markisenlänge": true,
+        "Stoff Nummer": true,
+        "ZIP (JA/NEIN)": true
+      }
+    },
+    {
+      "name": "SENKRECHT",
+      "fields": {
+        "Title": "SENKRECHT",
+        "Markise": true,
+        "Modell": "2020Z                             1616Z",
+        "Breite": true,
+        "Höhe": true,
+        "Gestellfarbe": true,
+        "Befestingugnsart": "Zwischen Pfs.  Vor Pfosten",
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Antrieb": true,
+        "Antriebsseite": true,
+        "Bemerkungen": true,
+        "Markisenbreite": true,
+        "Markisenlänge": true,
+        "Stoff Nummer": true,
+        "ZIP (JA/NEIN)": true
+      }
+    },
+    {
+      "name": "VOLKASSETTE",
+      "fields": {
+        "Title": "VOLKASSETTE",
+        "Markise": true,
+        "Modell": "TRENTINO",
+        "Breite": true,
+        "Tiefe": true,
+        "Gestellfarbe": true,
+        "Befestingugnsart": "Wand             Decke                        Untenbalkon ",
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Volan Typ": true,
+        "Antrieb": true,
+        "Antriebsseite": true,
+        "Bemerkungen": true,
+        "Markisenbreite": true,
+        "Markisenlänge": true,
+        "Stoff Nummer": true,
+        "ZIP (JA/NEIN)": true
+      }
+    },
+    {
+      "name": "HALBEKASSETTE",
+      "fields": {
+        "Title": "HALBEKASSETTE",
+        "Markise": true,
+        "Modell": "AGUERO",
+        "Breite": true,
+        "Tiefe": true,
+        "Gestellfarbe": true,
+        "Befestingugnsart": "Wand             Decke                        Untenbalkon ",
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Volan Typ": true,
+        "Antrieb": true,
+        "Antriebsseite": true,
+        "Bemerkungen": true,
+        "Markisenbreite": true,
+        "Markisenlänge": true,
+        "Stoff Nummer": true,
+        "ZIP (JA/NEIN)": true
+      }
+    }
+  ],
+  "UNTERBAUELEMENTE": [
+    {
+      "name": "GG Schiebe Element",
+      "fields": {
+        "Title": "GG Schiebe Element",
+        "Modell": "AL22                                AL23                                  AL24                                 BELLAVISTA                  APT",
+        "Breite": true,
+        "Höhe": true,
+        "Anzahl Flügel": true,
+        "Gestellfarbe": true,
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Position (Links / Rechts / Front)": "LINKS              RECHTS               FRONT                  FRONT LINKS                   FRONT RECHTS",
+        "Öffnungsrichtung ": "NACH WAND                                   NACH PFOSTEN                            NACH LINKS                                  NACH RECHTS                               MITTIG ÖFFNEN",
+        "Fundament": "STREIFEN                 AUSGLEICH"
+      }
+    },
+    {
+      "name": "Rahmen Schiebe Element",
+      "fields": {
+        "Title": "Rahmen Schiebe Element",
+        "Modell": "ALUXE                              APT                                   BELLAVISTA",
+        "Breite": true,
+        "Höhe": true,
+        "Anzahl Flügel": true,
+        "Gestellfarbe": true,
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Position (Links / Rechts / Front)": "LINKS              RECHTS               FRONT                  FRONT LINKS                   FRONT RECHTS",
+        "Öffnungsrichtung ": "NACH WAND                                   NACH PFOSTEN                            NACH LINKS                                  NACH RECHTS                               MITTIG ÖFFNEN",
+        "Fundament": "STREIFEN                 AUSGLEICH"
+      }
+    },
+    {
+      "name": "Festes Element",
+      "fields": {
+        "Title": "Festes Element",
+        "Modell": "ALUXE                              APT                                   BELLAVISTA",
+        "Breite": true,
+        "Höhe": true,
+        "Anzahl Flügel": true,
+        "Gestellfarbe": true,
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Position (Links / Rechts / Front)": "LINKS              RECHTS               FRONT                  FRONT LINKS                   FRONT RECHTS",
+        "Öffnungsrichtung ": true,
+        "Fundament": "STREIFEN                 AUSGLEICH"
+      }
+    },
+    {
+      "name": "Keil",
+      "fields": {
+        "Title": "Keil",
+        "Modell": "ALUXE                              APT                                   BELLAVISTA",
+        "Breite": true,
+        "Höhe": true,
+        "Anzahl Flügel": true,
+        "Gestellfarbe": true,
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Position (Links / Rechts / Front)": "LINKS              RECHTS           ",
+        "Öffnungsrichtung ": true
+      }
+    },
+    {
+      "name": "Dreh Tür",
+      "fields": {
+        "Title": "Dreh Tür",
+        "Modell": "ALUXE                              APT                                   BELLAVISTA",
+        "Breite": true,
+        "Höhe": true,
+        "Anzahl Flügel": true,
+        "Gestellfarbe": true,
+        "Montageteam": "SENOL             APO",
+        "Kundenlokation": true,
+        "Aufmesser / Berater": true,
+        "Kunde": "Vorname          Nachname",
+        "Bilder": true,
+        "Position (Links / Rechts / Front)": "LINKS              RECHTS               FRONT                  FRONT LINKS                   FRONT RECHTS",
+        "Öffnungsrichtung ": "INNEN                                            AUSSEN"
+      }
+    }
+  ]
+}
