@@ -7,7 +7,6 @@ import DynamicSpecificationForm from './components/DynamicSpecificationForm';
 import FinalSection from './components/FinalSection';
 import StepIcon from './components/StepIcon';
 import { FormData } from './types';
-import { DynamicFormData } from './types/productConfig';
 import { generatePDF } from './utils/pdfGenerator';
 
 function App() {
