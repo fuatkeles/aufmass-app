@@ -1,3 +1,13 @@
+# Environment files
+.env
+.env.*
+server/.env
+
+# Temp files
+nul
+read-excel.cjs
+read-excel.js
+
 # Logs
 logs
 *.log

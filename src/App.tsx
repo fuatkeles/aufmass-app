@@ -1,19 +1,26 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
 import GrunddatenSection from './components/GrunddatenSection';
 import ProductSelectionSection from './components/ProductSelectionSection';
 import DynamicSpecificationForm from './components/DynamicSpecificationForm';
+import MarkiseStep from './components/MarkiseStep';
+import type { MarkiseData } from './components/MarkiseStep';
 import FinalSection from './components/FinalSection';
 import StepIcon from './components/StepIcon';
 import { FormData } from './types';
 import { generatePDF } from './utils/pdfGenerator';
 
-function App() {
-  const [formData, setFormData] = useState<FormData>({
+interface AufmassFormProps {
+  initialData?: FormData | null;
+  onSave?: (data: FormData) => void;
+  onCancel?: () => void;
+}
+
+function AufmassForm({ initialData, onSave, onCancel }: AufmassFormProps) {
+  const [formData, setFormData] = useState<FormData>(initialData || {
     datum: new Date().toISOString().split('T')[0],
     aufmasser: '',
-    montageteam: '',
     kundeVorname: '',
     kundeNachname: '',
     kundenlokation: '',
@@ -28,6 +35,9 @@ function App() {
   });
 
   const [currentStep, setCurrentStep] = useState(0);
+
+  // Check if Markise is active
+  const hasMarkise = formData.specifications?.markiseActive === true;
 
   // Update grunddaten fields
   const updateGrunddatenField = (field: string, value: string) => {
@@ -48,7 +58,7 @@ function App() {
   };
 
   // Update specification field
-  const updateSpecificationField = (fieldName: string, value: string | number | boolean) => {
+  const updateSpecificationField = (fieldName: string, value: string | number | boolean | string[]) => {
     setFormData(prev => ({
       ...prev,
       specifications: {
@@ -58,44 +68,87 @@ function App() {
     }));
   };
 
+  // Update markise data
+  const updateMarkiseData = (data: MarkiseData) => {
+    setFormData(prev => ({
+      ...prev,
+      specifications: {
+        ...prev.specifications,
+        markiseData: JSON.stringify(data)
+      }
+    }));
+  };
+
   // Update bemerkungen
   const updateBemerkungen = (value: string) => {
     setFormData(prev => ({ ...prev, bemerkungen: value }));
   };
 
-  const steps = [
-    {
-      title: 'Grunddaten',
-      icon: '1',
-      component: GrunddatenSection,
-      canProceed: () => {
-        return formData.datum && formData.aufmasser && formData.montageteam &&
-               formData.kundeVorname && formData.kundeNachname;
+  // Update bilder
+  const updateBilder = (files: File[]) => {
+    setFormData(prev => ({ ...prev, bilder: files }));
+  };
+
+  // Dynamic steps based on whether Markise is selected
+  const steps = useMemo(() => {
+    const baseSteps = [
+      {
+        id: 'grunddaten',
+        title: 'Grunddaten',
+        icon: '1',
+        canProceed: () => {
+          return formData.datum && formData.aufmasser &&
+                 formData.kundeVorname && formData.kundeNachname && formData.kundenlokation;
+        }
+      },
+      {
+        id: 'produktauswahl',
+        title: 'Produktauswahl',
+        icon: '2',
+        canProceed: () => {
+          return formData.productSelection.category &&
+                 formData.productSelection.productType &&
+                 formData.productSelection.model;
+        }
+      },
+      {
+        id: 'spezifikationen',
+        title: 'Spezifikationen',
+        icon: '3',
+        canProceed: () => true
       }
-    },
-    {
-      title: 'Produktauswahl',
-      icon: '2',
-      component: ProductSelectionSection,
-      canProceed: () => {
-        return formData.productSelection.category &&
-               formData.productSelection.productType &&
-               formData.productSelection.model;
-      }
-    },
-    {
-      title: 'Spezifikationen',
-      icon: '3',
-      component: DynamicSpecificationForm,
-      canProceed: () => true // TODO: Add validation
-    },
-    {
-      title: 'Abschluss',
-      icon: '4',
-      component: FinalSection,
-      canProceed: () => true
+    ];
+
+    // Add Markise step if markiseActive is true
+    if (hasMarkise) {
+      baseSteps.push({
+        id: 'markise',
+        title: 'Markise',
+        icon: '4',
+        canProceed: () => {
+          const markiseDataStr = formData.specifications?.markiseData as string;
+          if (!markiseDataStr) return false;
+          try {
+            const data = JSON.parse(markiseDataStr) as MarkiseData;
+            return !!(data.typ && data.modell && data.breite && data.laenge &&
+                     data.stoffNummer && data.gestellfarbe && data.antrieb && data.antriebsseite);
+          } catch {
+            return false;
+          }
+        }
+      });
     }
-  ];
+
+    // Add Abschluss step
+    baseSteps.push({
+      id: 'abschluss',
+      title: 'Abschluss',
+      icon: hasMarkise ? '5' : '4',
+      canProceed: () => (formData.bilder as File[]).length >= 2
+    });
+
+    return baseSteps;
+  }, [formData, hasMarkise]);
 
   const currentStepInfo = steps[currentStep];
 
@@ -113,19 +166,23 @@ function App() {
     }
   };
 
-  const handleExport = () => {
-    generatePDF(formData);
+  const handleExport = async () => {
+    await generatePDF(formData);
+    if (onSave) {
+      onSave(formData);
+    }
   };
 
   const renderStepContent = () => {
-    switch (currentStep) {
-      case 0:
+    const stepId = currentStepInfo.id;
+
+    switch (stepId) {
+      case 'grunddaten':
         return (
           <GrunddatenSection
             formData={{
               datum: formData.datum,
               aufmasser: formData.aufmasser,
-              montageteam: formData.montageteam,
               kundeVorname: formData.kundeVorname,
               kundeNachname: formData.kundeNachname,
               kundenlokation: formData.kundenlokation
@@ -133,14 +190,14 @@ function App() {
             updateField={updateGrunddatenField}
           />
         );
-      case 1:
+      case 'produktauswahl':
         return (
           <ProductSelectionSection
             selection={formData.productSelection}
             updateSelection={updateProductSelection}
           />
         );
-      case 2:
+      case 'spezifikationen':
         return (
           <DynamicSpecificationForm
             category={formData.productSelection.category}
@@ -150,11 +207,29 @@ function App() {
             updateField={updateSpecificationField}
           />
         );
-      case 3:
+      case 'markise':
+        const markiseDataStr = formData.specifications?.markiseData as string;
+        let markiseData: MarkiseData | null = null;
+        if (markiseDataStr) {
+          try {
+            markiseData = JSON.parse(markiseDataStr);
+          } catch {
+            markiseData = null;
+          }
+        }
+        return (
+          <MarkiseStep
+            markiseData={markiseData}
+            updateMarkiseData={updateMarkiseData}
+          />
+        );
+      case 'abschluss':
         return (
           <FinalSection
             bemerkungen={formData.bemerkungen}
+            bilder={formData.bilder as File[]}
             updateBemerkungen={updateBemerkungen}
+            updateBilder={updateBilder}
             onExport={handleExport}
           />
         );
@@ -195,7 +270,7 @@ function App() {
         <div className="progress-steps">
           {steps.map((step, index) => (
             <motion.div
-              key={index}
+              key={step.id}
               className={`progress-step ${index === currentStep ? 'active' : ''} ${index < currentStep ? 'completed' : ''}`}
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -227,7 +302,7 @@ function App() {
       <main className="main-content">
         <AnimatePresence mode="wait">
           <motion.div
-            key={currentStep}
+            key={currentStepInfo.id}
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -50 }}
@@ -239,15 +314,28 @@ function App() {
         </AnimatePresence>
 
         <div className="navigation-buttons">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="btn btn-secondary"
-            onClick={prevStep}
-            disabled={currentStep === 0}
-          >
-            ← Zurück
-          </motion.button>
+          {onCancel && currentStep === 0 && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="btn btn-secondary"
+              onClick={onCancel}
+            >
+              Abbrechen
+            </motion.button>
+          )}
+
+          {(currentStep > 0 || !onCancel) && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="btn btn-secondary"
+              onClick={prevStep}
+              disabled={currentStep === 0}
+            >
+              Zurück
+            </motion.button>
+          )}
 
           {currentStep < steps.length - 1 && (
             <motion.button
@@ -257,7 +345,7 @@ function App() {
               onClick={nextStep}
               disabled={!canProceed}
             >
-              Weiter →
+              Weiter
             </motion.button>
           )}
         </div>
@@ -266,4 +354,5 @@ function App() {
   );
 }
 
-export default App;
+export default AufmassForm;
+export { AufmassForm };

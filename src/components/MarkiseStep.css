@@ -1,0 +1,130 @@
+.markise-step {
+  width: 100%;
+  max-width: 100%;
+}
+
+.markise-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .markise-form-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+}
+
+.markise-step .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.markise-step .form-field label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.markise-step .unit-label {
+  font-weight: 400;
+  color: var(--text-secondary);
+  font-size: 0.9em;
+}
+
+.markise-step .required {
+  color: var(--error-color);
+  font-weight: 600;
+}
+
+.markise-step .form-field input[type="text"],
+.markise-step .form-field input[type="number"],
+.markise-step .form-field select {
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: inherit;
+  width: 100%;
+}
+
+.markise-step .form-field select {
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 3rem;
+}
+
+.markise-step .form-field select option {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 0.75rem;
+}
+
+.markise-step .form-field select option:hover,
+.markise-step .form-field select option:checked {
+  background: var(--primary-color);
+  color: var(--bg-primary);
+}
+
+.markise-step .form-field input:focus,
+.markise-step .form-field select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(127, 169, 61, 0.15);
+  background: var(--bg-secondary);
+}
+
+.markise-step .number-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.markise-step .number-input-wrapper input[type="number"] {
+  flex: 1;
+  padding-right: 4rem;
+}
+
+.markise-step .unit-suffix {
+  position: absolute;
+  right: 1rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .markise-form-grid {
+    gap: 1rem;
+  }
+
+  .markise-step .form-field input,
+  .markise-step .form-field select {
+    padding: 1rem;
+    font-size: 16px; /* Prevents iOS zoom */
+  }
+}
+
+/* Touch-friendly minimum size */
+@media (hover: none) and (pointer: coarse) {
+  .markise-step .form-field input,
+  .markise-step .form-field select {
+    min-height: 48px;
+  }
+}

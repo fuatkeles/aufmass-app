@@ -46,12 +46,12 @@
 .form-group select,
 .form-group textarea {
   padding: 0.875rem 1rem;
-  border: 2px solid #3a4452;
+  border: 1px solid var(--border-color, #3a4452);
   border-radius: 12px;
   font-size: clamp(0.9375rem, 2.5vw, 1rem);
   transition: all 0.3s ease;
-  background: #ffffff;
-  color: #1a1a1a;
+  background: var(--bg-tertiary, #1e2530);
+  color: var(--text-primary, #E8EAED);
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
@@ -76,12 +76,12 @@
 }
 
 .form-group input::placeholder {
-  color: #999;
+  color: var(--text-secondary, #8b9298);
 }
 
 /* Select dropdown styling */
 .form-group select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b9298' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 1rem center;
   padding-right: 3rem;

@@ -12,180 +12,155 @@
         "Murano Puro",
         "Murano Int. Zip"
       ],
+      "modelColors": {
+        "Premiumline": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9016", "RAL 9006", "RAL 8014"],
+        "Orangeline": ["RAL 7016", "RAL 9007", "RAL 9010"],
+        "Trendline": ["RAL 7016", "RAL 9007"],
+        "Topline": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9005"],
+        "Designline": ["RAL 9010", "RAL 9005", "DB703"],
+        "Ultraline": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9005"],
+        "Skyline": ["RAL 7016"],
+        "Murano Puro": [],
+        "Murano Int. Zip": []
+      },
       "fields": [
         {
+          "name": "befestigungsart",
+          "label": "Befestigungsart",
+          "type": "select",
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "required": true
+        },
+        {
           "name": "breite",
-          "label": "Breite",
+          "label": "Breite (Aussen/Aussen)",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
           "name": "tiefe",
-          "label": "Tiefe",
+          "label": "Tiefe (Aussen Kante Pfosten)",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "name": "hoehe",
+          "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
           "name": "oberkante",
-          "label": "Oberkante",
-          "type": "boolean",
-          "required": false
+          "label": "Wandprofil Oberkante",
+          "type": "number",
+          "unit": "mm",
+          "required": true
         },
         {
           "name": "unterkante",
-          "label": "Unterkante",
-          "type": "boolean",
-          "required": false
-        },
-        {
-          "name": "anzahlStützen",
-          "label": "Anzahl Stützen",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "höheStützen",
-          "label": "Höhe Stützen",
+          "label": "Rinne Unterkante",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
         },
         {
-          "name": "anzahlFlügel",
-          "label": "Anzahl Flügel",
+          "name": "anzahlStuetzen",
+          "label": "Anzahl Stützen",
           "type": "number",
-          "required": false
+          "required": true
+        },
+        {
+          "name": "hoeheStuetzen",
+          "label": "Höhe Stützen",
+          "type": "select",
+          "options": ["Standard", "300 cm", "350 cm", "400 cm", "Sondermass"],
+          "required": true,
+          "conditionalField": {
+            "trigger": "Sondermass",
+            "field": "hoeheStuetzenCustom",
+            "type": "number",
+            "unit": "mm",
+            "label": "Sondermass eingeben"
+          }
         },
         {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
-          "name": "überstand",
+          "name": "ueberstand",
           "label": "Überstand",
-          "type": "boolean",
-          "required": false
+          "type": "conditional",
+          "conditionalType": "ja_nein_with_value",
+          "valueUnit": "cm",
+          "valueLabel": "Überstand Maß",
+          "required": true
         },
         {
-          "name": "befestigungsart",
-          "label": "Befestigungsart",
-          "type": "radio",
-          "options": [
-            "Wand",
-            "Decke",
-            "Freistehend",
-            "Untenbalkon"
-          ],
-          "required": false
+          "name": "bauform",
+          "label": "Bauform",
+          "type": "bauform",
+          "required": true
         },
         {
           "name": "eindeckung",
           "label": "Eindeckung",
           "type": "select",
-          "options": [
-            "8MM KLAR",
-            "8MM MILCH",
-            "10MM KLAR",
-            "10MM MILCH",
-            "16MM PCS KLAR",
-            "16MM PCS MILCH"
-          ],
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
+          "options": ["8 MM KLAR", "8 MM MILCH", "10 MM KLAR", "10 MM MILCH", "16 MM PCS KLAR", "16 MM PCS MILCH"],
           "required": true
         },
         {
-          "name": "statikträger",
+          "name": "statiktraeger",
           "label": "Statikträger",
           "type": "select",
-          "options": [
-            "Für Überstand",
-            "Für Decke",
-            "Wand Extra"
-          ],
-          "required": false
+          "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
+          "required": true
         },
         {
           "name": "freistehend",
           "label": "Freistehend",
-          "type": "radio",
-          "options": [
-            "JA",
-            "NEIN"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["JA", "NEIN"],
+          "required": true
         },
         {
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
-          "options": [
-            "6 Stück",
-            "9 Stück",
-            "12 Stück"
-          ],
-          "required": false
+          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück"],
+          "required": true
         },
         {
           "name": "fundament",
           "label": "Fundament",
-          "type": "radio",
-          "options": [
-            "Aylux",
-            "Kunde"
-          ],
-          "required": false
+          "type": "fundament",
+          "options": ["Keine", "Aylux", "Kunde"],
+          "required": true
         },
         {
           "name": "wasserablauf",
           "label": "Wasserablauf",
-          "type": "radio",
-          "options": [
-            "Links",
-            "Rechts"
-          ],
-          "required": false
-        },
-        {
-          "name": "bauform",
-          "label": "Bauform",
           "type": "select",
-          "options": [
-            "BUNDIG",
-            "EINGERUCKT LINKS 50 CM",
-            "EINGERUCKT RECHTS 50 CM"
-          ],
-          "required": false
+          "options": ["Links", "Rechts", "Links + Rechts"],
+          "required": true
         },
         {
-          "name": "stützen",
-          "label": "Stützen",
+          "name": "markise",
+          "label": "Markise",
+          "type": "markise_trigger",
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
           "type": "select",
-          "options": [
-            "2",
-            "3",
-            "4",
-            "5"
-          ],
-          "required": false
-        },
-        {
-          "name": "markisenbreite",
-          "label": "Markisenbreite",
-          "type": "number",
-          "unit": "mm",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
@@ -198,198 +173,144 @@
         "Tarasola Puro",
         "Brustor"
       ],
+      "modelColors": {
+        "X Roof": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9016", "RAL 9006", "RAL 8014"],
+        "Tarasola Essential": ["RAL 7016", "RAL 9007", "RAL 9010"],
+        "Tarasola Technik": ["RAL 7016", "RAL 9007", "RAL 9010"],
+        "Tarasola Puro": ["RAL 7016", "RAL 9007", "RAL 9010"],
+        "Brustor": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9005"]
+      },
       "fields": [
         {
+          "name": "befestigungsart",
+          "label": "Befestigungsart",
+          "type": "select",
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "required": true
+        },
+        {
           "name": "breite",
-          "label": "Breite",
+          "label": "Breite (Aussen/Aussen)",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
           "name": "tiefe",
-          "label": "Tiefe",
+          "label": "Tiefe (Aussen Kante Pfosten)",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "name": "hoehe",
+          "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
           "name": "oberkante",
-          "label": "Oberkante",
-          "type": "boolean",
-          "required": false
+          "label": "Wandprofil Oberkante",
+          "type": "number",
+          "unit": "mm",
+          "required": true
         },
         {
           "name": "unterkante",
-          "label": "Unterkante",
-          "type": "boolean",
-          "required": false
-        },
-        {
-          "name": "anzahlStützen",
-          "label": "Anzahl Stützen",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "höheStützen",
-          "label": "Höhe Stützen",
+          "label": "Rinne Unterkante",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
         },
         {
-          "name": "anzahlFlügel",
-          "label": "Anzahl Flügel",
+          "name": "anzahlStuetzen",
+          "label": "Anzahl Stützen",
           "type": "number",
-          "required": false
+          "required": true
+        },
+        {
+          "name": "hoeheStuetzen",
+          "label": "Höhe Stützen",
+          "type": "select",
+          "options": ["Standard", "300 cm", "350 cm", "400 cm", "Sondermass"],
+          "required": true,
+          "conditionalField": {
+            "trigger": "Sondermass",
+            "field": "hoeheStuetzenCustom",
+            "type": "number",
+            "unit": "mm",
+            "label": "Sondermass eingeben"
+          }
         },
         {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
-          "name": "überstand",
+          "name": "ueberstand",
           "label": "Überstand",
-          "type": "boolean",
-          "required": false
-        },
-        {
-          "name": "befestigungsart",
-          "label": "Befestigungsart",
-          "type": "radio",
-          "options": [
-            "Wand",
-            "Decke",
-            "Freistehend",
-            "Untenbalkon"
-          ],
-          "required": false
-        },
-        {
-          "name": "eindeckung",
-          "label": "Eindeckung",
-          "type": "select",
-          "options": [
-            "8MM KLAR",
-            "8MM MILCH",
-            "10MM KLAR",
-            "10MM MILCH",
-            "16MM PCS KLAR",
-            "16MM PCS MILCH"
-          ],
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
+          "type": "conditional",
+          "conditionalType": "ja_nein_with_value",
+          "valueUnit": "cm",
+          "valueLabel": "Überstand Maß",
           "required": true
         },
         {
-          "name": "statikträger",
+          "name": "bauform",
+          "label": "Bauform",
+          "type": "bauform",
+          "required": true
+        },
+        {
+          "name": "statiktraeger",
           "label": "Statikträger",
           "type": "select",
-          "options": [
-            "Für Überstand",
-            "Für Decke",
-            "Wand Extra"
-          ],
-          "required": false
+          "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
+          "required": true
         },
         {
           "name": "freistehend",
           "label": "Freistehend",
-          "type": "radio",
-          "options": [
-            "JA",
-            "NEIN"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["JA", "NEIN"],
+          "required": true
         },
         {
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
-          "options": [
-            "6 Stück",
-            "9 Stück",
-            "12 Stück"
-          ],
-          "required": false
+          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück"],
+          "required": true
         },
         {
           "name": "fundament",
           "label": "Fundament",
-          "type": "radio",
-          "options": [
-            "Aylux",
-            "Kunde"
-          ],
-          "required": false
+          "type": "fundament",
+          "options": ["Keine", "Aylux", "Kunde"],
+          "required": true
         },
         {
           "name": "wasserablauf",
           "label": "Wasserablauf",
-          "type": "radio",
-          "options": [
-            "Links",
-            "Rechts"
-          ],
-          "required": false
-        },
-        {
-          "name": "bauform",
-          "label": "Bauform",
           "type": "select",
-          "options": [
-            "BUNDIG",
-            "EINGERUCKT LINKS 50 CM",
-            "EINGERUCKT RECHTS 50 CM"
-          ],
-          "required": false
+          "options": ["Links", "Rechts", "Links + Rechts"],
+          "required": true
         },
         {
-          "name": "stützen",
-          "label": "Stützen",
+          "name": "markise",
+          "label": "Markise",
+          "type": "markise_trigger",
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
           "type": "select",
-          "options": [
-            "2",
-            "3",
-            "4",
-            "5"
-          ],
-          "required": false
-        },
-        {
-          "name": "markisenbreite",
-          "label": "Markisenbreite",
-          "type": "number",
-          "unit": "mm",
-          "required": false
-        },
-        {
-          "name": "volanTyp",
-          "label": "Volan Typ",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antrieb",
-          "label": "Antrieb",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antriebsseite",
-          "label": "Antriebsseite",
-          "type": "text",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
@@ -400,192 +321,149 @@
         "Flat 135",
         "Pergola Markise"
       ],
+      "modelColors": {
+        "Flat 125": ["RAL 7016", "RAL 9007", "RAL 9010"],
+        "Flat 135": ["RAL 7016", "RAL 9007", "RAL 9010"],
+        "Pergola Markise": ["RAL 7016", "RAL 9007", "RAL 9010"]
+      },
       "fields": [
         {
+          "name": "befestigungsart",
+          "label": "Befestigungsart",
+          "type": "select",
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "required": true
+        },
+        {
           "name": "breite",
-          "label": "Breite",
+          "label": "Breite (Aussen/Aussen)",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
           "name": "tiefe",
-          "label": "Tiefe",
+          "label": "Tiefe (Aussen Kante Pfosten)",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "name": "hoehe",
+          "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
           "name": "oberkante",
-          "label": "Oberkante",
-          "type": "boolean",
-          "required": false
+          "label": "Wandprofil Oberkante",
+          "type": "number",
+          "unit": "mm",
+          "required": true
         },
         {
           "name": "unterkante",
-          "label": "Unterkante",
-          "type": "boolean",
-          "required": false
-        },
-        {
-          "name": "anzahlStützen",
-          "label": "Anzahl Stützen",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "höheStützen",
-          "label": "Höhe Stützen",
+          "label": "Rinne Unterkante",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
+        },
+        {
+          "name": "anzahlStuetzen",
+          "label": "Anzahl Stützen",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "hoeheStuetzen",
+          "label": "Höhe Stützen",
+          "type": "select",
+          "options": ["Standard", "300 cm", "350 cm", "400 cm", "Sondermass"],
+          "required": true,
+          "conditionalField": {
+            "trigger": "Sondermass",
+            "field": "hoeheStuetzenCustom",
+            "type": "number",
+            "unit": "mm",
+            "label": "Sondermass eingeben"
+          }
         },
         {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
-          "name": "überstand",
+          "name": "ueberstand",
           "label": "Überstand",
-          "type": "boolean",
-          "required": false
+          "type": "conditional",
+          "conditionalType": "ja_nein_with_value",
+          "valueUnit": "cm",
+          "valueLabel": "Überstand Maß",
+          "required": true
         },
         {
-          "name": "befestigungsart",
-          "label": "Befestigungsart",
-          "type": "radio",
-          "options": [
-            "Wand",
-            "Decke",
-            "Freistehend",
-            "Untenbalkon"
-          ],
-          "required": false
+          "name": "bauform",
+          "label": "Bauform",
+          "type": "bauform",
+          "required": true
         },
         {
           "name": "eindeckung",
           "label": "Eindeckung",
           "type": "select",
-          "options": [
-            "8MM KLAR",
-            "8MM MILCH",
-            "10MM KLAR",
-            "10MM MILCH",
-            "16MM PCS KLAR",
-            "16MM PCS MILCH"
-          ],
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
+          "options": ["8 MM KLAR", "8 MM MILCH", "10 MM KLAR", "10 MM MILCH", "16 MM PCS KLAR", "16 MM PCS MILCH"],
           "required": true
         },
         {
-          "name": "statikträger",
+          "name": "statiktraeger",
           "label": "Statikträger",
           "type": "select",
-          "options": [
-            "Für Überstand",
-            "Für Decke",
-            "Wand Extra"
-          ],
-          "required": false
+          "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
+          "required": true
         },
         {
           "name": "freistehend",
           "label": "Freistehend",
-          "type": "radio",
-          "options": [
-            "JA",
-            "NEIN"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["JA", "NEIN"],
+          "required": true
         },
         {
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
-          "options": [
-            "6 Stück",
-            "9 Stück",
-            "12 Stück"
-          ],
-          "required": false
+          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück"],
+          "required": true
         },
         {
           "name": "fundament",
           "label": "Fundament",
-          "type": "radio",
-          "options": [
-            "Aylux",
-            "Kunde"
-          ],
-          "required": false
+          "type": "fundament",
+          "options": ["Keine", "Aylux", "Kunde"],
+          "required": true
         },
         {
           "name": "wasserablauf",
           "label": "Wasserablauf",
-          "type": "radio",
-          "options": [
-            "Links",
-            "Rechts"
-          ],
-          "required": false
-        },
-        {
-          "name": "bauform",
-          "label": "Bauform",
           "type": "select",
-          "options": [
-            "BUNDIG",
-            "EINGERUCKT LINKS 50 CM",
-            "EINGERUCKT RECHTS 50 CM"
-          ],
-          "required": false
+          "options": ["Links", "Rechts", "Links + Rechts"],
+          "required": true
         },
         {
-          "name": "stützen",
-          "label": "Stützen",
+          "name": "markise",
+          "label": "Markise",
+          "type": "markise_trigger",
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
           "type": "select",
-          "options": [
-            "2",
-            "3",
-            "4",
-            "5"
-          ],
-          "required": false
-        },
-        {
-          "name": "volanTyp",
-          "label": "Volan Typ",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antrieb",
-          "label": "Antrieb",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antriebsseite",
-          "label": "Antriebsseite",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "markisenlänge",
-          "label": "Markisenlänge",
-          "type": "number",
-          "unit": "mm",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
@@ -596,167 +474,143 @@
         "Panther",
         "Tarasola Vordach"
       ],
+      "modelColors": {
+        "Premiumline Vordach": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9016", "RAL 9006", "RAL 8014"],
+        "Panther": ["RAL 7016", "RAL 9007", "RAL 9010"],
+        "Tarasola Vordach": ["RAL 7016", "RAL 9007", "RAL 9010"]
+      },
       "fields": [
         {
+          "name": "befestigungsart",
+          "label": "Befestigungsart",
+          "type": "select",
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "required": true
+        },
+        {
           "name": "breite",
-          "label": "Breite",
+          "label": "Breite (Aussen/Aussen)",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
           "name": "tiefe",
-          "label": "Tiefe",
+          "label": "Tiefe (Aussen Kante Pfosten)",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "name": "hoehe",
+          "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
           "name": "oberkante",
-          "label": "Oberkante",
-          "type": "boolean",
-          "required": false
+          "label": "Wandprofil Oberkante",
+          "type": "number",
+          "unit": "mm",
+          "required": true
         },
         {
           "name": "unterkante",
-          "label": "Unterkante",
-          "type": "boolean",
-          "required": false
-        },
-        {
-          "name": "anzahlStützen",
-          "label": "Anzahl Stützen",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "höheStützen",
-          "label": "Höhe Stützen",
+          "label": "Rinne Unterkante",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
+        },
+        {
+          "name": "anzahlStuetzen",
+          "label": "Anzahl Stützen",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "hoeheStuetzen",
+          "label": "Höhe Stützen",
+          "type": "select",
+          "options": ["Standard", "300 cm", "350 cm", "400 cm", "Sondermass"],
+          "required": true,
+          "conditionalField": {
+            "trigger": "Sondermass",
+            "field": "hoeheStuetzenCustom",
+            "type": "number",
+            "unit": "mm",
+            "label": "Sondermass eingeben"
+          }
         },
         {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
-          "name": "überstand",
+          "name": "ueberstand",
           "label": "Überstand",
-          "type": "boolean",
-          "required": false
+          "type": "conditional",
+          "conditionalType": "ja_nein_with_value",
+          "valueUnit": "cm",
+          "valueLabel": "Überstand Maß",
+          "required": true
         },
         {
-          "name": "befestigungsart",
-          "label": "Befestigungsart",
-          "type": "radio",
-          "options": [
-            "Wand",
-            "Decke",
-            "Freistehend",
-            "Untenbalkon"
-          ],
-          "required": false
+          "name": "bauform",
+          "label": "Bauform",
+          "type": "bauform",
+          "required": true
         },
         {
           "name": "eindeckung",
           "label": "Eindeckung",
           "type": "select",
-          "options": [
-            "8MM KLAR",
-            "8MM MILCH",
-            "10MM KLAR",
-            "10MM MILCH",
-            "16MM PCS KLAR",
-            "16MM PCS MILCH"
-          ],
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
+          "options": ["8 MM KLAR", "8 MM MILCH", "16 MM PCS KLAR", "16 MM PCS MILCH"],
           "required": true
         },
         {
-          "name": "statikträger",
+          "name": "statiktraeger",
           "label": "Statikträger",
           "type": "select",
-          "options": [
-            "Für Überstand",
-            "Für Decke",
-            "Wand Extra"
-          ],
-          "required": false
+          "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
+          "required": true
         },
         {
           "name": "freistehend",
           "label": "Freistehend",
-          "type": "radio",
-          "options": [
-            "JA",
-            "NEIN"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["JA", "NEIN"],
+          "required": true
         },
         {
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
-          "options": [
-            "6 Stück",
-            "9 Stück",
-            "12 Stück"
-          ],
-          "required": false
+          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück"],
+          "required": true
         },
         {
           "name": "fundament",
           "label": "Fundament",
-          "type": "radio",
-          "options": [
-            "Aylux",
-            "Kunde"
-          ],
-          "required": false
+          "type": "fundament",
+          "options": ["Keine", "Aylux", "Kunde"],
+          "required": true
         },
         {
           "name": "wasserablauf",
           "label": "Wasserablauf",
-          "type": "radio",
-          "options": [
-            "Links",
-            "Rechts"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["Links", "Rechts", "Links + Rechts"],
+          "required": true
         },
         {
-          "name": "bauform",
-          "label": "Bauform",
+          "name": "montageteam",
+          "label": "Montageteam",
           "type": "select",
-          "options": [
-            "BUNDIG",
-            "EINGERUCKT LINKS 50 CM",
-            "EINGERUCKT RECHTS 50 CM"
-          ],
-          "required": false
-        },
-        {
-          "name": "stützen",
-          "label": "Stützen",
-          "type": "select",
-          "options": [
-            "2",
-            "3",
-            "4",
-            "5"
-          ],
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
@@ -764,491 +618,380 @@
   },
   "MARKISE": {
     "AUFGLAS": {
-      "models": [
-        "W350",
-        "ANCONA AG"
-      ],
+      "models": ["W350", "ANCONA AG"],
+      "modelColors": {
+        "W350": ["RAL 7016", "RAL 9007", "RAL 9010"],
+        "ANCONA AG": ["RAL 7016", "RAL 9007", "RAL 9010"]
+      },
       "fields": [
-        {
-          "name": "breite",
-          "label": "Breite",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "tiefe",
-          "label": "Tiefe",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
         {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
-          "required": true
-        },
-        {
-          "name": "volanTyp",
-          "label": "Volan Typ",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antrieb",
-          "label": "Antrieb",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antriebsseite",
-          "label": "Antriebsseite",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "bemerkungen",
-          "label": "Bemerkungen",
-          "type": "textarea",
-          "required": false
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
           "name": "markisenbreite",
           "label": "Markisenbreite",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
         },
         {
-          "name": "markisenlänge",
+          "name": "markisenlaenge",
           "label": "Markisenlänge",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
+        },
+        {
+          "name": "markisenhoehe",
+          "label": "Markisenhöhe",
+          "type": "number",
+          "unit": "mm",
+          "required": true
         },
         {
           "name": "stoffNummer",
           "label": "Stoff Nummer",
           "type": "text",
-          "required": false
+          "required": true
         },
         {
           "name": "zip",
           "label": "ZIP",
-          "type": "radio",
-          "options": [
-            "JA",
-            "NEIN"
-          ],
+          "type": "select",
+          "options": ["JA", "NEIN"],
+          "required": true
+        },
+        {
+          "name": "antrieb",
+          "label": "Antrieb",
+          "type": "select",
+          "options": ["Funk Motor", "E-Motor (Schalter)"],
+          "required": true
+        },
+        {
+          "name": "antriebsseite",
+          "label": "Antriebsseite",
+          "type": "select",
+          "options": ["Links", "Rechts"],
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
+          "type": "select",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
     },
     "UNTERGLAS": {
-      "models": [
-        "T350",
-        "ANCONA UG"
-      ],
+      "models": ["T350", "ANCONA UG"],
+      "modelColors": {
+        "T350": ["RAL 7016", "RAL 9007", "RAL 9010"],
+        "ANCONA UG": ["RAL 7016", "RAL 9007", "RAL 9010"]
+      },
       "fields": [
         {
-          "name": "breite",
-          "label": "Breite",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "tiefe",
-          "label": "Tiefe",
-          "type": "number",
-          "unit": "mm",
+          "name": "befestigungsart",
+          "label": "Befestigungsart",
+          "type": "select",
+          "options": ["Innen Sparren", "Unten Sparren"],
           "required": true
         },
         {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
-          "required": true
-        },
-        {
-          "name": "volanTyp",
-          "label": "Volan Typ",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antrieb",
-          "label": "Antrieb",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antriebsseite",
-          "label": "Antriebsseite",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "bemerkungen",
-          "label": "Bemerkungen",
-          "type": "textarea",
-          "required": false
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
           "name": "markisenbreite",
           "label": "Markisenbreite",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
         },
         {
-          "name": "markisenlänge",
+          "name": "markisenlaenge",
           "label": "Markisenlänge",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
+        },
+        {
+          "name": "markisenhoehe",
+          "label": "Markisenhöhe",
+          "type": "number",
+          "unit": "mm",
+          "required": true
         },
         {
           "name": "stoffNummer",
           "label": "Stoff Nummer",
           "type": "text",
-          "required": false
+          "required": true
         },
         {
           "name": "zip",
           "label": "ZIP",
-          "type": "radio",
-          "options": [
-            "JA",
-            "NEIN"
-          ],
+          "type": "select",
+          "options": ["JA", "NEIN"],
+          "required": true
+        },
+        {
+          "name": "antrieb",
+          "label": "Antrieb",
+          "type": "select",
+          "options": ["Funk Motor", "E-Motor (Schalter)"],
+          "required": true
+        },
+        {
+          "name": "antriebsseite",
+          "label": "Antriebsseite",
+          "type": "select",
+          "options": ["Links", "Rechts"],
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
+          "type": "select",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
     },
     "SENKRECHT": {
-      "models": [
-        "2020Z",
-        "1616Z"
-      ],
+      "models": ["2020Z", "1616Z"],
+      "modelColors": {
+        "2020Z": ["RAL 7016", "RAL 9007", "RAL 9010"],
+        "1616Z": ["RAL 7016", "RAL 9007", "RAL 9010"]
+      },
       "fields": [
         {
-          "name": "breite",
-          "label": "Breite",
-          "type": "number",
-          "unit": "mm",
+          "name": "befestigungsart",
+          "label": "Befestigungsart",
+          "type": "select",
+          "options": ["Zwischen Pfosten", "Vor Pfosten"],
           "required": true
         },
         {
-          "name": "höhe",
-          "label": "Höhe",
-          "type": "number",
-          "unit": "mm",
+          "name": "position",
+          "label": "Position",
+          "type": "select",
+          "options": ["LINKS", "RECHTS", "FRONT", "FRONT LINKS", "FRONT RECHTS"],
           "required": true
         },
         {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
-          "required": true
-        },
-        {
-          "name": "befestigungsart",
-          "label": "Befestigungsart",
-          "type": "radio",
-          "options": [
-            "Zwischen Pfosten",
-            "Vor Pfosten"
-          ],
-          "required": false
-        },
-        {
-          "name": "volanTyp",
-          "label": "Volan Typ",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antrieb",
-          "label": "Antrieb",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antriebsseite",
-          "label": "Antriebsseite",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "bemerkungen",
-          "label": "Bemerkungen",
-          "type": "textarea",
-          "required": false
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
           "name": "markisenbreite",
           "label": "Markisenbreite",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
         },
         {
-          "name": "markisenlänge",
+          "name": "markisenlaenge",
           "label": "Markisenlänge",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
         },
         {
           "name": "stoffNummer",
           "label": "Stoff Nummer",
           "type": "text",
-          "required": false
+          "required": true
         },
         {
           "name": "zip",
           "label": "ZIP",
-          "type": "radio",
-          "options": [
-            "JA",
-            "NEIN"
-          ],
+          "type": "select",
+          "options": ["JA", "NEIN"],
+          "required": true
+        },
+        {
+          "name": "antrieb",
+          "label": "Antrieb",
+          "type": "select",
+          "options": ["Funk Motor", "E-Motor (Schalter)"],
+          "required": true
+        },
+        {
+          "name": "antriebsseite",
+          "label": "Antriebsseite",
+          "type": "select",
+          "options": ["Links", "Rechts"],
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
+          "type": "select",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
     },
     "VOLKASSETTE": {
-      "models": [
-        "TRENTINO"
-      ],
+      "models": ["TRENTINO"],
+      "modelColors": {
+        "TRENTINO": ["RAL 7016", "RAL 9007", "RAL 9010"]
+      },
       "fields": [
         {
-          "name": "breite",
-          "label": "Breite",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "tiefe",
-          "label": "Tiefe",
-          "type": "number",
-          "unit": "mm",
+          "name": "befestigungsart",
+          "label": "Befestigungsart",
+          "type": "select",
+          "options": ["Wand", "Decke", "Untenbalkon"],
           "required": true
         },
         {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
-          "required": true
-        },
-        {
-          "name": "befestigungsart",
-          "label": "Befestigungsart",
-          "type": "radio",
-          "options": [
-            "Wand",
-            "Decke",
-            "Untenbalkon"
-          ],
-          "required": false
-        },
-        {
-          "name": "volanTyp",
-          "label": "Volan Typ",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antrieb",
-          "label": "Antrieb",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antriebsseite",
-          "label": "Antriebsseite",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "bemerkungen",
-          "label": "Bemerkungen",
-          "type": "textarea",
-          "required": false
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
           "name": "markisenbreite",
           "label": "Markisenbreite",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
         },
         {
-          "name": "markisenlänge",
+          "name": "markisenlaenge",
           "label": "Markisenlänge",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
+        },
+        {
+          "name": "markisenhoehe",
+          "label": "Markisenhöhe",
+          "type": "number",
+          "unit": "mm",
+          "required": true
         },
         {
           "name": "stoffNummer",
           "label": "Stoff Nummer",
           "type": "text",
-          "required": false
+          "required": true
         },
         {
-          "name": "zip",
-          "label": "ZIP",
-          "type": "radio",
-          "options": [
-            "JA",
-            "NEIN"
-          ],
+          "name": "volanTyp",
+          "label": "Volan Typ",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "antrieb",
+          "label": "Antrieb",
+          "type": "select",
+          "options": ["Funk Motor", "E-Motor (Schalter)"],
+          "required": true
+        },
+        {
+          "name": "antriebsseite",
+          "label": "Antriebsseite",
+          "type": "select",
+          "options": ["Links", "Rechts"],
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
+          "type": "select",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
     },
     "HALBEKASSETTE": {
-      "models": [
-        "AGUERO"
-      ],
+      "models": ["AGUERO"],
+      "modelColors": {
+        "AGUERO": ["RAL 7016", "RAL 9007", "RAL 9010"]
+      },
       "fields": [
         {
-          "name": "breite",
-          "label": "Breite",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "tiefe",
-          "label": "Tiefe",
-          "type": "number",
-          "unit": "mm",
+          "name": "befestigungsart",
+          "label": "Befestigungsart",
+          "type": "select",
+          "options": ["Wand", "Decke", "Untenbalkon"],
           "required": true
         },
         {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
-          "required": true
-        },
-        {
-          "name": "befestigungsart",
-          "label": "Befestigungsart",
-          "type": "radio",
-          "options": [
-            "Wand",
-            "Decke",
-            "Untenbalkon"
-          ],
-          "required": false
-        },
-        {
-          "name": "volanTyp",
-          "label": "Volan Typ",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antrieb",
-          "label": "Antrieb",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "antriebsseite",
-          "label": "Antriebsseite",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "bemerkungen",
-          "label": "Bemerkungen",
-          "type": "textarea",
-          "required": false
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
           "name": "markisenbreite",
           "label": "Markisenbreite",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
         },
         {
-          "name": "markisenlänge",
+          "name": "markisenlaenge",
           "label": "Markisenlänge",
           "type": "number",
           "unit": "mm",
-          "required": false
+          "required": true
+        },
+        {
+          "name": "markisenhoehe",
+          "label": "Markisenhöhe",
+          "type": "number",
+          "unit": "mm",
+          "required": true
         },
         {
           "name": "stoffNummer",
           "label": "Stoff Nummer",
           "type": "text",
-          "required": false
+          "required": true
         },
         {
-          "name": "zip",
-          "label": "ZIP",
-          "type": "radio",
-          "options": [
-            "JA",
-            "NEIN"
-          ],
+          "name": "volanTyp",
+          "label": "Volan Typ",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "antrieb",
+          "label": "Antrieb",
+          "type": "select",
+          "options": ["Funk Motor", "E-Motor (Schalter)"],
+          "required": true
+        },
+        {
+          "name": "antriebsseite",
+          "label": "Antriebsseite",
+          "type": "select",
+          "options": ["Links", "Rechts"],
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
+          "type": "select",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
@@ -1256,13 +999,14 @@
   },
   "UNTERBAUELEMENTE": {
     "GG Schiebe Element": {
-      "models": [
-        "AL22",
-        "AL23",
-        "AL24",
-        "BELLAVISTA",
-        "APT"
-      ],
+      "models": ["AL22", "AL23", "AL24", "BELLAVISTA", "APT"],
+      "modelColors": {
+        "AL22": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "AL23": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "AL24": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "BELLAVISTA": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "APT": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"]
+      },
       "fields": [
         {
           "name": "breite",
@@ -1272,84 +1016,70 @@
           "required": true
         },
         {
-          "name": "höhe",
+          "name": "hoehe",
           "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
-          "name": "anzahlStützen",
-          "label": "Anzahl Stützen",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "anzahlFlügel",
-          "label": "Anzahl Flügel",
-          "type": "number",
-          "required": false
-        },
-        {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
-          "required": true
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
           "name": "position",
           "label": "Position",
-          "type": "radio",
-          "options": [
-            "LINKS",
-            "RECHTS",
-            "FRONT",
-            "FRONT LINKS",
-            "FRONT RECHTS"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["LINKS", "RECHTS", "FRONT", "FRONT LINKS", "FRONT RECHTS"],
+          "required": true
         },
         {
-          "name": "öffnungsrichtung",
+          "name": "oeffnungsrichtung",
           "label": "Öffnungsrichtung",
-          "type": "radio",
-          "options": [
-            "NACH WAND",
-            "NACH PFOSTEN",
-            "NACH LINKS",
-            "NACH RECHTS",
-            "MITTIG ÖFFNEN"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["NACH WAND", "NACH PFOSTEN", "NACH LINKS", "NACH RECHTS", "MITTIG ÖFFNEN"],
+          "required": true
+        },
+        {
+          "name": "anzahlFluegel",
+          "label": "Anzahl Flügel",
+          "type": "select",
+          "options": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+          "required": true
+        },
+        {
+          "name": "ledBeleuchtung",
+          "label": "LED Beleuchtung",
+          "type": "select",
+          "options": ["Keine", "STREIFEN", "AUSGLEICH"],
+          "required": true
         },
         {
           "name": "fundament",
           "label": "Fundament",
-          "type": "radio",
-          "options": [
-            "STREIFEN",
-            "AUSGLEICH"
-          ],
+          "type": "fundament",
+          "options": ["Keine", "Aylux", "Kunde"],
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
+          "type": "select",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
     },
     "Rahmen Schiebe Element": {
-      "models": [
-        "ALUXE",
-        "APT",
-        "BELLAVISTA"
-      ],
+      "models": ["ALUXE", "APT", "BELLAVISTA"],
+      "modelColors": {
+        "ALUXE": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "APT": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "BELLAVISTA": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"]
+      },
       "fields": [
         {
           "name": "breite",
@@ -1359,84 +1089,70 @@
           "required": true
         },
         {
-          "name": "höhe",
+          "name": "hoehe",
           "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
-          "name": "anzahlStützen",
-          "label": "Anzahl Stützen",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "anzahlFlügel",
-          "label": "Anzahl Flügel",
-          "type": "number",
-          "required": false
-        },
-        {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
-          "required": true
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
           "name": "position",
           "label": "Position",
-          "type": "radio",
-          "options": [
-            "LINKS",
-            "RECHTS",
-            "FRONT",
-            "FRONT LINKS",
-            "FRONT RECHTS"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["LINKS", "RECHTS", "FRONT", "FRONT LINKS", "FRONT RECHTS"],
+          "required": true
         },
         {
-          "name": "öffnungsrichtung",
+          "name": "oeffnungsrichtung",
           "label": "Öffnungsrichtung",
-          "type": "radio",
-          "options": [
-            "NACH WAND",
-            "NACH PFOSTEN",
-            "NACH LINKS",
-            "NACH RECHTS",
-            "MITTIG ÖFFNEN"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["NACH WAND", "NACH PFOSTEN", "NACH LINKS", "NACH RECHTS", "MITTIG ÖFFNEN"],
+          "required": true
+        },
+        {
+          "name": "anzahlFluegel",
+          "label": "Anzahl Flügel",
+          "type": "select",
+          "options": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+          "required": true
+        },
+        {
+          "name": "ledBeleuchtung",
+          "label": "LED Beleuchtung",
+          "type": "select",
+          "options": ["Keine", "STREIFEN", "AUSGLEICH"],
+          "required": true
         },
         {
           "name": "fundament",
           "label": "Fundament",
-          "type": "radio",
-          "options": [
-            "STREIFEN",
-            "AUSGLEICH"
-          ],
+          "type": "fundament",
+          "options": ["Keine", "Aylux", "Kunde"],
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
+          "type": "select",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
     },
     "Festes Element": {
-      "models": [
-        "ALUXE",
-        "APT",
-        "BELLAVISTA"
-      ],
+      "models": ["ALUXE", "APT", "BELLAVISTA"],
+      "modelColors": {
+        "ALUXE": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "APT": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "BELLAVISTA": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"]
+      },
       "fields": [
         {
           "name": "breite",
@@ -1446,69 +1162,56 @@
           "required": true
         },
         {
-          "name": "höhe",
+          "name": "hoehe",
           "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
-          "name": "anzahlStützen",
-          "label": "Anzahl Stützen",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "anzahlFlügel",
-          "label": "Anzahl Flügel",
-          "type": "number",
-          "required": false
-        },
-        {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
-          "required": true
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
           "name": "position",
           "label": "Position",
-          "type": "radio",
-          "options": [
-            "LINKS",
-            "RECHTS",
-            "FRONT"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["LINKS", "RECHTS", "FRONT", "FRONT LINKS", "FRONT RECHTS"],
+          "required": true
+        },
+        {
+          "name": "ledBeleuchtung",
+          "label": "LED Beleuchtung",
+          "type": "select",
+          "options": ["Keine", "STREIFEN", "AUSGLEICH"],
+          "required": true
         },
         {
           "name": "fundament",
           "label": "Fundament",
-          "type": "radio",
-          "options": [
-            "STREIFEN",
-            "AUSGLEICH"
-          ],
+          "type": "fundament",
+          "options": ["Keine", "Aylux", "Kunde"],
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
+          "type": "select",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
     },
     "Keil": {
-      "models": [
-        "ALUXE",
-        "APT",
-        "BELLAVISTA"
-      ],
+      "models": ["ALUXE", "APT", "BELLAVISTA"],
+      "modelColors": {
+        "ALUXE": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "APT": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "BELLAVISTA": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"]
+      },
       "fields": [
         {
           "name": "breite",
@@ -1518,40 +1221,42 @@
           "required": true
         },
         {
-          "name": "höhe",
+          "name": "hoehe",
           "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
-          "required": true
+          "name": "gestellfarbe",
+          "label": "Gestellfarbe",
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
           "name": "position",
           "label": "Position",
-          "type": "radio",
-          "options": [
-            "LINKS",
-            "RECHTS"
-          ],
+          "type": "select",
+          "options": ["LINKS", "RECHTS"],
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
+          "type": "select",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]
     },
     "Dreh Tür": {
-      "models": [
-        "ALUXE",
-        "APT",
-        "BELLAVISTA"
-      ],
+      "models": ["ALUXE", "APT", "BELLAVISTA"],
+      "modelColors": {
+        "ALUXE": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "APT": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"],
+        "BELLAVISTA": ["RAL 7016", "RAL 9007", "RAL 9006", "RAL 9010", "RAL 9016", "RAL 8014", "RAL 9005"]
+      },
       "fields": [
         {
           "name": "breite",
@@ -1561,69 +1266,45 @@
           "required": true
         },
         {
-          "name": "höhe",
+          "name": "hoehe",
           "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
-          "name": "anzahlStützen",
-          "label": "Anzahl Stützen",
-          "type": "number",
-          "required": false
-        },
-        {
-          "name": "anzahlFlügel",
-          "label": "Anzahl Flügel",
-          "type": "number",
-          "required": false
-        },
-        {
           "name": "gestellfarbe",
           "label": "Gestellfarbe",
-          "type": "text",
-          "required": false
-        },
-        {
-          "name": "montageteam",
-          "label": "Montageteam",
-          "type": "radio",
-          "options": [
-            "SENOL",
-            "APO"
-          ],
-          "required": true
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true
         },
         {
           "name": "position",
           "label": "Position",
-          "type": "radio",
-          "options": [
-            "LINKS",
-            "RECHTS",
-            "FRONT"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["LINKS", "RECHTS", "FRONT", "FRONT LINKS", "FRONT RECHTS"],
+          "required": true
         },
         {
-          "name": "öffnungsrichtung",
+          "name": "oeffnungsrichtung",
           "label": "Öffnungsrichtung",
-          "type": "radio",
-          "options": [
-            "INNEN",
-            "AUSSEN"
-          ],
-          "required": false
+          "type": "select",
+          "options": ["INNEN", "AUSSEN"],
+          "required": true
         },
         {
           "name": "fundament",
           "label": "Fundament",
-          "type": "radio",
-          "options": [
-            "STREIFEN",
-            "AUSGLEICH"
-          ],
+          "type": "fundament",
+          "options": ["Keine", "Aylux", "Kunde"],
+          "required": true
+        },
+        {
+          "name": "montageteam",
+          "label": "Montageteam",
+          "type": "select",
+          "options": ["SENOL", "APO", "IZAR"],
           "required": false
         }
       ]

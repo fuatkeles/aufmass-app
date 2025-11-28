@@ -6,7 +6,6 @@ interface GrunddatenSectionProps {
   formData: {
     datum: string;
     aufmasser: string;
-    montageteam: string;
     kundeVorname: string;
     kundeNachname: string;
     kundenlokation: string;
@@ -15,8 +14,6 @@ interface GrunddatenSectionProps {
 }
 
 const GrunddatenSection = ({ formData, updateField }: GrunddatenSectionProps) => {
-  const montageteams = ['SENOL', 'APO'];
-
   return (
     <div className="grunddaten-section">
       <motion.div
@@ -49,7 +46,7 @@ const GrunddatenSection = ({ formData, updateField }: GrunddatenSectionProps) =>
         </motion.div>
 
         <motion.div
-          className="form-group"
+          className="form-group full-width"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.2 }}
@@ -73,30 +70,6 @@ const GrunddatenSection = ({ formData, updateField }: GrunddatenSectionProps) =>
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.3 }}
         >
-          <label htmlFor="montageteam">
-            Montageteam <span className="required">*</span>
-          </label>
-          <select
-            id="montageteam"
-            value={formData.montageteam}
-            onChange={(e) => updateField('montageteam', e.target.value)}
-            required
-          >
-            <option value="">Bitte wählen...</option>
-            {montageteams.map((team) => (
-              <option key={team} value={team}>
-                {team}
-              </option>
-            ))}
-          </select>
-        </motion.div>
-
-        <motion.div
-          className="form-group"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.4 }}
-        >
           <label htmlFor="kundeVorname">
             Kunde Vorname <span className="required">*</span>
           </label>
@@ -114,7 +87,7 @@ const GrunddatenSection = ({ formData, updateField }: GrunddatenSectionProps) =>
           className="form-group"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.5 }}
+          transition={{ duration: 0.3, delay: 0.4 }}
         >
           <label htmlFor="kundeNachname">
             Kunde Nachname <span className="required">*</span>
@@ -133,10 +106,10 @@ const GrunddatenSection = ({ formData, updateField }: GrunddatenSectionProps) =>
           className="form-group full-width"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.6 }}
+          transition={{ duration: 0.3, delay: 0.5 }}
         >
           <label htmlFor="kundenlokation">
-            Kundenlokation / Adresse
+            Kundenlokation / Adresse <span className="required">*</span>
           </label>
           <input
             type="text"
@@ -144,6 +117,7 @@ const GrunddatenSection = ({ formData, updateField }: GrunddatenSectionProps) =>
             value={formData.kundenlokation}
             onChange={(e) => updateField('kundenlokation', e.target.value)}
             placeholder="Adresse oder Standort"
+            required
           />
         </motion.div>
       </div>

@@ -2,9 +2,9 @@ import { ProductSelection, DynamicFormData } from './productConfig';
 
 export interface FormData {
   // Grunddaten (Common data for all products)
+  id?: string; // For database
   datum: string;
   aufmasser: string;
-  montageteam: string;
   kundeVorname: string;
   kundeNachname: string;
   kundenlokation: string;
@@ -16,8 +16,13 @@ export interface FormData {
   specifications: DynamicFormData;
 
   // Additional data
-  bilder: string[]; // Image URLs or base64
+  bilder: File[] | string[]; // Image files or URLs
   bemerkungen: string; // Notes/remarks
+
+  // Metadata
+  createdAt?: string;
+  updatedAt?: string;
+  status?: 'draft' | 'completed' | 'archived';
 }
 
 // Legacy interfaces (keeping for backward compatibility during migration)
