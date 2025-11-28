@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AufmassForm } from '../App';
 import { FormData } from '../types';
-import { getForm, createForm, updateForm, uploadImages } from '../services/api';
-import type { FormData as ApiFormData } from '../services/api';
+import { DynamicFormData } from '../types/productConfig';
+import { getForm, createForm, updateForm, uploadImages, FormData as ApiFormData } from '../services/api';
 
 const FormPage = () => {
   const navigate = useNavigate();
@@ -35,7 +35,7 @@ const FormPage = () => {
               productType: apiData.productType || '',
               model: apiData.model || ''
             },
-            specifications: apiData.specifications || {},
+            specifications: (apiData.specifications || {}) as DynamicFormData,
             bilder: apiData.bilder?.map(b => String(b.id)) || [],
             bemerkungen: apiData.bemerkungen || '',
             status: (apiData.status as 'draft' | 'completed' | 'archived') || 'draft',

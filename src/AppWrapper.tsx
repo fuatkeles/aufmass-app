@@ -342,9 +342,9 @@ function ProtectedContent() {
 }
 
 function AppWrapper() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="dashboard">
         <div className="dashboard-loading">
