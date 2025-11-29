@@ -630,56 +630,48 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
   }
 });
 
-// Update form
+// Update form (supports partial updates)
 app.put('/api/forms/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      datum,
-      aufmasser,
-      kundeVorname,
-      kundeNachname,
-      kundenlokation,
-      category,
-      productType,
-      model,
-      specifications,
-      markiseData,
-      bemerkungen,
-      status
-    } = req.body;
+    const updates = req.body;
 
-    await pool.request()
-      .input('id', sql.Int, id)
-      .input('datum', sql.Date, datum)
-      .input('aufmasser', sql.NVarChar, aufmasser)
-      .input('kunde_vorname', sql.NVarChar, kundeVorname)
-      .input('kunde_nachname', sql.NVarChar, kundeNachname)
-      .input('kundenlokation', sql.NVarChar, kundenlokation)
-      .input('category', sql.NVarChar, category)
-      .input('product_type', sql.NVarChar, productType)
-      .input('model', sql.NVarChar, model)
-      .input('specifications', sql.NVarChar, JSON.stringify(specifications || {}))
-      .input('markise_data', sql.NVarChar, JSON.stringify(markiseData || null))
-      .input('bemerkungen', sql.NVarChar, bemerkungen || '')
-      .input('status', sql.NVarChar, status || 'draft')
-      .query(`
-        UPDATE aufmass_forms SET
-          datum = @datum,
-          aufmasser = @aufmasser,
-          kunde_vorname = @kunde_vorname,
-          kunde_nachname = @kunde_nachname,
-          kundenlokation = @kundenlokation,
-          category = @category,
-          product_type = @product_type,
-          model = @model,
-          specifications = @specifications,
-          markise_data = @markise_data,
-          bemerkungen = @bemerkungen,
-          status = @status,
-          updated_at = GETDATE()
-        WHERE id = @id
-      `);
+    // Build dynamic update query based on provided fields
+    const fieldMappings = {
+      datum: { column: 'datum', type: sql.Date },
+      aufmasser: { column: 'aufmasser', type: sql.NVarChar },
+      kundeVorname: { column: 'kunde_vorname', type: sql.NVarChar },
+      kundeNachname: { column: 'kunde_nachname', type: sql.NVarChar },
+      kundenlokation: { column: 'kundenlokation', type: sql.NVarChar },
+      category: { column: 'category', type: sql.NVarChar },
+      productType: { column: 'product_type', type: sql.NVarChar },
+      model: { column: 'model', type: sql.NVarChar },
+      specifications: { column: 'specifications', type: sql.NVarChar, transform: v => JSON.stringify(v || {}) },
+      markiseData: { column: 'markise_data', type: sql.NVarChar, transform: v => JSON.stringify(v || null) },
+      bemerkungen: { column: 'bemerkungen', type: sql.NVarChar },
+      status: { column: 'status', type: sql.NVarChar }
+    };
+
+    const setClauses = [];
+    const request = pool.request().input('id', sql.Int, id);
+
+    for (const [key, mapping] of Object.entries(fieldMappings)) {
+      if (updates[key] !== undefined) {
+        const value = mapping.transform ? mapping.transform(updates[key]) : updates[key];
+        request.input(mapping.column, mapping.type, value);
+        setClauses.push(`${mapping.column} = @${mapping.column}`);
+      }
+    }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    setClauses.push('updated_at = GETDATE()');
+
+    await request.query(`
+      UPDATE aufmass_forms SET ${setClauses.join(', ')} WHERE id = @id
+    `);
 
     res.json({ message: 'Form updated successfully' });
   } catch (err) {
