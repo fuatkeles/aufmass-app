@@ -366,6 +366,22 @@ export function getImageUrl(imageId: number): string {
   return `${API_BASE_URL}/images/${imageId}`;
 }
 
+// Upload temporary file (returns URL for PDF linking)
+export async function uploadTempFile(file: File): Promise<{ id: number; url: string; fileName: string }> {
+  const formData = new window.FormData();
+  formData.append('file', file);
+
+  const token = getStoredToken();
+  const response = await fetch(`${API_BASE_URL}/upload-temp`, {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData
+  });
+
+  if (!response.ok) throw new Error('Failed to upload file');
+  return response.json();
+}
+
 // Delete image
 export async function deleteImage(imageId: number): Promise<{ message: string }> {
   const response = await authFetch(`${API_BASE_URL}/images/${imageId}`, {

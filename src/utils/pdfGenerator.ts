@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { FormData } from '../types';
 import productConfigData from '../config/productConfig.json';
 import type { ProductConfig, FieldConfig } from '../types/productConfig';
+import { uploadTempFile } from '../services/api';
 
 const productConfig = productConfigData as ProductConfig;
 
@@ -288,19 +289,34 @@ export const generatePDF = async (formData: FormData) => {
     pdf.setTextColor(0, 0, 0);
     pdf.setFontSize(10);
 
-    // List PDF attachments first
+    // List PDF attachments with clickable links
     if (pdfFiles.length > 0) {
       pdf.setFont('helvetica', 'bold');
       pdf.text('PDF Anhänge:', margin, yPos);
       yPos += 8;
       pdf.setFont('helvetica', 'normal');
 
-      pdfFiles.forEach((file) => {
-        if (!file || !file.name) return;
+      // Upload PDFs and create links
+      for (const file of pdfFiles) {
+        if (!file || !file.name) continue;
         checkNewPage();
-        pdf.text(`• ${file.name}`, margin + 5, yPos);
-        yPos += 6;
-      });
+
+        try {
+          // Upload PDF to server and get URL
+          const uploadResult = await uploadTempFile(file);
+          const linkText = `• ${file.name}`;
+
+          // Add clickable link
+          pdf.setTextColor(0, 102, 204); // Blue color for link
+          pdf.textWithLink(linkText, margin + 5, yPos, { url: uploadResult.url });
+          pdf.setTextColor(0, 0, 0); // Reset to black
+          yPos += 6;
+        } catch {
+          // If upload fails, just show filename without link
+          pdf.text(`• ${file.name} (Link nicht verfügbar)`, margin + 5, yPos);
+          yPos += 6;
+        }
+      }
       yPos += 10;
     }
 

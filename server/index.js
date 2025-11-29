@@ -732,6 +732,69 @@ app.post('/api/forms/:id/images', authenticateToken, upload.array('images', 10),
   }
 });
 
+// Upload temporary file (for PDF links in exported PDF)
+app.post('/api/upload-temp', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+
+    // Create temp_files table if not exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_temp_files' AND xtype='U')
+      CREATE TABLE aufmass_temp_files (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        file_name NVARCHAR(255) NOT NULL,
+        file_data VARBINARY(MAX) NOT NULL,
+        file_type NVARCHAR(100) NOT NULL,
+        created_at DATETIME DEFAULT GETDATE()
+      )
+    `);
+
+    // Insert file and get ID
+    const result = await pool.request()
+      .input('file_name', sql.NVarChar, file.originalname)
+      .input('file_data', sql.VarBinary, file.buffer)
+      .input('file_type', sql.NVarChar, file.mimetype)
+      .query(`
+        INSERT INTO aufmass_temp_files (file_name, file_data, file_type)
+        OUTPUT INSERTED.id
+        VALUES (@file_name, @file_data, @file_type)
+      `);
+
+    const fileId = result.recordset[0].id;
+    const fileUrl = `${req.protocol}://${req.get('host')}/api/files/${fileId}`;
+
+    res.json({ id: fileId, url: fileUrl, fileName: file.originalname });
+  } catch (err) {
+    console.error('Error uploading temp file:', err);
+    res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
+
+// Get temp file by ID (public)
+app.get('/api/files/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.request()
+      .input('id', sql.Int, id)
+      .query('SELECT file_data, file_type, file_name FROM aufmass_temp_files WHERE id = @id');
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const file = result.recordset[0];
+    res.set('Content-Type', file.file_type);
+    res.set('Content-Disposition', `inline; filename="${file.file_name}"`);
+    res.send(file.file_data);
+  } catch (err) {
+    console.error('Error fetching file:', err);
+    res.status(500).json({ error: 'Failed to fetch file' });
+  }
+});
+
 // Get image by ID (public - for displaying images)
 app.get('/api/images/:id', async (req, res) => {
   try {
