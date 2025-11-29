@@ -8,7 +8,7 @@ import MarkiseStep from './components/MarkiseStep';
 import type { MarkiseData } from './components/MarkiseStep';
 import FinalSection from './components/FinalSection';
 import StepIcon from './components/StepIcon';
-import { FormData } from './types';
+import { FormData, ServerImage } from './types';
 import { generatePDF } from './utils/pdfGenerator';
 
 interface AufmassFormProps {
@@ -85,7 +85,7 @@ function AufmassForm({ initialData, onSave, onCancel }: AufmassFormProps) {
   };
 
   // Update bilder
-  const updateBilder = (files: File[]) => {
+  const updateBilder = (files: (File | ServerImage)[]) => {
     setFormData(prev => ({ ...prev, bilder: files }));
   };
 
@@ -227,7 +227,7 @@ function AufmassForm({ initialData, onSave, onCancel }: AufmassFormProps) {
         return (
           <FinalSection
             bemerkungen={formData.bemerkungen}
-            bilder={formData.bilder as File[]}
+            bilder={formData.bilder}
             updateBemerkungen={updateBemerkungen}
             updateBilder={updateBilder}
             onExport={handleExport}
