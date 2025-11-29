@@ -36,7 +36,7 @@ const FormPage = () => {
               model: apiData.model || ''
             },
             specifications: (apiData.specifications || {}) as DynamicFormData,
-            bilder: apiData.bilder?.map(b => String(b.id)) || [],
+            bilder: apiData.bilder || [],
             bemerkungen: apiData.bemerkungen || '',
             status: (apiData.status as 'draft' | 'completed' | 'archived') || 'draft',
             createdAt: apiData.created_at,

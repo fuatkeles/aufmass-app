@@ -1,13 +1,16 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ServerImage } from '../types';
 import './FinalSection.css';
 import './SectionStyles.css';
 
+type ImageItem = File | ServerImage;
+
 interface FinalSectionProps {
   bemerkungen: string;
-  bilder: File[];
+  bilder: ImageItem[];
   updateBemerkungen: (value: string) => void;
-  updateBilder: (files: File[]) => void;
+  updateBilder: (files: ImageItem[]) => void;
   onExport: () => Promise<void> | void;
 }
 
@@ -71,31 +74,31 @@ const FinalSection = ({
   };
 
   // Type guard to check if file is from server
-  const isServerFile = (file: unknown): file is { id: number; file_name: string; file_type: string } => {
-    return typeof file === 'object' && file !== null && 'id' in file && typeof (file as { id: unknown }).id === 'number';
+  const isServerFile = (file: ImageItem): file is ServerImage => {
+    return typeof file === 'object' && file !== null && 'id' in file && typeof (file as ServerImage).id === 'number';
   };
 
-  const getFilePreview = (file: File | { id: number; file_name: string; file_type: string }) => {
+  const getFilePreview = (file: ImageItem) => {
     // If it's a server-loaded image (has id), use API URL
     if (isServerFile(file)) {
       return `/api/images/${file.id}`;
     }
     // If it's a local File object, create blob URL
-    return URL.createObjectURL(file as File);
+    return URL.createObjectURL(file);
   };
 
-  const isPdf = (file: File | { id: number; file_name: string; file_type: string }) => {
+  const isPdf = (file: ImageItem) => {
     if (isServerFile(file)) {
       return file.file_type === 'application/pdf';
     }
-    return (file as File).type === 'application/pdf';
+    return file.type === 'application/pdf';
   };
 
-  const getFileName = (file: File | { id: number; file_name: string; file_type: string }) => {
+  const getFileName = (file: ImageItem) => {
     if (isServerFile(file)) {
       return file.file_name;
     }
-    return (file as File).name;
+    return file.name;
   };
 
   const isValid = bilder.length >= 2;

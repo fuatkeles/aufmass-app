@@ -1,5 +1,12 @@
 import { ProductSelection, DynamicFormData } from './productConfig';
 
+// Server image object type
+export interface ServerImage {
+  id: number;
+  file_name: string;
+  file_type: string;
+}
+
 export interface FormData {
   // Grunddaten (Common data for all products)
   id?: string; // For database
@@ -16,7 +23,7 @@ export interface FormData {
   specifications: DynamicFormData;
 
   // Additional data
-  bilder: File[] | string[]; // Image files or URLs
+  bilder: (File | ServerImage)[]; // Image files or server image objects
   bemerkungen: string; // Notes/remarks
 
   // Metadata
