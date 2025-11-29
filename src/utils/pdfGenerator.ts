@@ -255,10 +255,25 @@ export const generatePDF = async (formData: FormData) => {
     });
   }
 
-  // ============ BILDER ============
+  // ============ BILDER & ANHÄNGE ============
   const bilder = formData.bilder as File[];
   if (bilder && bilder.length > 0) {
-    // Start images on a new page
+    // Separate images and PDFs - check both type and name extension for safety
+    const imageFiles = bilder.filter(f => {
+      if (!f || !f.type) return false;
+      if (f.type.startsWith('image/')) return true;
+      // Fallback: check file extension
+      const ext = f.name?.toLowerCase().split('.').pop();
+      return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext || '');
+    });
+    const pdfFiles = bilder.filter(f => {
+      if (!f) return false;
+      if (f.type === 'application/pdf') return true;
+      // Fallback: check file extension
+      return f.name?.toLowerCase().endsWith('.pdf');
+    });
+
+    // Start attachments on a new page
     pdf.addPage();
     yPos = 20;
 
@@ -267,15 +282,36 @@ export const generatePDF = async (formData: FormData) => {
     pdf.setFillColor(127, 169, 61);
     pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
     pdf.setTextColor(255, 255, 255);
-    pdf.text('BILDER', margin + 2, yPos);
+    pdf.text('BILDER & ANHÄNGE', margin + 2, yPos);
     yPos += 15;
 
     pdf.setTextColor(0, 0, 0);
     pdf.setFontSize(10);
 
+    // List PDF attachments first
+    if (pdfFiles.length > 0) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('PDF Anhänge:', margin, yPos);
+      yPos += 8;
+      pdf.setFont('helvetica', 'normal');
+
+      pdfFiles.forEach((file) => {
+        if (!file || !file.name) return;
+        checkNewPage();
+        pdf.text(`• ${file.name}`, margin + 5, yPos);
+        yPos += 6;
+      });
+      yPos += 10;
+    }
+
     // Process each image
-    for (let i = 0; i < bilder.length; i++) {
-      const file = bilder[i];
+    for (let i = 0; i < imageFiles.length; i++) {
+      const file = imageFiles[i];
+
+      // Skip if not a valid file
+      if (!file || !(file instanceof File)) {
+        continue;
+      }
 
       try {
         const base64 = await fileToBase64(file);

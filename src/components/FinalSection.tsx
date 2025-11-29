@@ -48,7 +48,7 @@ const FinalSection = ({
     setDragActive(false);
 
     const files = Array.from(e.dataTransfer.files).filter(file =>
-      file.type.startsWith('image/')
+      file.type.startsWith('image/') || file.type === 'application/pdf'
     );
 
     if (files.length > 0) {
@@ -70,8 +70,12 @@ const FinalSection = ({
     updateBilder(newFiles);
   };
 
-  const getImagePreview = (file: File) => {
+  const getFilePreview = (file: File) => {
     return URL.createObjectURL(file);
+  };
+
+  const isPdf = (file: File) => {
+    return file.type === 'application/pdf';
   };
 
   const isValid = bilder.length >= 2;
@@ -117,7 +121,7 @@ const FinalSection = ({
           <input
             ref={addMoreInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             multiple
             onChange={handleFileSelect}
             style={{ display: 'none' }}
@@ -129,21 +133,37 @@ const FinalSection = ({
               {bilder.map((file, index) => (
                 <motion.div
                   key={`${file.name}-${index}`}
-                  className="image-preview-item"
+                  className={`image-preview-item ${isPdf(file) ? 'pdf-item' : ''}`}
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
                 >
-                  <img src={getImagePreview(file)} alt={`Bild ${index + 1}`} />
+                  {isPdf(file) ? (
+                    <a
+                      href={getFilePreview(file)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="pdf-preview"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="pdf-icon">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                        <polyline points="14,2 14,8 20,8" />
+                        <path d="M9 13h6M9 17h6M9 9h1" />
+                      </svg>
+                      <span className="pdf-name">{file.name}</span>
+                    </a>
+                  ) : (
+                    <img src={getFilePreview(file)} alt={`Bild ${index + 1}`} />
+                  )}
                   <button
                     type="button"
                     className="remove-image-btn"
                     onClick={() => removeImage(index)}
-                    title="Bild entfernen"
+                    title={isPdf(file) ? 'PDF entfernen' : 'Bild entfernen'}
                   >
                     ×
                   </button>
-                  <span className="image-label">Bild {index + 1}</span>
+                  <span className="image-label">{isPdf(file) ? 'PDF' : 'Bild'} {index + 1}</span>
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -163,7 +183,7 @@ const FinalSection = ({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf"
                   multiple
                   onChange={handleFileSelect}
                   style={{ display: 'none' }}
@@ -171,8 +191,8 @@ const FinalSection = ({
                 <span className="upload-icon">+</span>
                 <span className="upload-text">
                   {bilder.length === 0
-                    ? 'Klicken oder Bilder hierher ziehen'
-                    : 'Noch 1 Bild erforderlich'
+                    ? 'Klicken oder Dateien hierher ziehen'
+                    : 'Noch 1 Datei erforderlich'
                   }
                 </span>
               </motion.div>
