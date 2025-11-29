@@ -140,7 +140,7 @@
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
-          "options": ["Keine", "Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde"],
           "required": true
         },
         {
@@ -290,7 +290,7 @@
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
-          "options": ["Keine", "Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde"],
           "required": true
         },
         {
@@ -443,7 +443,7 @@
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
-          "options": ["Keine", "Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde"],
           "required": true
         },
         {
@@ -596,7 +596,7 @@
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
-          "options": ["Keine", "Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde"],
           "required": true
         },
         {
@@ -1061,7 +1061,7 @@
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
-          "options": ["Keine", "Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde"],
           "required": true
         },
         {
@@ -1134,7 +1134,7 @@
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
-          "options": ["Keine", "Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde"],
           "required": true
         },
         {
@@ -1193,7 +1193,7 @@
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
-          "options": ["Keine", "Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde"],
           "required": true
         },
         {
@@ -1297,7 +1297,7 @@
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
-          "options": ["Keine", "Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde"],
           "required": true
         },
         {

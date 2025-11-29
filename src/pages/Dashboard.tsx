@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getForms, deleteForm, getMontageteamStats } from '../services/api';
-import type { FormData, MontageteamStats } from '../services/api';
+import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm } from '../services/api';
+import type { FormData, MontageteamStats, Montageteam } from '../services/api';
 import { useStats } from '../AppWrapper';
 import './Dashboard.css';
 
@@ -18,6 +18,8 @@ const Dashboard = () => {
   const [formToDelete, setFormToDelete] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [montageteamStats, setMontageteamStats] = useState<MontageteamStats[]>([]);
+  const [montageteams, setMontageteams] = useState<Montageteam[]>([]);
+  const [teamDropdownOpen, setTeamDropdownOpen] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -27,12 +29,14 @@ const Dashboard = () => {
     try {
       setLoading(true);
       setError(null);
-      const [formsData, teamStats] = await Promise.all([
+      const [formsData, teamStats, teams] = await Promise.all([
         getForms(),
-        getMontageteamStats()
+        getMontageteamStats(),
+        getMontageteams()
       ]);
       setForms(formsData);
       setMontageteamStats(teamStats);
+      setMontageteams(teams.filter(t => t.is_active));
       refreshStats();
     } catch (err) {
       console.error('Error loading data:', err);
@@ -48,6 +52,36 @@ const Dashboard = () => {
   const handleDeleteForm = (id: number) => {
     setFormToDelete(id);
     setDeleteModalOpen(true);
+  };
+
+  const handleMontageteamChange = async (formId: number, teamName: string) => {
+    try {
+      const form = forms.find(f => f.id === formId);
+      if (!form) return;
+
+      const updatedSpecs = {
+        ...form.specifications,
+        montageteam: teamName || null
+      };
+
+      await updateForm(formId, { specifications: updatedSpecs });
+
+      // Update local state
+      setForms(forms.map(f =>
+        f.id === formId
+          ? { ...f, specifications: updatedSpecs }
+          : f
+      ));
+      setTeamDropdownOpen(null);
+    } catch (err) {
+      console.error('Error updating montageteam:', err);
+      alert('Fehler beim Aktualisieren des Montageteams');
+    }
+  };
+
+  const getFormMontageteam = (form: FormData): string => {
+    const specs = form.specifications as Record<string, unknown>;
+    return (specs?.montageteam as string) || '';
   };
 
   const confirmDelete = async () => {
@@ -267,6 +301,46 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <div className="card-actions-modern">
+                    <div className="team-selector">
+                      <button
+                        className={`team-selector-btn ${getFormMontageteam(form) ? 'has-team' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTeamDropdownOpen(teamDropdownOpen === form.id ? null : form.id!);
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" /></svg>
+                        <span>{getFormMontageteam(form) || 'Team'}</span>
+                        <svg className="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+                      </button>
+                      <AnimatePresence>
+                        {teamDropdownOpen === form.id && (
+                          <motion.div
+                            className="team-dropdown"
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              className={`team-option ${!getFormMontageteam(form) ? 'selected' : ''}`}
+                              onClick={() => handleMontageteamChange(form.id!, '')}
+                            >
+                              Kein Team
+                            </button>
+                            {montageteams.map((team) => (
+                              <button
+                                key={team.id}
+                                className={`team-option ${getFormMontageteam(form) === team.name ? 'selected' : ''}`}
+                                onClick={() => handleMontageteamChange(form.id!, team.name)}
+                              >
+                                {team.name}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                     <button className="action-btn edit" onClick={() => handleEditForm(form.id!)}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                       <span>Bearbeiten</span>
