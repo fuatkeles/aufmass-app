@@ -70,27 +70,32 @@ const FinalSection = ({
     updateBilder(newFiles);
   };
 
+  // Type guard to check if file is from server
+  const isServerFile = (file: unknown): file is { id: number; file_name: string; file_type: string } => {
+    return typeof file === 'object' && file !== null && 'id' in file && typeof (file as { id: unknown }).id === 'number';
+  };
+
   const getFilePreview = (file: File | { id: number; file_name: string; file_type: string }) => {
     // If it's a server-loaded image (has id), use API URL
-    if ('id' in file) {
+    if (isServerFile(file)) {
       return `/api/images/${file.id}`;
     }
     // If it's a local File object, create blob URL
-    return URL.createObjectURL(file);
+    return URL.createObjectURL(file as File);
   };
 
   const isPdf = (file: File | { id: number; file_name: string; file_type: string }) => {
-    if ('file_type' in file) {
+    if (isServerFile(file)) {
       return file.file_type === 'application/pdf';
     }
-    return file.type === 'application/pdf';
+    return (file as File).type === 'application/pdf';
   };
 
   const getFileName = (file: File | { id: number; file_name: string; file_type: string }) => {
-    if ('file_name' in file) {
+    if (isServerFile(file)) {
       return file.file_name;
     }
-    return file.name;
+    return (file as File).name;
   };
 
   const isValid = bilder.length >= 2;
