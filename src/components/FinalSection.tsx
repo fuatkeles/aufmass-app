@@ -70,12 +70,27 @@ const FinalSection = ({
     updateBilder(newFiles);
   };
 
-  const getFilePreview = (file: File) => {
+  const getFilePreview = (file: File | { id: number; file_name: string; file_type: string }) => {
+    // If it's a server-loaded image (has id), use API URL
+    if ('id' in file) {
+      return `/api/images/${file.id}`;
+    }
+    // If it's a local File object, create blob URL
     return URL.createObjectURL(file);
   };
 
-  const isPdf = (file: File) => {
+  const isPdf = (file: File | { id: number; file_name: string; file_type: string }) => {
+    if ('file_type' in file) {
+      return file.file_type === 'application/pdf';
+    }
     return file.type === 'application/pdf';
+  };
+
+  const getFileName = (file: File | { id: number; file_name: string; file_type: string }) => {
+    if ('file_name' in file) {
+      return file.file_name;
+    }
+    return file.name;
   };
 
   const isValid = bilder.length >= 2;
@@ -132,7 +147,7 @@ const FinalSection = ({
             <AnimatePresence>
               {bilder.map((file, index) => (
                 <motion.div
-                  key={`${file.name}-${index}`}
+                  key={`${getFileName(file)}-${index}`}
                   className={`image-preview-item ${isPdf(file) ? 'pdf-item' : ''}`}
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -150,7 +165,7 @@ const FinalSection = ({
                         <polyline points="14,2 14,8 20,8" />
                         <path d="M9 13h6M9 17h6M9 9h1" />
                       </svg>
-                      <span className="pdf-name">{file.name}</span>
+                      <span className="pdf-name">{getFileName(file)}</span>
                     </a>
                   ) : (
                     <img src={getFilePreview(file)} alt={`Bild ${index + 1}`} />
