@@ -206,7 +206,8 @@ const DynamicSpecificationForm = ({
 
       case 'modelColorSelect':
         const colors = modelColors.length > 0 ? modelColors : [];
-        const isCustom = formData[`${field.name}Custom`] !== undefined && formData[`${field.name}Custom`] !== '';
+        const isCustomColor = formData[`${field.name}Custom`] !== undefined && formData[`${field.name}Custom`] !== '';
+        const showCustomInput = formData[`${field.name}ShowCustom`] === true || isCustomColor;
 
         return (
           <motion.div
@@ -224,11 +225,13 @@ const DynamicSpecificationForm = ({
               <>
                 <select
                   id={field.name}
-                  value={isCustom ? 'custom' : (value as string)}
+                  value={showCustomInput ? 'custom' : (value as string)}
                   onChange={(e) => {
                     if (e.target.value === 'custom') {
+                      updateField(`${field.name}ShowCustom`, true);
                       updateField(field.name, '');
                     } else {
+                      updateField(`${field.name}ShowCustom`, false);
                       updateField(field.name, e.target.value);
                       updateField(`${field.name}Custom`, '');
                     }
@@ -244,7 +247,7 @@ const DynamicSpecificationForm = ({
                   {field.hasCustomOption && <option value="custom">Sonderfarbe...</option>}
                 </select>
                 <AnimatePresence>
-                  {(value === 'custom' || isCustom) && (
+                  {showCustomInput && (
                     <motion.div
                       className="custom-color-input"
                       initial={{ opacity: 0, height: 0 }}
