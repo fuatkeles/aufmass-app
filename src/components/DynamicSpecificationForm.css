@@ -189,6 +189,38 @@
   grid-column: 1 / -1;
 }
 
+/* Bauform Button Group - Weitere Produkte tarzı */
+.bauform-button-group {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.bauform-option-btn {
+  flex: 1;
+  padding: 1rem 1.5rem;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.bauform-option-btn:hover {
+  border-color: var(--primary-color);
+  background: rgba(127, 169, 61, 0.05);
+}
+
+.bauform-option-btn.selected {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: var(--bg-primary);
+}
+
+/* Old radio options - deprecated but keeping for backward compatibility */
 .bauform-options {
   display: flex;
   gap: 1rem;
@@ -517,6 +549,15 @@
     flex-direction: column;
   }
 
+  .bauform-button-group {
+    flex-direction: row;
+  }
+
+  .bauform-option-btn {
+    padding: 0.875rem 1rem;
+    font-size: 0.95rem;
+  }
+
   .eingerueckt-row {
     flex-direction: column;
     align-items: stretch;
@@ -601,4 +642,37 @@
   font-size: 0.95rem;
   color: var(--text-secondary);
   margin: 0;
+}
+
+/* ============ WEITERE PRODUKTE MOBILE OPTIMIZATIONS ============ */
+@media (max-width: 768px) {
+  .weitere-produkte-section {
+    margin-top: 2rem;
+    margin-left: -1rem;
+    margin-right: -1rem;
+    padding: 1.25rem 1rem;
+    border-radius: 12px;
+    border-left: none;
+    border-right: none;
+    width: calc(100% + 2rem);
+  }
+
+  .weitere-produkte-section::before {
+    left: 1rem;
+    right: 1rem;
+  }
+
+  .section-divider h3 {
+    font-size: 1.15rem;
+  }
+
+  .section-divider h3::before {
+    width: 24px;
+    height: 24px;
+    font-size: 1rem;
+  }
+
+  .section-divider .section-description {
+    font-size: 0.85rem;
+  }
 }

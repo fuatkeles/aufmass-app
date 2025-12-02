@@ -34,12 +34,47 @@ function Layout({ children }: { children: React.ReactNode }) {
   const { user, logout, isAdmin } = useAuth();
   const { stats } = useStats();
   const { openAdminPanel } = useAdminPanel();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
 
+  const handleNavClick = (path: string) => {
+    navigate(path);
+    setMobileMenuOpen(false);
+  };
+
   return (
     <div className="dashboard">
-      <aside className="dashboard-sidebar">
+      {/* Mobile Header */}
+      <header className="mobile-header">
+        <button className="hamburger-btn" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            {mobileMenuOpen ? (
+              <path d="M18 6L6 18M6 6l12 12" />
+            ) : (
+              <>
+                <path d="M3 12h18M3 6h18M3 18h18" />
+              </>
+            )}
+          </svg>
+        </button>
+        <div className="mobile-logo">
+          <span className="logo-name">AYLUX</span>
+          <span className="logo-tagline">Aufmaß</span>
+        </div>
+        <button className="mobile-new-btn" onClick={() => handleNavClick('/form/new')}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div className="mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)} />
+      )}
+
+      <aside className={`dashboard-sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo">
             <div className="logo-icon">

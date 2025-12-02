@@ -360,7 +360,7 @@ const DynamicSpecificationForm = ({
         return null;
 
       case 'bauform':
-        const bauformType = formData['bauformType'] as string || 'BUNDIG';
+        const bauformType = formData['bauformType'] as string || '';
         const eingeruecktLinks = formData['bauformLinksActive'] === true;
         const eingeruecktRechts = formData['bauformRechtsActive'] === true;
 
@@ -376,36 +376,30 @@ const DynamicSpecificationForm = ({
               {field.label}
               {field.required && <span className="required">*</span>}
             </label>
-            <div className="bauform-options">
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="bauformType"
-                  value="BUNDIG"
-                  checked={bauformType === 'BUNDIG'}
-                  onChange={() => {
-                    updateField('bauformType', 'BUNDIG');
-                    updateField('bauformLinksActive', false);
-                    updateField('bauformRechtsActive', false);
-                    updateField('bauformLinksValue', '');
-                    updateField('bauformRechtsValue', '');
-                    updateField(field.name, 'BUNDIG');
-                  }}
-                />
-                <span>BÜNDIG</span>
-              </label>
-              <label className="radio-option">
-                <input
-                  type="radio"
-                  name="bauformType"
-                  value="EINGERUCKT"
-                  checked={bauformType === 'EINGERUCKT'}
-                  onChange={() => {
-                    updateField('bauformType', 'EINGERUCKT');
-                  }}
-                />
-                <span>EINGERÜCKT</span>
-              </label>
+            <div className="bauform-button-group">
+              <button
+                type="button"
+                className={`bauform-option-btn ${bauformType === 'BUNDIG' ? 'selected' : ''}`}
+                onClick={() => {
+                  updateField('bauformType', 'BUNDIG');
+                  updateField('bauformLinksActive', false);
+                  updateField('bauformRechtsActive', false);
+                  updateField('bauformLinksValue', '');
+                  updateField('bauformRechtsValue', '');
+                  updateField(field.name, 'BUNDIG');
+                }}
+              >
+                BÜNDIG
+              </button>
+              <button
+                type="button"
+                className={`bauform-option-btn ${bauformType === 'EINGERUCKT' ? 'selected' : ''}`}
+                onClick={() => {
+                  updateField('bauformType', 'EINGERUCKT');
+                }}
+              >
+                EINGERÜCKT
+              </button>
             </div>
 
             <AnimatePresence>
