@@ -128,3 +128,233 @@
     min-height: 48px;
   }
 }
+
+/* Markise Cards Container */
+.markise-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Single Markise Card */
+.markise-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.markise-card.expanded {
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.markise-card.collapsed {
+  cursor: pointer;
+}
+
+.markise-card.collapsed:hover {
+  border-color: var(--text-secondary);
+  background: var(--bg-tertiary);
+}
+
+/* Card Header */
+.markise-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+
+.markise-card-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.markise-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.markise-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--primary-color);
+  color: var(--bg-primary);
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.markise-label {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.markise-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Remove Button */
+.remove-markise-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--error-color);
+  border-radius: 8px;
+  color: var(--error-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.remove-markise-btn:hover {
+  background: var(--error-color);
+  color: white;
+}
+
+.remove-markise-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Expand Icon */
+.expand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  transition: transform 0.3s ease;
+}
+
+.expand-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.expand-icon svg {
+  width: 20px;
+  height: 20px;
+  color: var(--text-secondary);
+}
+
+/* Card Content */
+.markise-card-content {
+  padding: 1.25rem;
+  padding-top: 0;
+  border-top: 1px solid var(--border-color);
+  margin-top: 0;
+  overflow: hidden;
+}
+
+.markise-card.expanded .markise-card-content {
+  padding-top: 1.25rem;
+}
+
+/* Add Markise Button */
+.add-markise-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 1rem;
+  background: transparent;
+  border: 2px dashed var(--border-color);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 1.5rem;
+}
+
+.add-markise-btn:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: rgba(127, 169, 61, 0.05);
+}
+
+.add-markise-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Bemerkungen Section */
+.markise-bemerkungen {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.markise-bemerkungen label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.markise-bemerkungen textarea {
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  resize: vertical;
+  min-height: 80px;
+  transition: all 0.2s ease;
+}
+
+.markise-bemerkungen textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(127, 169, 61, 0.15);
+  background: var(--bg-secondary);
+}
+
+.markise-bemerkungen textarea::placeholder {
+  color: var(--text-secondary);
+}
+
+/* Mobile optimizations for cards */
+@media (max-width: 768px) {
+  .markise-card-header {
+    padding: 0.875rem 1rem;
+  }
+
+  .markise-card-content {
+    padding: 1rem;
+  }
+
+  .markise-number {
+    width: 24px;
+    height: 24px;
+    font-size: 0.8rem;
+  }
+
+  .markise-label {
+    font-size: 0.9rem;
+  }
+
+  .add-markise-btn {
+    padding: 0.875rem;
+    font-size: 0.95rem;
+  }
+}

@@ -286,7 +286,25 @@
   line-height: 1.5;
 }
 
-.export-button {
+.export-info.success h3 {
+  color: white;
+}
+
+.export-info.success p {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Action Buttons Container */
+.action-buttons {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.save-button,
+.export-button,
+.new-form-button,
+.back-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -302,16 +320,69 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   font-family: inherit;
+  flex: 1;
+  min-width: 200px;
 }
 
-.export-button:hover:not(.disabled) {
+.save-button {
+  background: transparent;
+  border: 2px solid var(--bg-primary);
+  color: var(--bg-primary);
+}
+
+.save-button.primary {
+  background: var(--bg-primary);
+  color: var(--primary-color);
+  border: none;
+}
+
+.save-button:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.save-button.primary:hover:not(.disabled) {
+  background: var(--bg-primary);
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
+.export-button:hover:not(.disabled),
+.new-form-button:hover,
+.back-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.save-button.disabled,
 .export-button.disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.new-form-button {
+  background: var(--bg-primary);
+  color: var(--primary-color);
+}
+
+.new-form-button.secondary {
+  background: transparent;
+  border: 2px solid var(--bg-primary);
+  color: var(--bg-primary);
+}
+
+.new-form-button.secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.back-button {
+  background: transparent;
+  border: 2px solid var(--bg-primary);
+  color: var(--bg-primary);
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .button-text {

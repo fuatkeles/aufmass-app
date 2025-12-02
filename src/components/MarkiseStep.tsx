@@ -19,9 +19,16 @@ export interface MarkiseData {
   position?: string;
 }
 
+export interface MarkiseStepData {
+  markisen: MarkiseData[];
+  bemerkungen: string;
+}
+
 interface MarkiseStepProps {
-  markiseData: MarkiseData | null;
-  updateMarkiseData: (data: MarkiseData) => void;
+  markiseData: MarkiseData | MarkiseData[] | null;
+  updateMarkiseData: (data: MarkiseData | MarkiseData[]) => void;
+  markiseBemerkungen?: string;
+  updateMarkiseBemerkungen?: (bemerkungen: string) => void;
 }
 
 const markiseTypes = [
@@ -29,7 +36,7 @@ const markiseTypes = [
     value: 'AUFGLAS',
     label: 'Aufglas Markise',
     models: ['W350', 'ANCONA AG'],
-    showHeight: true,
+    showHeight: false,
     showZip: true,
     befestigungsOptions: []
   },
@@ -37,7 +44,7 @@ const markiseTypes = [
     value: 'UNTERGLAS',
     label: 'Unterglas Markise',
     models: ['T350', 'ANCONA UG'],
-    showHeight: true,
+    showHeight: false,
     showZip: true,
     befestigungsOptions: ['Innen Sparren', 'Unten Sparren']
   },
@@ -45,7 +52,7 @@ const markiseTypes = [
     value: 'SENKRECHT',
     label: 'Senkrecht Markise',
     models: ['2020Z', '1616Z'],
-    showHeight: false,
+    showHeight: true,
     showZip: true,
     befestigungsOptions: ['Zwischen Pfosten', 'Vor Pfosten'],
     showPosition: true
@@ -54,7 +61,7 @@ const markiseTypes = [
     value: 'VOLKASSETTE',
     label: 'Volkassette',
     models: ['TRENTINO'],
-    showHeight: true,
+    showHeight: false,
     showZip: false,
     showVolanTyp: true,
     befestigungsOptions: ['Wand', 'Decke', 'Untenbalkon']
@@ -63,50 +70,69 @@ const markiseTypes = [
     value: 'HALBEKASSETTE',
     label: 'Halbekassette',
     models: ['AGUERO'],
-    showHeight: true,
+    showHeight: false,
     showZip: false,
     showVolanTyp: true,
     befestigungsOptions: ['Wand', 'Decke', 'Untenbalkon']
   }
 ];
 
-const positionOptions = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS'];
+const positionOptions = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS', 'HINTEN LINKS', 'HINTEN RECHTS'];
 
-const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
-  const [formData, setFormData] = useState<MarkiseData>({
-    typ: '',
-    modell: '',
-    breite: 0,
-    laenge: 0,
-    hoehe: 0,
-    stoffNummer: '',
-    gestellfarbe: '',
-    antrieb: '',
-    antriebsseite: '',
-    volanTyp: '',
-    zip: '',
-    befestigungsart: '',
-    position: ''
-  });
+const emptyMarkise: MarkiseData = {
+  typ: '',
+  modell: '',
+  breite: 0,
+  laenge: 0,
+  hoehe: 0,
+  stoffNummer: '',
+  gestellfarbe: '',
+  antrieb: '',
+  antriebsseite: '',
+  volanTyp: '',
+  zip: '',
+  befestigungsart: '',
+  position: ''
+};
+
+const MarkiseStep = ({ markiseData, updateMarkiseData, markiseBemerkungen = '', updateMarkiseBemerkungen }: MarkiseStepProps) => {
+  // Convert old single object format to array format
+  const initialMarkisen = (): MarkiseData[] => {
+    if (!markiseData) return [{ ...emptyMarkise }];
+    if (Array.isArray(markiseData)) return markiseData.length > 0 ? markiseData : [{ ...emptyMarkise }];
+    // Old single object format - convert to array
+    return [markiseData];
+  };
+
+  const [markisen, setMarkisen] = useState<MarkiseData[]>(initialMarkisen);
+  const [bemerkungen, setBemerkungen] = useState(markiseBemerkungen);
+  const [expandedIndex, setExpandedIndex] = useState<number>(0);
 
   useEffect(() => {
     if (markiseData) {
-      setFormData(markiseData);
+      if (Array.isArray(markiseData)) {
+        setMarkisen(markiseData.length > 0 ? markiseData : [{ ...emptyMarkise }]);
+      } else {
+        setMarkisen([markiseData]);
+      }
     }
   }, [markiseData]);
 
-  const selectedType = markiseTypes.find(t => t.value === formData.typ);
-  const availableModels = selectedType?.models || [];
+  useEffect(() => {
+    setBemerkungen(markiseBemerkungen);
+  }, [markiseBemerkungen]);
 
-  const handleChange = (field: keyof MarkiseData, value: string | number) => {
-    const newData = { ...formData, [field]: value };
-    setFormData(newData);
-    updateMarkiseData(newData);
+  const handleChange = (index: number, field: keyof MarkiseData, value: string | number) => {
+    const newMarkisen = [...markisen];
+    newMarkisen[index] = { ...newMarkisen[index], [field]: value };
+    setMarkisen(newMarkisen);
+    updateMarkiseData(newMarkisen);
   };
 
-  const handleTypeChange = (value: string) => {
-    const newData = {
-      ...formData,
+  const handleTypeChange = (index: number, value: string) => {
+    const newMarkisen = [...markisen];
+    newMarkisen[index] = {
+      ...newMarkisen[index],
       typ: value,
       modell: '',
       befestigungsart: '',
@@ -115,24 +141,50 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
       volanTyp: '',
       hoehe: 0
     };
-    setFormData(newData);
-    updateMarkiseData(newData);
+    setMarkisen(newMarkisen);
+    updateMarkiseData(newMarkisen);
   };
 
-  return (
-    <div className="markise-step">
-      <motion.div
-        className="section-header"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        <h2>Markise Konfiguration</h2>
-        <p className="section-description">
-          Bitte geben Sie alle Details zur Markise an
-        </p>
-      </motion.div>
+  const addMarkise = () => {
+    const newMarkisen = [...markisen, { ...emptyMarkise }];
+    setMarkisen(newMarkisen);
+    updateMarkiseData(newMarkisen);
+    setExpandedIndex(newMarkisen.length - 1);
+  };
 
+  const removeMarkise = (index: number) => {
+    if (markisen.length <= 1) return; // Keep at least one
+    const newMarkisen = markisen.filter((_, i) => i !== index);
+    setMarkisen(newMarkisen);
+    updateMarkiseData(newMarkisen);
+    if (expandedIndex >= newMarkisen.length) {
+      setExpandedIndex(newMarkisen.length - 1);
+    }
+  };
+
+  const handleBemerkungenChange = (value: string) => {
+    setBemerkungen(value);
+    if (updateMarkiseBemerkungen) {
+      updateMarkiseBemerkungen(value);
+    }
+  };
+
+  const getMarkiseLabel = (markise: MarkiseData, index: number) => {
+    if (markise.typ) {
+      const typeLabel = markiseTypes.find(t => t.value === markise.typ)?.label || markise.typ;
+      if (markise.position) {
+        return `Markise ${index + 1}: ${typeLabel} - ${markise.position}`;
+      }
+      return `Markise ${index + 1}: ${typeLabel}`;
+    }
+    return `Markise ${index + 1}`;
+  };
+
+  const renderMarkiseForm = (markise: MarkiseData, index: number) => {
+    const selectedType = markiseTypes.find(t => t.value === markise.typ);
+    const availableModels = selectedType?.models || [];
+
+    return (
       <div className="markise-form-grid">
         {/* Markise Typ */}
         <motion.div
@@ -141,13 +193,13 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0 }}
         >
-          <label htmlFor="markiseTyp">
+          <label htmlFor={`markiseTyp-${index}`}>
             Markise Typ <span className="required">*</span>
           </label>
           <select
-            id="markiseTyp"
-            value={formData.typ}
-            onChange={(e) => handleTypeChange(e.target.value)}
+            id={`markiseTyp-${index}`}
+            value={markise.typ}
+            onChange={(e) => handleTypeChange(index, e.target.value)}
             required
           >
             <option value="">Bitte wählen...</option>
@@ -159,7 +211,7 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
 
         {/* Modell */}
         <AnimatePresence>
-          {formData.typ && (
+          {markise.typ && (
             <motion.div
               className="form-field"
               initial={{ opacity: 0, y: 20 }}
@@ -167,13 +219,13 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, delay: 0.05 }}
             >
-              <label htmlFor="markiseModell">
+              <label htmlFor={`markiseModell-${index}`}>
                 Modell <span className="required">*</span>
               </label>
               <select
-                id="markiseModell"
-                value={formData.modell}
-                onChange={(e) => handleChange('modell', e.target.value)}
+                id={`markiseModell-${index}`}
+                value={markise.modell}
+                onChange={(e) => handleChange(index, 'modell', e.target.value)}
                 required
               >
                 <option value="">Bitte wählen...</option>
@@ -195,13 +247,13 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, delay: 0.1 }}
             >
-              <label htmlFor="befestigungsart">
+              <label htmlFor={`befestigungsart-${index}`}>
                 Befestigungsart <span className="required">*</span>
               </label>
               <select
-                id="befestigungsart"
-                value={formData.befestigungsart}
-                onChange={(e) => handleChange('befestigungsart', e.target.value)}
+                id={`befestigungsart-${index}`}
+                value={markise.befestigungsart}
+                onChange={(e) => handleChange(index, 'befestigungsart', e.target.value)}
                 required
               >
                 <option value="">Bitte wählen...</option>
@@ -223,13 +275,13 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, delay: 0.15 }}
             >
-              <label htmlFor="position">
+              <label htmlFor={`position-${index}`}>
                 Position <span className="required">*</span>
               </label>
               <select
-                id="position"
-                value={formData.position}
-                onChange={(e) => handleChange('position', e.target.value)}
+                id={`position-${index}`}
+                value={markise.position}
+                onChange={(e) => handleChange(index, 'position', e.target.value)}
                 required
               >
                 <option value="">Bitte wählen...</option>
@@ -248,15 +300,15 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.2 }}
         >
-          <label htmlFor="breite">
+          <label htmlFor={`breite-${index}`}>
             Markisenbreite <span className="unit-label">(mm)</span> <span className="required">*</span>
           </label>
           <div className="number-input-wrapper">
             <input
               type="number"
-              id="breite"
-              value={formData.breite || ''}
-              onChange={(e) => handleChange('breite', parseFloat(e.target.value) || 0)}
+              id={`breite-${index}`}
+              value={markise.breite || ''}
+              onChange={(e) => handleChange(index, 'breite', parseFloat(e.target.value) || 0)}
               placeholder="0"
               min="0"
               required
@@ -271,15 +323,15 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.25 }}
         >
-          <label htmlFor="laenge">
+          <label htmlFor={`laenge-${index}`}>
             Markisenlänge <span className="unit-label">(mm)</span> <span className="required">*</span>
           </label>
           <div className="number-input-wrapper">
             <input
               type="number"
-              id="laenge"
-              value={formData.laenge || ''}
-              onChange={(e) => handleChange('laenge', parseFloat(e.target.value) || 0)}
+              id={`laenge-${index}`}
+              value={markise.laenge || ''}
+              onChange={(e) => handleChange(index, 'laenge', parseFloat(e.target.value) || 0)}
               placeholder="0"
               min="0"
               required
@@ -288,7 +340,7 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
           </div>
         </motion.div>
 
-        {/* Höhe - conditional */}
+        {/* Höhe - only for SENKRECHT */}
         <AnimatePresence>
           {selectedType?.showHeight && (
             <motion.div
@@ -298,15 +350,15 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, delay: 0.3 }}
             >
-              <label htmlFor="hoehe">
+              <label htmlFor={`hoehe-${index}`}>
                 Markisenhöhe <span className="unit-label">(mm)</span> <span className="required">*</span>
               </label>
               <div className="number-input-wrapper">
                 <input
                   type="number"
-                  id="hoehe"
-                  value={formData.hoehe || ''}
-                  onChange={(e) => handleChange('hoehe', parseFloat(e.target.value) || 0)}
+                  id={`hoehe-${index}`}
+                  value={markise.hoehe || ''}
+                  onChange={(e) => handleChange(index, 'hoehe', parseFloat(e.target.value) || 0)}
                   placeholder="0"
                   min="0"
                   required
@@ -324,14 +376,14 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.35 }}
         >
-          <label htmlFor="stoffNummer">
+          <label htmlFor={`stoffNummer-${index}`}>
             Stoff Nummer <span className="required">*</span>
           </label>
           <input
             type="text"
-            id="stoffNummer"
-            value={formData.stoffNummer}
-            onChange={(e) => handleChange('stoffNummer', e.target.value)}
+            id={`stoffNummer-${index}`}
+            value={markise.stoffNummer}
+            onChange={(e) => handleChange(index, 'stoffNummer', e.target.value)}
             placeholder="Stoff Nummer eingeben"
             required
           />
@@ -344,14 +396,14 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.4 }}
         >
-          <label htmlFor="gestellfarbe">
+          <label htmlFor={`gestellfarbe-${index}`}>
             Gestellfarbe <span className="required">*</span>
           </label>
           <input
             type="text"
-            id="gestellfarbe"
-            value={formData.gestellfarbe}
-            onChange={(e) => handleChange('gestellfarbe', e.target.value)}
+            id={`gestellfarbe-${index}`}
+            value={markise.gestellfarbe}
+            onChange={(e) => handleChange(index, 'gestellfarbe', e.target.value)}
             placeholder="z.B. RAL 7016"
             required
           />
@@ -367,13 +419,13 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, delay: 0.45 }}
             >
-              <label htmlFor="zip">
+              <label htmlFor={`zip-${index}`}>
                 ZIP <span className="required">*</span>
               </label>
               <select
-                id="zip"
-                value={formData.zip}
-                onChange={(e) => handleChange('zip', e.target.value)}
+                id={`zip-${index}`}
+                value={markise.zip}
+                onChange={(e) => handleChange(index, 'zip', e.target.value)}
                 required
               >
                 <option value="">Bitte wählen...</option>
@@ -394,14 +446,14 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, delay: 0.5 }}
             >
-              <label htmlFor="volanTyp">
+              <label htmlFor={`volanTyp-${index}`}>
                 Volan Typ <span className="required">*</span>
               </label>
               <input
                 type="text"
-                id="volanTyp"
-                value={formData.volanTyp}
-                onChange={(e) => handleChange('volanTyp', e.target.value)}
+                id={`volanTyp-${index}`}
+                value={markise.volanTyp}
+                onChange={(e) => handleChange(index, 'volanTyp', e.target.value)}
                 placeholder="Volan Typ eingeben"
                 required
               />
@@ -416,13 +468,13 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.55 }}
         >
-          <label htmlFor="antrieb">
+          <label htmlFor={`antrieb-${index}`}>
             Antrieb <span className="required">*</span>
           </label>
           <select
-            id="antrieb"
-            value={formData.antrieb}
-            onChange={(e) => handleChange('antrieb', e.target.value)}
+            id={`antrieb-${index}`}
+            value={markise.antrieb}
+            onChange={(e) => handleChange(index, 'antrieb', e.target.value)}
             required
           >
             <option value="">Bitte wählen...</option>
@@ -438,13 +490,13 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.6 }}
         >
-          <label htmlFor="antriebsseite">
+          <label htmlFor={`antriebsseite-${index}`}>
             Antriebsseite <span className="required">*</span>
           </label>
           <select
-            id="antriebsseite"
-            value={formData.antriebsseite}
-            onChange={(e) => handleChange('antriebsseite', e.target.value)}
+            id={`antriebsseite-${index}`}
+            value={markise.antriebsseite}
+            onChange={(e) => handleChange(index, 'antriebsseite', e.target.value)}
             required
           >
             <option value="">Bitte wählen...</option>
@@ -453,6 +505,115 @@ const MarkiseStep = ({ markiseData, updateMarkiseData }: MarkiseStepProps) => {
           </select>
         </motion.div>
       </div>
+    );
+  };
+
+  return (
+    <div className="markise-step">
+      <motion.div
+        className="section-header"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <h2>Markise Konfiguration</h2>
+        <p className="section-description">
+          Bitte geben Sie alle Details zu den Markisen an
+        </p>
+      </motion.div>
+
+      {/* Markise Cards */}
+      <div className="markise-cards">
+        {markisen.map((markise, index) => (
+          <motion.div
+            key={index}
+            className={`markise-card ${expandedIndex === index ? 'expanded' : 'collapsed'}`}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.1 }}
+          >
+            <div
+              className="markise-card-header"
+              onClick={() => setExpandedIndex(expandedIndex === index ? -1 : index)}
+            >
+              <div className="markise-card-title">
+                <span className="markise-number">{index + 1}</span>
+                <span className="markise-label">{getMarkiseLabel(markise, index)}</span>
+              </div>
+              <div className="markise-card-actions">
+                {markisen.length > 1 && (
+                  <button
+                    type="button"
+                    className="remove-markise-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeMarkise(index);
+                    }}
+                    title="Markise entfernen"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
+                <span className={`expand-icon ${expandedIndex === index ? 'expanded' : ''}`}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="6,9 12,15 18,9" />
+                  </svg>
+                </span>
+              </div>
+            </div>
+            <AnimatePresence>
+              {expandedIndex === index && (
+                <motion.div
+                  className="markise-card-content"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {renderMarkiseForm(markise, index)}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Add Markise Button */}
+      <motion.button
+        type="button"
+        className="add-markise-btn"
+        onClick={addMarkise}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3, delay: 0.2 }}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+        Weitere Markise hinzufügen
+      </motion.button>
+
+      {/* Bemerkungen */}
+      <motion.div
+        className="markise-bemerkungen"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.3 }}
+      >
+        <label htmlFor="markiseBemerkungen">
+          Bemerkungen zur Markise
+        </label>
+        <textarea
+          id="markiseBemerkungen"
+          value={bemerkungen}
+          onChange={(e) => handleBemerkungenChange(e.target.value)}
+          placeholder="Zusätzliche Anmerkungen zur Markise..."
+          rows={3}
+        />
+      </motion.div>
     </div>
   );
 };

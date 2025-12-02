@@ -36,6 +36,7 @@ const FormPage = () => {
               model: apiData.model || ''
             },
             specifications: (apiData.specifications || {}) as DynamicFormData,
+            weitereProdukte: apiData.weitereProdukte || [],
             bilder: apiData.bilder || [],
             bemerkungen: apiData.bemerkungen || '',
             status: (apiData.status as 'draft' | 'completed' | 'archived') || 'draft',
@@ -69,8 +70,9 @@ const FormPage = () => {
         model: data.productSelection?.model || '',
         specifications: data.specifications || {},
         markiseData: (data.specifications as Record<string, unknown>)?.markiseData,
+        weitereProdukte: data.weitereProdukte || [],
         bemerkungen: data.bemerkungen || '',
-        status: 'completed'
+        status: 'neu'
       };
 
       let formId: number;
@@ -91,7 +93,7 @@ const FormPage = () => {
         await uploadImages(formId, newImages);
       }
 
-      navigate('/');
+      // Navigate etme - kullanıcı FinalSection'daki butonlarla yönlendirilecek
     } catch (err) {
       console.error('Error saving form:', err);
       alert('Fehler beim Speichern. Bitte versuchen Sie es erneut.');

@@ -545,3 +545,60 @@
     min-height: 52px;
   }
 }
+
+/* ============ WEITERE PRODUKTE SECTION ============ */
+.weitere-produkte-section {
+  margin-top: 3rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(127, 169, 61, 0.1) 0%, rgba(127, 169, 61, 0.05) 100%);
+  border: 2px solid rgba(127, 169, 61, 0.4);
+  border-radius: 16px;
+  position: relative;
+}
+
+.weitere-produkte-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 1.5rem;
+  right: 1.5rem;
+  height: 3px;
+  background: linear-gradient(90deg, #7FA93D, #5a8a1a);
+  border-radius: 0 0 4px 4px;
+}
+
+.section-divider {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.section-divider h3 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.section-divider h3::before {
+  content: '+';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #7FA93D, #5a8a1a);
+  color: white;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.section-divider .section-description {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin: 0;
+}

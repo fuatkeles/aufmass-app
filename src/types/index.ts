@@ -7,6 +7,15 @@ export interface ServerImage {
   file_type: string;
 }
 
+// Weiteres Produkt type for multiple products per form
+export interface WeiteresProdukt {
+  id: string;
+  category: string;
+  productType: string;
+  model: string;
+  specifications: Record<string, string | number | boolean>;
+}
+
 export interface FormData {
   // Grunddaten (Common data for all products)
   id?: string; // For database
@@ -22,6 +31,9 @@ export interface FormData {
   // Dynamic product-specific fields
   specifications: DynamicFormData;
 
+  // Weitere Produkte (additional products for same customer)
+  weitereProdukte?: WeiteresProdukt[];
+
   // Additional data
   bilder: (File | ServerImage)[]; // Image files or server image objects
   bemerkungen: string; // Notes/remarks
@@ -29,7 +41,7 @@ export interface FormData {
   // Metadata
   createdAt?: string;
   updatedAt?: string;
-  status?: 'draft' | 'completed' | 'archived';
+  status?: 'neu' | 'auftrag_erteilt' | 'bestellt' | 'abgeschlossen' | 'reklamation' | 'draft' | 'completed' | 'archived';
 }
 
 // Legacy interfaces (keeping for backward compatibility during migration)

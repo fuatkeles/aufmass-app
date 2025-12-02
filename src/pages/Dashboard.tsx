@@ -1,10 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm } from '../services/api';
+import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getForm } from '../services/api';
 import type { FormData, MontageteamStats, Montageteam } from '../services/api';
 import { useStats } from '../AppWrapper';
+import { generatePDF } from '../utils/pdfGenerator';
 import './Dashboard.css';
+
+// Status options for forms
+const STATUS_OPTIONS = [
+  { value: 'alle', label: 'Alle Aufmaße', color: '#7fa93d' },
+  { value: 'neu', label: 'Neu', color: '#8b5cf6' },
+  { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
+  { value: 'bestellt', label: 'Bestellt/In Bearbeitung', color: '#f59e0b' },
+  { value: 'abgeschlossen', label: 'Abgeschlossen', color: '#10b981' },
+  { value: 'reklamation', label: 'Reklamation/Restarbeit', color: '#ef4444' },
+];
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -13,13 +24,15 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'completed'>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('alle');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [formToDelete, setFormToDelete] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [montageteamStats, setMontageteamStats] = useState<MontageteamStats[]>([]);
   const [montageteams, setMontageteams] = useState<Montageteam[]>([]);
   const [teamDropdownOpen, setTeamDropdownOpen] = useState<number | null>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState<number | null>(null);
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -84,6 +97,77 @@ const Dashboard = () => {
     return (specs?.montageteam as string) || '';
   };
 
+  const getFormStatus = (form: FormData): string => {
+    const status = form.status || 'neu';
+    // Map legacy statuses to new ones
+    if (status === 'completed' || status === 'draft') {
+      return 'neu';
+    }
+    return status;
+  };
+
+  const getStatusLabel = (status: string): string => {
+    const option = STATUS_OPTIONS.find(o => o.value === status);
+    return option?.label || 'Alle Aufmaße';
+  };
+
+  const getStatusColor = (status: string): string => {
+    const option = STATUS_OPTIONS.find(o => o.value === status);
+    return option?.color || '#7fa93d';
+  };
+
+  const handleStatusChange = async (formId: number, newStatus: string) => {
+    try {
+      await updateForm(formId, { status: newStatus });
+
+      // Update local state
+      setForms(forms.map(f =>
+        f.id === formId
+          ? { ...f, status: newStatus }
+          : f
+      ));
+      setStatusDropdownOpen(null);
+      refreshStats();
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert(`Fehler beim Aktualisieren des Status: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`);
+    }
+  };
+
+  const handleDownloadPDF = async (formId: number) => {
+    try {
+      // Get full form data with images
+      const fullFormData = await getForm(formId);
+
+      // Transform to the format expected by generatePDF
+      const pdfData = {
+        id: String(fullFormData.id),
+        datum: fullFormData.datum || '',
+        aufmasser: fullFormData.aufmasser || '',
+        kundeVorname: fullFormData.kundeVorname || '',
+        kundeNachname: fullFormData.kundeNachname || '',
+        kundenlokation: fullFormData.kundenlokation || '',
+        productSelection: {
+          category: fullFormData.category || '',
+          productType: fullFormData.productType || '',
+          model: fullFormData.model || ''
+        },
+        specifications: fullFormData.specifications as Record<string, string | number | boolean | string[]> || {},
+        weitereProdukte: fullFormData.weitereProdukte || [],
+        bilder: fullFormData.bilder || [],
+        bemerkungen: fullFormData.bemerkungen || '',
+        status: (fullFormData.status as 'draft' | 'completed' | 'archived') || 'draft',
+        createdAt: fullFormData.created_at,
+        updatedAt: fullFormData.updated_at
+      };
+
+      await generatePDF(pdfData);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      alert(`Fehler beim Erstellen der PDF: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`);
+    }
+  };
+
   const confirmDelete = async () => {
     if (formToDelete) {
       try {
@@ -105,7 +189,7 @@ const Dashboard = () => {
       form.kundenlokation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       form.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       form.productType?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || form.status === filterStatus;
+    const matchesFilter = filterStatus === 'alle' || form.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
@@ -156,47 +240,6 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* Quick Stats */}
-      <div className="quick-stats">
-        <motion.div className="quick-stat-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <div className="quick-stat-content">
-            <div className="quick-stat-icon total">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            </div>
-            <div className="quick-stat-info">
-              <span className="quick-stat-value">{stats.total}</span>
-              <span className="quick-stat-label">Alle Aufmaße</span>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div className="quick-stat-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
-          <div className="quick-stat-content">
-            <div className="quick-stat-icon completed">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </div>
-            <div className="quick-stat-info">
-              <span className="quick-stat-value">{stats.completed}</span>
-              <span className="quick-stat-label">Abgeschlossen</span>
-            </div>
-          </div>
-          <div className="quick-stat-percentage">{stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%</div>
-        </motion.div>
-
-        <motion.div className="quick-stat-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <div className="quick-stat-content">
-            <div className="quick-stat-icon draft">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-            </div>
-            <div className="quick-stat-info">
-              <span className="quick-stat-value">{stats.draft}</span>
-              <span className="quick-stat-label">In Bearbeitung</span>
-            </div>
-          </div>
-          <div className="quick-stat-percentage">{stats.total > 0 ? Math.round((stats.draft / stats.total) * 100) : 0}%</div>
-        </motion.div>
-      </div>
-
       {/* Montageteams Section */}
       <motion.div className="montageteams-section" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
         <div className="section-header">
@@ -236,13 +279,72 @@ const Dashboard = () => {
             <input type="text" placeholder="Suchen..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             {searchTerm && <button className="clear-search" onClick={() => setSearchTerm('')}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button>}
           </div>
+          {/* Desktop: Horizontal tabs */}
+          <div className="status-filter-tabs desktop-only">
+            {STATUS_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                className={`status-filter-tab ${filterStatus === option.value ? 'active' : ''}`}
+                onClick={() => setFilterStatus(option.value)}
+                style={{
+                  '--tab-color': option.color,
+                  borderColor: filterStatus === option.value ? option.color : 'transparent'
+                } as React.CSSProperties}
+              >
+                <span className="status-dot" style={{ backgroundColor: option.color }} />
+                <span className="tab-label">{option.label}</span>
+                <span className="tab-count">
+                  {option.value === 'alle'
+                    ? stats.total
+                    : forms.filter(f => f.status === option.value).length}
+                </span>
+              </button>
+            ))}
+          </div>
+          {/* Mobile: Dropdown */}
+          <div className="status-filter-dropdown-container mobile-only">
+            <button
+              className="status-filter-dropdown-btn"
+              onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
+              style={{ borderColor: getStatusColor(filterStatus) }}
+            >
+              <span className="status-dot" style={{ backgroundColor: getStatusColor(filterStatus) }} />
+              <span>{getStatusLabel(filterStatus)}</span>
+              <span className="dropdown-count">{filterStatus === 'alle' ? stats.total : filteredForms.length}</span>
+              <svg className={`chevron ${filterDropdownOpen ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            <AnimatePresence>
+              {filterDropdownOpen && (
+                <motion.div
+                  className="status-filter-dropdown"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      className={`status-dropdown-option ${filterStatus === option.value ? 'selected' : ''}`}
+                      onClick={() => {
+                        setFilterStatus(option.value);
+                        setFilterDropdownOpen(false);
+                      }}
+                    >
+                      <span className="status-dot" style={{ backgroundColor: option.color }} />
+                      <span>{option.label}</span>
+                      <span className="option-count">
+                        {option.value === 'alle'
+                          ? stats.total
+                          : forms.filter(f => f.status === option.value).length}
+                      </span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
         <div className="toolbar-right">
-          <div className="filter-tabs">
-            <button className={`filter-tab ${filterStatus === 'all' ? 'active' : ''}`} onClick={() => setFilterStatus('all')}>Alle</button>
-            <button className={`filter-tab ${filterStatus === 'completed' ? 'active' : ''}`} onClick={() => setFilterStatus('completed')}>Abgeschlossen</button>
-            <button className={`filter-tab ${filterStatus === 'draft' ? 'active' : ''}`} onClick={() => setFilterStatus('draft')}>Entwürfe</button>
-          </div>
           <div className="view-toggle">
             <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
@@ -280,13 +382,52 @@ const Dashboard = () => {
                           {form.kundenlokation || 'Keine Adresse'}
                         </p>
                       </div>
-                      <span className={`status-pill ${form.status || 'draft'}`}>{form.status === 'completed' ? 'Fertig' : 'Entwurf'}</span>
+                      <div className="status-selector">
+                        <button
+                          className="status-pill-btn"
+                          style={{ backgroundColor: getStatusColor(getFormStatus(form)) }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStatusDropdownOpen(statusDropdownOpen === form.id ? null : form.id!);
+                          }}
+                        >
+                          {getStatusLabel(getFormStatus(form)).split('/')[0]}
+                          <svg className="chevron-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+                        </button>
+                        <AnimatePresence>
+                          {statusDropdownOpen === form.id && (
+                            <motion.div
+                              className="status-dropdown"
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {STATUS_OPTIONS.filter(o => o.value !== 'alle').map((option) => (
+                                <button
+                                  key={option.value}
+                                  className={`status-option ${getFormStatus(form) === option.value ? 'selected' : ''}`}
+                                  onClick={() => handleStatusChange(form.id!, option.value)}
+                                >
+                                  <span className="status-dot" style={{ backgroundColor: option.color }} />
+                                  <span>{option.label}</span>
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
                     <div className="card-body-modern">
                       <div className="product-tags">
                         {form.category && <span className="product-tag category">{form.category}</span>}
                         {form.productType && <span className="product-tag type">{form.productType}</span>}
                         {form.model && <span className="product-tag model">{form.model}</span>}
+                        {form.weitereProdukte && form.weitereProdukte.length > 0 && (
+                          <span className="product-tag weitere" title={`${form.weitereProdukte.length} weitere Produkte`}>
+                            +{form.weitereProdukte.length} weitere
+                          </span>
+                        )}
                       </div>
                       <div className="card-meta">
                         <div className="meta-item-modern">
@@ -341,6 +482,9 @@ const Dashboard = () => {
                         )}
                       </AnimatePresence>
                     </div>
+                    <button className="action-btn pdf" onClick={() => handleDownloadPDF(form.id!)} title="PDF herunterladen">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14,2 14,8 20,8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="12" y2="18" /><line x1="15" y1="15" x2="12" y2="18" /></svg>
+                    </button>
                     <button className="action-btn edit" onClick={() => handleEditForm(form.id!)}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                       <span>Bearbeiten</span>

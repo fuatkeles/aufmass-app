@@ -68,7 +68,7 @@ async function initializeTables() {
         specifications NVARCHAR(MAX),
         markise_data NVARCHAR(MAX),
         bemerkungen NVARCHAR(MAX),
-        status NVARCHAR(50) DEFAULT 'draft',
+        status NVARCHAR(50) DEFAULT 'neu',
         created_by INT,
         created_at DATETIME DEFAULT GETDATE(),
         updated_at DATETIME DEFAULT GETDATE()
@@ -131,12 +131,35 @@ async function initializeTables() {
       )
     `);
 
+    // Form Products table (for multiple products per form)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_form_produkte' AND xtype='U')
+      CREATE TABLE aufmass_form_produkte (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        form_id INT NOT NULL,
+        sort_order INT NOT NULL DEFAULT 1,
+        category NVARCHAR(100) NOT NULL,
+        product_type NVARCHAR(100) NOT NULL,
+        model NVARCHAR(100) NOT NULL,
+        specifications NVARCHAR(MAX),
+        created_at DATETIME DEFAULT GETDATE(),
+        FOREIGN KEY (form_id) REFERENCES aufmass_forms(id) ON DELETE CASCADE
+      )
+    `);
+
     // Add created_by column to aufmass_forms if it doesn't exist
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_forms') AND name = 'created_by')
       BEGIN
         ALTER TABLE aufmass_forms ADD created_by INT NULL
       END
+    `);
+
+    // Migrate old status values to new ones (draft/completed -> neu)
+    await pool.request().query(`
+      UPDATE aufmass_forms
+      SET status = 'neu'
+      WHERE status IN ('draft', 'completed')
     `);
 
     // Check if admin exists, create default admin if not
@@ -573,9 +596,15 @@ app.get('/api/forms/:id', authenticateToken, async (req, res) => {
       .input('form_id', sql.Int, id)
       .query('SELECT id, file_name, file_type FROM aufmass_bilder WHERE form_id = @form_id');
 
+    // Get additional products for this form
+    const produkte = await pool.request()
+      .input('form_id', sql.Int, id)
+      .query('SELECT * FROM aufmass_form_produkte WHERE form_id = @form_id ORDER BY sort_order');
+
     res.json({
       ...result.recordset[0],
-      bilder: images.recordset
+      bilder: images.recordset,
+      weitereProdukte: produkte.recordset
     });
   } catch (err) {
     console.error('Error fetching form:', err);
@@ -598,7 +627,8 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       specifications,
       markiseData,
       bemerkungen,
-      status
+      status,
+      weitereProdukte
     } = req.body;
 
     const result = await pool.request()
@@ -613,7 +643,7 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       .input('specifications', sql.NVarChar, JSON.stringify(specifications || {}))
       .input('markise_data', sql.NVarChar, JSON.stringify(markiseData || null))
       .input('bemerkungen', sql.NVarChar, bemerkungen || '')
-      .input('status', sql.NVarChar, status || 'draft')
+      .input('status', sql.NVarChar, status || 'neu')
       .input('created_by', sql.Int, req.user.id)
       .query(`
         INSERT INTO aufmass_forms
@@ -623,6 +653,25 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       `);
 
     const newId = result.recordset[0].id;
+
+    // Insert additional products if provided
+    if (weitereProdukte && Array.isArray(weitereProdukte) && weitereProdukte.length > 0) {
+      for (let i = 0; i < weitereProdukte.length; i++) {
+        const produkt = weitereProdukte[i];
+        await pool.request()
+          .input('form_id', sql.Int, newId)
+          .input('sort_order', sql.Int, i + 1)
+          .input('category', sql.NVarChar, produkt.category)
+          .input('product_type', sql.NVarChar, produkt.productType)
+          .input('model', sql.NVarChar, produkt.model)
+          .input('specifications', sql.NVarChar, JSON.stringify(produkt.specifications || {}))
+          .query(`
+            INSERT INTO aufmass_form_produkte (form_id, sort_order, category, product_type, model, specifications)
+            VALUES (@form_id, @sort_order, @category, @product_type, @model, @specifications)
+          `);
+      }
+    }
+
     res.status(201).json({ id: newId, message: 'Form created successfully' });
   } catch (err) {
     console.error('Error creating form:', err);
@@ -663,15 +712,41 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    if (setClauses.length === 0) {
+    // Handle weitereProdukte separately
+    if (updates.weitereProdukte !== undefined) {
+      // Delete existing products and re-insert
+      await pool.request()
+        .input('form_id', sql.Int, id)
+        .query('DELETE FROM aufmass_form_produkte WHERE form_id = @form_id');
+
+      if (Array.isArray(updates.weitereProdukte) && updates.weitereProdukte.length > 0) {
+        for (let i = 0; i < updates.weitereProdukte.length; i++) {
+          const produkt = updates.weitereProdukte[i];
+          await pool.request()
+            .input('form_id', sql.Int, id)
+            .input('sort_order', sql.Int, i + 1)
+            .input('category', sql.NVarChar, produkt.category)
+            .input('product_type', sql.NVarChar, produkt.productType)
+            .input('model', sql.NVarChar, produkt.model)
+            .input('specifications', sql.NVarChar, JSON.stringify(produkt.specifications || {}))
+            .query(`
+              INSERT INTO aufmass_form_produkte (form_id, sort_order, category, product_type, model, specifications)
+              VALUES (@form_id, @sort_order, @category, @product_type, @model, @specifications)
+            `);
+        }
+      }
+    }
+
+    if (setClauses.length === 0 && updates.weitereProdukte === undefined) {
       return res.status(400).json({ error: 'No fields to update' });
     }
 
-    setClauses.push('updated_at = GETDATE()');
-
-    await request.query(`
-      UPDATE aufmass_forms SET ${setClauses.join(', ')} WHERE id = @id
-    `);
+    if (setClauses.length > 0) {
+      setClauses.push('updated_at = GETDATE()');
+      await request.query(`
+        UPDATE aufmass_forms SET ${setClauses.join(', ')} WHERE id = @id
+      `);
+    }
 
     res.json({ message: 'Form updated successfully' });
   } catch (err) {
@@ -828,13 +903,19 @@ app.delete('/api/images/:id', authenticateToken, async (req, res) => {
 app.get('/api/stats', authenticateToken, async (req, res) => {
   try {
     const total = await pool.request().query('SELECT COUNT(*) as count FROM aufmass_forms');
-    const completed = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'completed'");
-    const draft = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'draft'");
+    const neu = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'neu' OR status = 'draft' OR status = 'completed'");
+    const auftragErteilt = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'auftrag_erteilt'");
+    const bestellt = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'bestellt'");
+    const abgeschlossen = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'abgeschlossen'");
+    const reklamation = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'reklamation'");
 
     res.json({
       total: total.recordset[0].count,
-      completed: completed.recordset[0].count,
-      draft: draft.recordset[0].count
+      neu: neu.recordset[0].count,
+      auftrag_erteilt: auftragErteilt.recordset[0].count,
+      bestellt: bestellt.recordset[0].count,
+      abgeschlossen: abgeschlossen.recordset[0].count,
+      reklamation: reklamation.recordset[0].count
     });
   } catch (err) {
     console.error('Error fetching stats:', err);
@@ -853,15 +934,15 @@ app.get('/api/stats/montageteam', authenticateToken, async (req, res) => {
         m.is_active,
         m.created_at,
         ISNULL(f.count, 0) as count,
-        ISNULL(f.completed, 0) as completed,
-        ISNULL(f.draft, 0) as draft
+        ISNULL(f.neu, 0) as neu,
+        ISNULL(f.abgeschlossen, 0) as abgeschlossen
       FROM aufmass_montageteams m
       LEFT JOIN (
         SELECT
           JSON_VALUE(specifications, '$.montageteam') as team_name,
           COUNT(*) as count,
-          SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-          SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) as draft
+          SUM(CASE WHEN status IN ('neu', 'draft', 'completed') THEN 1 ELSE 0 END) as neu,
+          SUM(CASE WHEN status = 'abgeschlossen' THEN 1 ELSE 0 END) as abgeschlossen
         FROM aufmass_forms
         WHERE JSON_VALUE(specifications, '$.montageteam') IS NOT NULL
           AND JSON_VALUE(specifications, '$.montageteam') != ''

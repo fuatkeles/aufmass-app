@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ServerImage } from '../types';
 import './FinalSection.css';
@@ -12,6 +12,8 @@ interface FinalSectionProps {
   updateBemerkungen: (value: string) => void;
   updateBilder: (files: ImageItem[]) => void;
   onExport: () => Promise<void> | void;
+  onSave: () => Promise<void> | void;
+  onNewForm: () => void;
 }
 
 const FinalSection = ({
@@ -19,19 +21,58 @@ const FinalSection = ({
   bilder,
   updateBemerkungen,
   updateBilder,
-  onExport
+  onExport,
+  onSave,
+  onNewForm
 }: FinalSectionProps) => {
   const [dragActive, setDragActive] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [pdfExported, setPdfExported] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
+  const bemerkungenRef = useRef<HTMLTextAreaElement>(null);
 
+  // Ensure textarea value is synced before export/save
+  const syncBemerkungen = useCallback(() => {
+    if (bemerkungenRef.current) {
+      const currentValue = bemerkungenRef.current.value;
+      if (currentValue !== bemerkungen) {
+        updateBemerkungen(currentValue);
+      }
+    }
+  }, [bemerkungen, updateBemerkungen]);
+
+  // PDF sadece indirir, kaydetmez
   const handleExport = async () => {
+    // Sync bemerkungen before export
+    syncBemerkungen();
+    // Small delay to ensure state is updated
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     setIsExporting(true);
     try {
       await onExport();
+      setPdfExported(true);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  // Önce kaydet, sonra PDF butonu aktif kalır
+  const handleSave = async () => {
+    // Sync bemerkungen before save
+    syncBemerkungen();
+    // Small delay to ensure state is updated
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    setIsSaving(true);
+    try {
+      await onSave();
+      setIsSaved(true);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -255,6 +296,7 @@ const FinalSection = ({
             Bemerkungen
           </label>
           <textarea
+            ref={bemerkungenRef}
             id="bemerkungen"
             value={bemerkungen}
             onChange={(e) => updateBemerkungen(e.target.value)}
@@ -263,32 +305,98 @@ const FinalSection = ({
           />
         </motion.div>
 
-        {/* Export Section */}
+        {/* Action Section */}
         <motion.div
           className="export-section"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.4, delay: 0.3 }}
         >
-          <div className="export-info">
-            <h3>Bereit zum Exportieren</h3>
-            <p>
-              {isValid
-                ? 'Alle Daten wurden erfasst. Sie können jetzt das PDF-Dokument generieren.'
-                : 'Bitte laden Sie mindestens 2 Bilder hoch, um fortzufahren.'}
-            </p>
-          </div>
-          <motion.button
-            className={`export-button ${!isValid || isExporting ? 'disabled' : ''}`}
-            onClick={handleExport}
-            disabled={!isValid || isExporting}
-            whileHover={isValid && !isExporting ? { scale: 1.02 } : {}}
-            whileTap={isValid && !isExporting ? { scale: 0.98 } : {}}
-          >
-            <span className="button-text">
-              {isExporting ? 'PDF wird erstellt...' : 'PDF Exportieren'}
-            </span>
-          </motion.button>
+          {/* Durum 1: Henüz kaydedilmedi */}
+          {!isSaved && (
+            <>
+              <div className="export-info">
+                <h3>Bereit zum Speichern</h3>
+                <p>
+                  {isValid
+                    ? 'Alle Daten wurden erfasst. Bitte zuerst speichern, dann können Sie das PDF exportieren.'
+                    : 'Bitte laden Sie mindestens 2 Bilder hoch, um fortzufahren.'}
+                </p>
+              </div>
+              <div className="action-buttons">
+                <motion.button
+                  className={`save-button primary ${!isValid || isSaving ? 'disabled' : ''}`}
+                  onClick={handleSave}
+                  disabled={!isValid || isSaving}
+                  whileHover={isValid && !isSaving ? { scale: 1.02 } : {}}
+                  whileTap={isValid && !isSaving ? { scale: 0.98 } : {}}
+                >
+                  <span className="button-text">
+                    {isSaving ? 'Wird gespeichert...' : 'Speichern'}
+                  </span>
+                </motion.button>
+              </div>
+            </>
+          )}
+
+          {/* Durum 2: Kaydedildi, PDF henüz indirilmedi */}
+          {isSaved && !pdfExported && (
+            <>
+              <div className="export-info success">
+                <h3>Erfolgreich gespeichert!</h3>
+                <p>Das Aufmaß wurde gespeichert. Sie können jetzt das PDF exportieren.</p>
+              </div>
+              <div className="action-buttons">
+                <motion.button
+                  className={`export-button ${isExporting ? 'disabled' : ''}`}
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  whileHover={!isExporting ? { scale: 1.02 } : {}}
+                  whileTap={!isExporting ? { scale: 0.98 } : {}}
+                >
+                  <span className="button-text">
+                    {isExporting ? 'PDF wird erstellt...' : 'PDF Exportieren'}
+                  </span>
+                </motion.button>
+                <motion.button
+                  className="new-form-button secondary"
+                  onClick={onNewForm}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <span className="button-text">Neues Aufmaß erstellen</span>
+                </motion.button>
+              </div>
+            </>
+          )}
+
+          {/* Durum 3: Hem kaydedildi hem PDF indirildi */}
+          {isSaved && pdfExported && (
+            <>
+              <div className="export-info success">
+                <h3>Alles erledigt!</h3>
+                <p>Das Aufmaß wurde gespeichert und das PDF wurde exportiert.</p>
+              </div>
+              <div className="action-buttons">
+                <motion.button
+                  className="new-form-button"
+                  onClick={onNewForm}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <span className="button-text">Neues Aufmaß erstellen</span>
+                </motion.button>
+                <motion.button
+                  className="back-button"
+                  onClick={() => window.location.href = '/'}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <span className="button-text">Zur Übersicht</span>
+                </motion.button>
+              </div>
+            </>
+          )}
         </motion.div>
       </div>
     </div>

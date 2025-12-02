@@ -1,4 +1,4 @@
-export type FieldType = 'text' | 'number' | 'select' | 'radio' | 'checkbox' | 'boolean' | 'textarea';
+export type FieldType = 'text' | 'number' | 'select' | 'radio' | 'checkbox' | 'boolean' | 'textarea' | 'fundament' | 'bauform' | 'conditional' | 'modelColorSelect' | 'markise_trigger';
 
 export interface FieldConfig {
   name: string;

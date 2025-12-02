@@ -2,9 +2,16 @@ import { jsPDF } from 'jspdf';
 import { FormData } from '../types';
 import productConfigData from '../config/productConfig.json';
 import type { ProductConfig, FieldConfig } from '../types/productConfig';
-import { uploadTempFile } from '../services/api';
+import { uploadTempFile, getImageUrl, getStoredToken } from '../services/api';
 
 const productConfig = productConfigData as ProductConfig;
+
+// Type for server image objects
+interface ServerImage {
+  id: number;
+  file_name: string;
+  file_type: string;
+}
 
 // Helper to convert File to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -16,6 +23,92 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+// Helper to read EXIF orientation from image file
+const getExifOrientation = (file: File): Promise<number> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const view = new DataView(e.target?.result as ArrayBuffer);
+      if (view.getUint16(0, false) !== 0xFFD8) {
+        resolve(1); // Not a JPEG
+        return;
+      }
+      const length = view.byteLength;
+      let offset = 2;
+      while (offset < length) {
+        if (view.getUint16(offset + 2, false) <= 8) {
+          resolve(1);
+          return;
+        }
+        const marker = view.getUint16(offset, false);
+        offset += 2;
+        if (marker === 0xFFE1) {
+          if (view.getUint32(offset += 2, false) !== 0x45786966) {
+            resolve(1);
+            return;
+          }
+          const little = view.getUint16(offset += 6, false) === 0x4949;
+          offset += view.getUint32(offset + 4, little);
+          const tags = view.getUint16(offset, little);
+          offset += 2;
+          for (let i = 0; i < tags; i++) {
+            if (view.getUint16(offset + (i * 12), little) === 0x0112) {
+              resolve(view.getUint16(offset + (i * 12) + 8, little));
+              return;
+            }
+          }
+        } else if ((marker & 0xFF00) !== 0xFF00) {
+          break;
+        } else {
+          offset += view.getUint16(offset, false);
+        }
+      }
+      resolve(1);
+    };
+    reader.readAsArrayBuffer(file.slice(0, 65536));
+  });
+};
+
+// Helper to fix image orientation based on EXIF data
+const fixImageOrientation = (base64: string, orientation: number): Promise<string> => {
+  return new Promise((resolve) => {
+    if (orientation <= 1) {
+      resolve(base64);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+
+      // Set canvas dimensions based on orientation
+      if (orientation >= 5 && orientation <= 8) {
+        canvas.width = img.height;
+        canvas.height = img.width;
+      } else {
+        canvas.width = img.width;
+        canvas.height = img.height;
+      }
+
+      // Apply transformations based on EXIF orientation
+      switch (orientation) {
+        case 2: ctx.transform(-1, 0, 0, 1, img.width, 0); break;
+        case 3: ctx.transform(-1, 0, 0, -1, img.width, img.height); break;
+        case 4: ctx.transform(1, 0, 0, -1, 0, img.height); break;
+        case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+        case 6: ctx.transform(0, 1, -1, 0, img.height, 0); break;
+        case 7: ctx.transform(0, -1, -1, 0, img.height, img.width); break;
+        case 8: ctx.transform(0, -1, 1, 0, 0, img.width); break;
+      }
+
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/jpeg', 0.92));
+    };
+    img.src = base64;
+  });
+};
+
 // Helper to get image dimensions
 const getImageDimensions = (base64: string): Promise<{ width: number; height: number }> => {
   return new Promise((resolve) => {
@@ -23,6 +116,37 @@ const getImageDimensions = (base64: string): Promise<{ width: number; height: nu
     img.onload = () => resolve({ width: img.width, height: img.height });
     img.src = base64;
   });
+};
+
+// Helper to fetch server image and convert to base64
+const fetchServerImageAsBase64 = async (imageId: number): Promise<string> => {
+  const url = getImageUrl(imageId);
+  const token = getStoredToken();
+
+  const response = await fetch(url, {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch image');
+  }
+
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+// Helper to check if object is a server image
+const isServerImage = (obj: unknown): obj is ServerImage => {
+  return obj !== null &&
+         typeof obj === 'object' &&
+         'id' in obj &&
+         'file_name' in obj &&
+         typeof (obj as ServerImage).id === 'number';
 };
 
 export const generatePDF = async (formData: FormData) => {
@@ -164,6 +288,11 @@ export const generatePDF = async (formData: FormData) => {
             displayValue = String(value);
           }
 
+          // For fundament field, append the additional details if available
+          if (field.type === 'fundament' && formData.specifications[`${field.name}Value`]) {
+            displayValue += ` - ${formData.specifications[`${field.name}Value`]}`;
+          }
+
           pdf.setFont('helvetica', 'bold');
           pdf.text(`${field.label}:`, margin + 2, yPos);
           pdf.setFont('helvetica', 'normal');
@@ -177,52 +306,95 @@ export const generatePDF = async (formData: FormData) => {
       // Add Markise data if exists
       if (formData.specifications.markiseActive && formData.specifications.markiseData) {
         try {
-          const markiseData = JSON.parse(formData.specifications.markiseData as string);
+          const parsed = JSON.parse(formData.specifications.markiseData as string);
+          // Support both single object (legacy) and array format
+          const markisenArray = Array.isArray(parsed) ? parsed : [parsed];
 
-          checkNewPage(25);
-          yPos += 5;
-          pdf.setFont('helvetica', 'bold');
-          pdf.setFontSize(11);
-          pdf.text('Markise Details:', margin + 2, yPos);
-          yPos += 8;
-          pdf.setFontSize(10);
-          pdf.setFont('helvetica', 'normal');
+          if (markisenArray.length > 0) {
+            checkNewPage(25);
+            yPos += 5;
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(11);
+            pdf.text(`Markise Details (${markisenArray.length} Stück):`, margin + 2, yPos);
+            yPos += 10;
 
-          const markiseFields = [
-            ['Typ:', markiseData.typ || '-'],
-            ['Modell:', markiseData.modell || '-'],
-            ['Breite:', markiseData.breite ? `${markiseData.breite} mm` : '-'],
-            ['Länge:', markiseData.laenge ? `${markiseData.laenge} mm` : '-'],
-            ['Höhe:', markiseData.hoehe ? `${markiseData.hoehe} mm` : '-'],
-            ['Stoff Nummer:', markiseData.stoffNummer || '-'],
-            ['Gestellfarbe:', markiseData.gestellfarbe || '-'],
-            ['Antrieb:', markiseData.antrieb || '-'],
-            ['Antriebsseite:', markiseData.antriebsseite || '-'],
-          ];
+            // Iterate through all markisen
+            markisenArray.forEach((markiseData: Record<string, unknown>, index: number) => {
+              checkNewPage(30);
 
-          if (markiseData.befestigungsart) {
-            markiseFields.push(['Befestigungsart:', markiseData.befestigungsart]);
-          }
-          if (markiseData.position) {
-            markiseFields.push(['Position:', markiseData.position]);
-          }
-          if (markiseData.zip) {
-            markiseFields.push(['ZIP:', markiseData.zip]);
-          }
-          if (markiseData.volanTyp) {
-            markiseFields.push(['Volan Typ:', markiseData.volanTyp]);
-          }
-
-          markiseFields.forEach(([label, value]) => {
-            if (value && value !== '-') {
-              checkNewPage();
+              // Markise header
+              pdf.setFontSize(10);
               pdf.setFont('helvetica', 'bold');
-              pdf.text(label, margin + 10, yPos);
+              const markiseLabel = markiseData.typ
+                ? `Markise ${index + 1}: ${markiseData.typ}${markiseData.position ? ` - ${markiseData.position}` : ''}`
+                : `Markise ${index + 1}`;
+              pdf.text(markiseLabel, margin + 5, yPos);
+              yPos += 7;
+
               pdf.setFont('helvetica', 'normal');
-              pdf.text(String(value), margin + 52, yPos);
+
+              const markiseFields: [string, string][] = [
+                ['Typ:', String(markiseData.typ || '-')],
+                ['Modell:', String(markiseData.modell || '-')],
+                ['Breite:', markiseData.breite ? `${markiseData.breite} mm` : '-'],
+                ['Länge:', markiseData.laenge ? `${markiseData.laenge} mm` : '-'],
+              ];
+
+              // Height only for SENKRECHT
+              if (markiseData.typ === 'SENKRECHT' && markiseData.hoehe) {
+                markiseFields.push(['Höhe:', `${markiseData.hoehe} mm`]);
+              }
+
+              markiseFields.push(
+                ['Stoff Nummer:', String(markiseData.stoffNummer || '-')],
+                ['Gestellfarbe:', String(markiseData.gestellfarbe || '-')],
+                ['Antrieb:', String(markiseData.antrieb || '-')],
+                ['Antriebsseite:', String(markiseData.antriebsseite || '-')]
+              );
+
+              if (markiseData.befestigungsart) {
+                markiseFields.push(['Befestigungsart:', String(markiseData.befestigungsart)]);
+              }
+              if (markiseData.position) {
+                markiseFields.push(['Position:', String(markiseData.position)]);
+              }
+              if (markiseData.zip) {
+                markiseFields.push(['ZIP:', String(markiseData.zip)]);
+              }
+              if (markiseData.volanTyp) {
+                markiseFields.push(['Volan Typ:', String(markiseData.volanTyp)]);
+              }
+
+              markiseFields.forEach(([label, value]) => {
+                if (value && value !== '-') {
+                  checkNewPage();
+                  pdf.setFont('helvetica', 'bold');
+                  pdf.text(label, margin + 10, yPos);
+                  pdf.setFont('helvetica', 'normal');
+                  pdf.text(value, margin + 52, yPos);
+                  yPos += 6;
+                }
+              });
+
+              yPos += 5; // Space between markisen
+            });
+
+            // Add Markise bemerkungen if exists
+            const markiseBemerkungen = formData.specifications.markiseBemerkungen as string;
+            if (markiseBemerkungen && markiseBemerkungen.trim()) {
+              checkNewPage(15);
+              pdf.setFont('helvetica', 'bold');
+              pdf.text('Markise Bemerkungen:', margin + 5, yPos);
               yPos += 6;
+              pdf.setFont('helvetica', 'normal');
+              const bemerkungenLines = pdf.splitTextToSize(markiseBemerkungen, pageWidth - margin - 30);
+              bemerkungenLines.forEach((line: string) => {
+                checkNewPage();
+                pdf.text(line, margin + 10, yPos);
+                yPos += 5;
+              });
             }
-          });
+          }
         } catch (e) {
           // Skip markise data if parsing fails
         }
@@ -232,7 +404,206 @@ export const generatePDF = async (formData: FormData) => {
     }
   }
 
+  // ============ UNTERBAUELEMENTE ============
+  if (formData.productSelection.category === 'UNTERBAUELEMENTE' && formData.specifications.unterbauelementeData) {
+    try {
+      const elements = JSON.parse(formData.specifications.unterbauelementeData as string);
+      if (Array.isArray(elements) && elements.length > 0) {
+        checkNewPage(25);
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFillColor(127, 169, 61);
+        pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(`UNTERBAUELEMENTE (${elements.length} Stück)`, margin + 2, yPos);
+        yPos += 15;
+
+        pdf.setTextColor(0, 0, 0);
+
+        // Draw each element in a card-like box
+        elements.forEach((el: Record<string, unknown>, index: number) => {
+          // Calculate required height for this element
+          const requiredHeight = 70;
+          if (yPos + requiredHeight > pageHeight - 30) {
+            pdf.addPage();
+            yPos = 20;
+          }
+
+          // Draw element box background
+          const boxStartY = yPos - 3;
+          pdf.setFillColor(248, 250, 245); // Light green-ish background
+          pdf.setDrawColor(127, 169, 61);
+          pdf.roundedRect(margin, boxStartY, pageWidth - 2 * margin, 60, 3, 3, 'FD');
+
+          // Element header with green background
+          pdf.setFillColor(127, 169, 61);
+          pdf.rect(margin, boxStartY, pageWidth - 2 * margin, 10, 'F');
+
+          pdf.setFontSize(11);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setTextColor(255, 255, 255);
+          const elementLabel = el.produktTyp
+            ? `${index + 1}. ${el.produktTyp}${el.position ? ` - ${el.position}` : ''}`
+            : `Unterbauelement ${index + 1}`;
+          pdf.text(elementLabel, margin + 5, boxStartY + 7);
+
+          yPos = boxStartY + 17;
+          pdf.setTextColor(0, 0, 0);
+          pdf.setFontSize(9);
+
+          // Left column
+          const leftColX = margin + 5;
+          const rightColX = margin + (pageWidth - 2 * margin) / 2 + 5;
+          let leftY = yPos;
+          let rightY = yPos;
+
+          const addField = (label: string, value: string, side: 'left' | 'right') => {
+            const x = side === 'left' ? leftColX : rightColX;
+            const y = side === 'left' ? leftY : rightY;
+
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(label, x, y);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(value, x + 35, y);
+
+            if (side === 'left') leftY += 7;
+            else rightY += 7;
+          };
+
+          // Build fields based on produktTyp
+          if (el.produktTyp) addField('Typ:', String(el.produktTyp), 'left');
+          if (el.modell) addField('Modell:', String(el.modell), 'right');
+
+          // Dimension fields
+          if (el.produktTyp === 'Keil') {
+            if (el.laenge) addField('Länge:', `${el.laenge} mm`, 'left');
+            if (el.hintenHoehe) addField('Hinten:', `${el.hintenHoehe} mm`, 'right');
+            if (el.vorneHoehe) addField('Vorne:', `${el.vorneHoehe} mm`, 'left');
+          } else {
+            if (el.breite) addField('Breite:', `${el.breite} mm`, 'left');
+            if (el.hoehe) addField('Höhe:', `${el.hoehe} mm`, 'right');
+          }
+
+          if (el.gestellfarbe) addField('Farbe:', String(el.gestellfarbe), 'left');
+          if (el.position) addField('Position:', String(el.position), 'right');
+          if (el.oeffnungsrichtung) addField('Öffnung:', String(el.oeffnungsrichtung), 'left');
+          if (el.anzahlFluegel) addField('Flügel:', String(el.anzahlFluegel), 'right');
+          if (el.fundament) {
+            let fundamentText = String(el.fundament);
+            if (el.fundamentValue) fundamentText += ` - ${el.fundamentValue}`;
+            addField('Fundament:', fundamentText, 'left');
+          }
+          if (el.drehrichtung) addField('Drehricht.:', String(el.drehrichtung), 'left');
+          if (el.schloss) addField('Schloss:', String(el.schloss), 'right');
+
+          yPos = boxStartY + 68; // Move past the box
+        });
+
+        // Add Unterbauelemente bemerkungen if exists
+        const unterbauelementeBemerkungen = formData.specifications.unterbauelementeBemerkungen as string;
+        if (unterbauelementeBemerkungen && unterbauelementeBemerkungen.trim()) {
+          checkNewPage(20);
+          yPos += 5;
+          pdf.setFontSize(10);
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('Bemerkungen:', margin + 2, yPos);
+          yPos += 6;
+          pdf.setFont('helvetica', 'normal');
+          const bemerkungenLines = pdf.splitTextToSize(unterbauelementeBemerkungen, pageWidth - margin - 20);
+          bemerkungenLines.forEach((line: string) => {
+            checkNewPage();
+            pdf.text(line, margin + 8, yPos);
+            yPos += 5;
+          });
+        }
+
+        yPos += 10;
+      }
+    } catch (e) {
+      // Skip unterbauelemente data if parsing fails
+    }
+  }
+
+  // ============ WEITERE PRODUKTE ============
+  if (formData.weitereProdukte && formData.weitereProdukte.length > 0) {
+    checkNewPage(25);
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFillColor(127, 169, 61);
+    pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(`WEITERE PRODUKTE (${formData.weitereProdukte.length} Stück)`, margin + 2, yPos);
+    yPos += 10;
+
+    pdf.setTextColor(0, 0, 0);
+
+    formData.weitereProdukte.forEach((produkt, index) => {
+      checkNewPage(40);
+
+      // Product header
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      const produktLabel = produkt.category && produkt.productType
+        ? `${index + 1}. ${produkt.category} - ${produkt.productType}${produkt.model ? ` (${produkt.model})` : ''}`
+        : `Weiteres Produkt ${index + 1}`;
+      pdf.text(produktLabel, margin + 2, yPos);
+      yPos += 8;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+
+      // Get fields for this product type
+      const produktFields = productConfig[produkt.category]?.[produkt.productType]?.fields || [];
+
+      // Build display fields
+      const displayFields: [string, string][] = [];
+
+      if (produkt.category) displayFields.push(['Kategorie:', produkt.category]);
+      if (produkt.productType) displayFields.push(['Produkttyp:', produkt.productType]);
+      if (produkt.model) displayFields.push(['Modell:', produkt.model]);
+
+      // Add specification fields
+      produktFields.forEach((field: FieldConfig) => {
+        const value = produkt.specifications[field.name];
+        if (value !== undefined && value !== null && value !== '') {
+          let displayValue = '';
+
+          if (typeof value === 'boolean') {
+            displayValue = value ? 'Ja' : 'Nein';
+          } else if (typeof value === 'number') {
+            displayValue = field.unit ? `${value} ${field.unit}` : String(value);
+          } else {
+            displayValue = String(value);
+          }
+
+          // For fundament field, append the additional details if available
+          if (field.type === 'fundament' && produkt.specifications[`${field.name}Value`]) {
+            displayValue += ` - ${produkt.specifications[`${field.name}Value`]}`;
+          }
+
+          displayFields.push([`${field.label}:`, displayValue]);
+        }
+      });
+
+      displayFields.forEach(([label, value]) => {
+        checkNewPage();
+        pdf.setFont('helvetica', 'bold');
+        pdf.text(label, margin + 8, yPos);
+        pdf.setFont('helvetica', 'normal');
+        const lines = pdf.splitTextToSize(value, pageWidth - margin - 70);
+        pdf.text(lines, margin + 52, yPos);
+        yPos += 6 * lines.length;
+      });
+
+      yPos += 5; // Space between products
+    });
+
+    yPos += 8;
+  }
+
   // ============ BEMERKUNGEN ============
+  console.log('PDF Generator - bemerkungen value:', formData.bemerkungen);
+  console.log('PDF Generator - bemerkungen type:', typeof formData.bemerkungen);
   if (formData.bemerkungen && formData.bemerkungen.trim()) {
     checkNewPage(25);
     pdf.setFontSize(14);
@@ -257,124 +628,167 @@ export const generatePDF = async (formData: FormData) => {
   }
 
   // ============ BILDER & ANHÄNGE ============
-  const bilder = formData.bilder as File[];
+  const bilder = formData.bilder as (File | ServerImage)[];
   if (bilder && bilder.length > 0) {
-    // Separate images and PDFs - check both type and name extension for safety
-    const imageFiles = bilder.filter(f => {
-      if (!f || !f.type) return false;
-      if (f.type.startsWith('image/')) return true;
-      // Fallback: check file extension
-      const ext = f.name?.toLowerCase().split('.').pop();
-      return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext || '');
-    });
-    const pdfFiles = bilder.filter(f => {
-      if (!f) return false;
-      if (f.type === 'application/pdf') return true;
-      // Fallback: check file extension
-      return f.name?.toLowerCase().endsWith('.pdf');
-    });
+    // Separate images and PDFs - handle both File and ServerImage objects
+    const imageItems: (File | ServerImage)[] = [];
+    const pdfFiles: File[] = [];
+    const serverPdfFiles: ServerImage[] = [];
 
-    // Start attachments on a new page
-    pdf.addPage();
-    yPos = 20;
+    for (const item of bilder) {
+      if (!item) continue;
 
-    pdf.setFontSize(14);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFillColor(127, 169, 61);
-    pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
-    pdf.setTextColor(255, 255, 255);
-    pdf.text('BILDER & ANHÄNGE', margin + 2, yPos);
-    yPos += 15;
+      if (item instanceof File) {
+        // It's a File object
+        if (item.type.startsWith('image/')) {
+          imageItems.push(item);
+        } else if (item.type === 'application/pdf' || item.name?.toLowerCase().endsWith('.pdf')) {
+          pdfFiles.push(item);
+        } else {
+          // Check by extension
+          const ext = item.name?.toLowerCase().split('.').pop();
+          if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext || '')) {
+            imageItems.push(item);
+          }
+        }
+      } else if (isServerImage(item)) {
+        // It's a server image/file object
+        if (item.file_type.startsWith('image/')) {
+          imageItems.push(item);
+        } else if (item.file_type === 'application/pdf' || item.file_name?.toLowerCase().endsWith('.pdf')) {
+          serverPdfFiles.push(item);
+        }
+      }
+    }
 
-    pdf.setTextColor(0, 0, 0);
-    pdf.setFontSize(10);
+    // Start attachments on a new page if we have any images or pdfs
+    if (imageItems.length > 0 || pdfFiles.length > 0 || serverPdfFiles.length > 0) {
+      pdf.addPage();
+      yPos = 20;
 
-    // List PDF attachments with clickable links
-    if (pdfFiles.length > 0) {
+      pdf.setFontSize(14);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('PDF Anhänge:', margin, yPos);
-      yPos += 8;
-      pdf.setFont('helvetica', 'normal');
+      pdf.setFillColor(127, 169, 61);
+      pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('BILDER & ANHÄNGE', margin + 2, yPos);
+      yPos += 15;
 
-      // Upload PDFs and create links
-      for (const file of pdfFiles) {
-        if (!file || !file.name) continue;
-        checkNewPage();
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(10);
 
-        try {
-          // Upload PDF to server and get URL
-          const uploadResult = await uploadTempFile(file);
-          const linkText = `• ${file.name}`;
+      // List PDF attachments with clickable links
+      if (pdfFiles.length > 0 || serverPdfFiles.length > 0) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('PDF Anhänge:', margin, yPos);
+        yPos += 8;
+        pdf.setFont('helvetica', 'normal');
+
+        // Upload new PDF files and create links
+        for (const file of pdfFiles) {
+          if (!file || !file.name) continue;
+          checkNewPage();
+
+          try {
+            // Upload PDF to server and get URL
+            const uploadResult = await uploadTempFile(file);
+            const linkText = `• ${file.name}`;
+
+            // Add clickable link
+            pdf.setTextColor(0, 102, 204); // Blue color for link
+            pdf.textWithLink(linkText, margin + 5, yPos, { url: uploadResult.url });
+            pdf.setTextColor(0, 0, 0); // Reset to black
+            yPos += 6;
+          } catch {
+            // If upload fails, just show filename without link
+            pdf.text(`• ${file.name} (Link nicht verfügbar)`, margin + 5, yPos);
+            yPos += 6;
+          }
+        }
+
+        // Add links for server PDF files (already uploaded)
+        for (const serverPdf of serverPdfFiles) {
+          checkNewPage();
+          const linkText = `• ${serverPdf.file_name}`;
+          const pdfUrl = getImageUrl(serverPdf.id);
 
           // Add clickable link
           pdf.setTextColor(0, 102, 204); // Blue color for link
-          pdf.textWithLink(linkText, margin + 5, yPos, { url: uploadResult.url });
+          pdf.textWithLink(linkText, margin + 5, yPos, { url: pdfUrl });
           pdf.setTextColor(0, 0, 0); // Reset to black
           yPos += 6;
-        } catch {
-          // If upload fails, just show filename without link
-          pdf.text(`• ${file.name} (Link nicht verfügbar)`, margin + 5, yPos);
-          yPos += 6;
-        }
-      }
-      yPos += 10;
-    }
-
-    // Process each image
-    for (let i = 0; i < imageFiles.length; i++) {
-      const file = imageFiles[i];
-
-      // Skip if not a valid file
-      if (!file || !(file instanceof File)) {
-        continue;
-      }
-
-      try {
-        const base64 = await fileToBase64(file);
-        const dimensions = await getImageDimensions(base64);
-
-        // Calculate image size to fit on page
-        const maxWidth = pageWidth - 2 * margin;
-        const maxHeight = 80; // Max height per image
-
-        let imgWidth = dimensions.width;
-        let imgHeight = dimensions.height;
-
-        // Scale to fit
-        if (imgWidth > maxWidth) {
-          const ratio = maxWidth / imgWidth;
-          imgWidth = maxWidth;
-          imgHeight = imgHeight * ratio;
         }
 
-        if (imgHeight > maxHeight) {
-          const ratio = maxHeight / imgHeight;
-          imgHeight = maxHeight;
-          imgWidth = imgWidth * ratio;
-        }
-
-        // Check if we need a new page
-        if (yPos + imgHeight + 15 > pageHeight - 20) {
-          pdf.addPage();
-          yPos = 20;
-        }
-
-        // Add image label
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(`Bild ${i + 1}: ${file.name}`, margin, yPos);
-        yPos += 5;
-
-        // Add image - center it horizontally
-        const xPos = margin + (maxWidth - imgWidth) / 2;
-        pdf.addImage(base64, 'JPEG', xPos, yPos, imgWidth, imgHeight);
-
-        yPos += imgHeight + 15;
-
-      } catch (error) {
-        // If image fails to load, add a placeholder message
-        pdf.setFont('helvetica', 'italic');
-        pdf.text(`Bild ${i + 1}: ${file.name} - Konnte nicht geladen werden`, margin, yPos);
         yPos += 10;
+      }
+
+      // Process each image (both File and ServerImage)
+      for (let i = 0; i < imageItems.length; i++) {
+        const item = imageItems[i];
+        let base64: string;
+        let fileName: string;
+
+        try {
+          if (item instanceof File) {
+            // It's a File object - get EXIF orientation and fix if needed
+            const orientation = await getExifOrientation(item);
+            base64 = await fileToBase64(item);
+            base64 = await fixImageOrientation(base64, orientation);
+            fileName = item.name;
+          } else if (isServerImage(item)) {
+            // It's a server image - fetch from server
+            base64 = await fetchServerImageAsBase64(item.id);
+            fileName = item.file_name;
+          } else {
+            continue;
+          }
+
+          const dimensions = await getImageDimensions(base64);
+
+          // Calculate image size to fit on page
+          const maxWidth = pageWidth - 2 * margin;
+          const maxHeight = 80; // Max height per image
+
+          let imgWidth = dimensions.width;
+          let imgHeight = dimensions.height;
+
+          // Scale to fit
+          if (imgWidth > maxWidth) {
+            const ratio = maxWidth / imgWidth;
+            imgWidth = maxWidth;
+            imgHeight = imgHeight * ratio;
+          }
+
+          if (imgHeight > maxHeight) {
+            const ratio = maxHeight / imgHeight;
+            imgHeight = maxHeight;
+            imgWidth = imgWidth * ratio;
+          }
+
+          // Check if we need a new page
+          if (yPos + imgHeight + 15 > pageHeight - 20) {
+            pdf.addPage();
+            yPos = 20;
+          }
+
+          // Add image label
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(`Bild ${i + 1}: ${fileName}`, margin, yPos);
+          yPos += 5;
+
+          // Add image - center it horizontally
+          const xPos = margin + (maxWidth - imgWidth) / 2;
+          pdf.addImage(base64, 'JPEG', xPos, yPos, imgWidth, imgHeight);
+
+          yPos += imgHeight + 15;
+
+        } catch (error) {
+          // If image fails to load, add a placeholder message
+          const name = item instanceof File ? item.name : (isServerImage(item) ? item.file_name : 'Unbekannt');
+          pdf.setFont('helvetica', 'italic');
+          pdf.text(`Bild ${i + 1}: ${name} - Konnte nicht geladen werden`, margin, yPos);
+          yPos += 10;
+        }
       }
     }
   }

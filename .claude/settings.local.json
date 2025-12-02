@@ -11,7 +11,12 @@
       "Bash(cat:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(dir /s C:Usersfuatkaufmass-appsrc)",
+      "Bash(dir:*)",
+      "Bash(npm run build:*)",
+      "Bash(netstat:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

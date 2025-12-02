@@ -28,6 +28,14 @@ export interface Invitation {
   created_at: string;
 }
 
+export interface WeiteresProdukt {
+  id: string;
+  category: string;
+  productType: string;
+  model: string;
+  specifications: Record<string, string | number | boolean>;
+}
+
 export interface FormData {
   id?: number;
   datum: string;
@@ -40,6 +48,7 @@ export interface FormData {
   model: string;
   specifications: Record<string, unknown>;
   markiseData?: unknown;
+  weitereProdukte?: WeiteresProdukt[];
   bemerkungen: string;
   status?: string;
   created_at?: string;
@@ -331,7 +340,10 @@ export async function updateForm(id: number, formData: Partial<FormData>): Promi
     method: 'PUT',
     body: JSON.stringify(formData)
   });
-  if (!response.ok) throw new Error('Failed to update form');
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to update form');
+  }
   return response.json();
 }
 

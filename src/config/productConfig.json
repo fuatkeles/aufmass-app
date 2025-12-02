@@ -28,7 +28,14 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Untenbalkon"],
+          "required": true
+        },
+        {
+          "name": "daemmung",
+          "label": "Dämmung / Isolation",
+          "type": "number",
+          "unit": "cm",
           "required": true
         },
         {
@@ -41,13 +48,6 @@
         {
           "name": "tiefe",
           "label": "Tiefe (Aussen Kante Pfosten)",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "hoehe",
-          "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
@@ -123,13 +123,6 @@
           "required": true
         },
         {
-          "name": "freistehend",
-          "label": "Freistehend",
-          "type": "select",
-          "options": ["JA", "NEIN"],
-          "required": true
-        },
-        {
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
@@ -148,12 +141,6 @@
           "label": "Wasserablauf",
           "type": "select",
           "options": ["Links", "Rechts", "Links + Rechts"],
-          "required": true
-        },
-        {
-          "name": "markise",
-          "label": "Markise",
-          "type": "markise_trigger",
           "required": true
         },
         {
@@ -185,7 +172,14 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Untenbalkon"],
+          "required": true
+        },
+        {
+          "name": "daemmung",
+          "label": "Dämmung / Isolation",
+          "type": "number",
+          "unit": "cm",
           "required": true
         },
         {
@@ -198,13 +192,6 @@
         {
           "name": "tiefe",
           "label": "Tiefe (Aussen Kante Pfosten)",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "hoehe",
-          "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
@@ -273,13 +260,6 @@
           "required": true
         },
         {
-          "name": "freistehend",
-          "label": "Freistehend",
-          "type": "select",
-          "options": ["JA", "NEIN"],
-          "required": true
-        },
-        {
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
@@ -298,12 +278,6 @@
           "label": "Wasserablauf",
           "type": "select",
           "options": ["Links", "Rechts", "Links + Rechts"],
-          "required": true
-        },
-        {
-          "name": "markise",
-          "label": "Markise",
-          "type": "markise_trigger",
           "required": true
         },
         {
@@ -331,7 +305,14 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Untenbalkon"],
+          "required": true
+        },
+        {
+          "name": "daemmung",
+          "label": "Dämmung / Isolation",
+          "type": "number",
+          "unit": "cm",
           "required": true
         },
         {
@@ -344,13 +325,6 @@
         {
           "name": "tiefe",
           "label": "Tiefe (Aussen Kante Pfosten)",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "hoehe",
-          "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
@@ -426,13 +400,6 @@
           "required": true
         },
         {
-          "name": "freistehend",
-          "label": "Freistehend",
-          "type": "select",
-          "options": ["JA", "NEIN"],
-          "required": true
-        },
-        {
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
@@ -451,12 +418,6 @@
           "label": "Wasserablauf",
           "type": "select",
           "options": ["Links", "Rechts", "Links + Rechts"],
-          "required": true
-        },
-        {
-          "name": "markise",
-          "label": "Markise",
-          "type": "markise_trigger",
           "required": true
         },
         {
@@ -484,7 +445,14 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Untenbalkon"],
+          "required": true
+        },
+        {
+          "name": "daemmung",
+          "label": "Dämmung / Isolation",
+          "type": "number",
+          "unit": "cm",
           "required": true
         },
         {
@@ -497,13 +465,6 @@
         {
           "name": "tiefe",
           "label": "Tiefe (Aussen Kante Pfosten)",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "hoehe",
-          "label": "Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
@@ -576,13 +537,6 @@
           "label": "Statikträger",
           "type": "select",
           "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
-          "required": true
-        },
-        {
-          "name": "freistehend",
-          "label": "Freistehend",
-          "type": "select",
-          "options": ["JA", "NEIN"],
           "required": true
         },
         {
@@ -1051,13 +1005,6 @@
           "required": true
         },
         {
-          "name": "ledBeleuchtung",
-          "label": "LED Beleuchtung",
-          "type": "select",
-          "options": ["Keine", "STREIFEN", "AUSGLEICH"],
-          "required": true
-        },
-        {
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
@@ -1124,13 +1071,6 @@
           "required": true
         },
         {
-          "name": "ledBeleuchtung",
-          "label": "LED Beleuchtung",
-          "type": "select",
-          "options": ["Keine", "STREIFEN", "AUSGLEICH"],
-          "required": true
-        },
-        {
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
@@ -1183,13 +1123,6 @@
           "required": true
         },
         {
-          "name": "ledBeleuchtung",
-          "label": "LED Beleuchtung",
-          "type": "select",
-          "options": ["Keine", "STREIFEN", "AUSGLEICH"],
-          "required": true
-        },
-        {
           "name": "fundament",
           "label": "Fundament",
           "type": "fundament",
@@ -1214,15 +1147,22 @@
       },
       "fields": [
         {
-          "name": "breite",
-          "label": "Breite",
+          "name": "laenge",
+          "label": "Länge",
           "type": "number",
           "unit": "mm",
           "required": true
         },
         {
-          "name": "hoehe",
-          "label": "Höhe",
+          "name": "hintenHoehe",
+          "label": "Hinten Höhe",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
+          "name": "vorneHoehe",
+          "label": "Vorne Höhe",
           "type": "number",
           "unit": "mm",
           "required": true
