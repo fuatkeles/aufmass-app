@@ -1085,8 +1085,18 @@
     gap: 0.5rem;
   }
 
+  .action-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
   .action-btn span {
-    display: none;
+    display: inline;
+  }
+
+  .action-btn svg {
+    width: 14px;
+    height: 14px;
   }
 }
 
