@@ -525,8 +525,13 @@ export const generatePDF = async (formData: FormData) => {
   }
 
   // ============ WEITERE PRODUKTE ============
+  console.log('PDF Generator - weitereProdukte:', formData.weitereProdukte);
+  console.log('PDF Generator - weitereProdukte length:', formData.weitereProdukte?.length);
   if (formData.weitereProdukte && formData.weitereProdukte.length > 0) {
-    checkNewPage(25);
+    // Start on a new page
+    pdf.addPage();
+    yPos = 20;
+
     pdf.setFontSize(14);
     pdf.setFont('helvetica', 'bold');
     pdf.setFillColor(127, 169, 61);

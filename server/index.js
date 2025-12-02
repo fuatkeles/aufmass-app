@@ -601,10 +601,19 @@ app.get('/api/forms/:id', authenticateToken, async (req, res) => {
       .input('form_id', sql.Int, id)
       .query('SELECT * FROM aufmass_form_produkte WHERE form_id = @form_id ORDER BY sort_order');
 
+    // Transform produkte to match frontend format
+    const transformedProdukte = produkte.recordset.map(p => ({
+      id: String(p.id),
+      category: p.category,
+      productType: p.product_type,
+      model: p.model,
+      specifications: typeof p.specifications === 'string' ? JSON.parse(p.specifications) : (p.specifications || {})
+    }));
+
     res.json({
       ...result.recordset[0],
       bilder: images.recordset,
-      weitereProdukte: produkte.recordset
+      weitereProdukte: transformedProdukte
     });
   } catch (err) {
     console.error('Error fetching form:', err);
