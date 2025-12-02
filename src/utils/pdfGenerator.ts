@@ -118,6 +118,86 @@ const getImageDimensions = (base64: string): Promise<{ width: number; height: nu
   });
 };
 
+// Helper to get EXIF orientation from base64 string
+const getExifOrientationFromBase64 = (base64: string): number => {
+  try {
+    // Remove data URL prefix
+    const binaryString = atob(base64.split(',')[1]);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    // Check for JPEG marker
+    if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) {
+      return 1; // Not a JPEG
+    }
+
+    let offset = 2;
+    while (offset < bytes.length - 1) {
+      if (bytes[offset] !== 0xFF) {
+        return 1;
+      }
+
+      const marker = bytes[offset + 1];
+
+      // APP1 marker (EXIF)
+      if (marker === 0xE1) {
+        const exifStart = offset + 4;
+
+        // Check for "Exif" string
+        if (bytes[exifStart] === 0x45 && bytes[exifStart + 1] === 0x78 &&
+            bytes[exifStart + 2] === 0x69 && bytes[exifStart + 3] === 0x66) {
+
+          const tiffStart = exifStart + 6;
+          const littleEndian = bytes[tiffStart] === 0x49;
+
+          const getUint16 = (pos: number) => {
+            if (littleEndian) {
+              return bytes[pos] | (bytes[pos + 1] << 8);
+            }
+            return (bytes[pos] << 8) | bytes[pos + 1];
+          };
+
+          const ifdOffset = tiffStart + 8;
+          const numEntries = getUint16(ifdOffset);
+
+          for (let i = 0; i < numEntries; i++) {
+            const entryOffset = ifdOffset + 2 + (i * 12);
+            const tag = getUint16(entryOffset);
+
+            if (tag === 0x0112) { // Orientation tag
+              return getUint16(entryOffset + 8);
+            }
+          }
+        }
+        return 1;
+      }
+
+      // Skip to next marker
+      if (marker === 0xD8 || marker === 0xD9) {
+        offset += 2;
+      } else {
+        const length = (bytes[offset + 2] << 8) | bytes[offset + 3];
+        offset += 2 + length;
+      }
+    }
+
+    return 1;
+  } catch {
+    return 1;
+  }
+};
+
+// Helper to automatically fix image orientation from base64
+const fixImageOrientationAuto = async (base64: string): Promise<string> => {
+  const orientation = getExifOrientationFromBase64(base64);
+  if (orientation <= 1) {
+    return base64;
+  }
+  return fixImageOrientation(base64, orientation);
+};
+
 // Helper to fetch server image and convert to base64
 const fetchServerImageAsBase64 = async (imageId: number): Promise<string> => {
   const url = getImageUrl(imageId);
@@ -741,8 +821,10 @@ export const generatePDF = async (formData: FormData) => {
             base64 = await fixImageOrientation(base64, orientation);
             fileName = item.name;
           } else if (isServerImage(item)) {
-            // It's a server image - fetch from server
+            // It's a server image - fetch from server and fix orientation
             base64 = await fetchServerImageAsBase64(item.id);
+            // Try to fix orientation for server images too
+            base64 = await fixImageOrientationAuto(base64);
             fileName = item.file_name;
           } else {
             continue;
