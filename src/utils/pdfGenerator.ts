@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import { FormData } from '../types';
 import productConfigData from '../config/productConfig.json';
 import type { ProductConfig, FieldConfig } from '../types/productConfig';
-import { uploadTempFile, getImageUrl, getStoredToken } from '../services/api';
+import { getImageUrl, getStoredToken } from '../services/api';
 
 const productConfig = productConfigData as ProductConfig;
 
@@ -353,6 +353,49 @@ export const generatePDF = async (formData: FormData) => {
       fields.forEach((field: FieldConfig) => {
         const value = formData.specifications[field.name];
 
+        // Handle seitenmarkise field type separately
+        if (field.type === 'seitenmarkise' && value) {
+          try {
+            const seitenmarkiseData = typeof value === 'string' ? JSON.parse(value) : value;
+            const activePositions = Object.keys(seitenmarkiseData).filter(
+              pos => seitenmarkiseData[pos]?.active
+            );
+
+            if (activePositions.length > 0) {
+              checkNewPage(25);
+              yPos += 5;
+              pdf.setFont('helvetica', 'bold');
+              pdf.setFontSize(11);
+              pdf.text('Seitenmarkise:', margin + 2, yPos);
+              yPos += 8;
+
+              pdf.setFontSize(10);
+              activePositions.forEach(position => {
+                const posData = seitenmarkiseData[position];
+                checkNewPage();
+
+                pdf.setFont('helvetica', 'bold');
+                pdf.text(`${position}:`, margin + 5, yPos);
+                pdf.setFont('helvetica', 'normal');
+
+                let details = '';
+                if (posData.aufteilung === 'mit') {
+                  details = `Mit Aufteilung - Links: ${posData.links || 0} cm, Rechts: ${posData.rechts || 0} cm`;
+                } else if (posData.aufteilung === 'ohne') {
+                  details = `Ohne Aufteilung - Breite: ${posData.breite || 0} cm`;
+                }
+
+                pdf.text(details, margin + 30, yPos);
+                yPos += 6;
+              });
+              yPos += 3;
+            }
+          } catch (e) {
+            // Skip if parsing fails
+          }
+          return; // Skip normal processing for seitenmarkise
+        }
+
         if (value !== undefined && value !== null && value !== '') {
           checkNewPage();
 
@@ -650,6 +693,36 @@ export const generatePDF = async (formData: FormData) => {
       // Add specification fields
       produktFields.forEach((field: FieldConfig) => {
         const value = produkt.specifications[field.name];
+
+        // Handle seitenmarkise field type separately for Weitere Produkte
+        if (field.type === 'seitenmarkise' && value) {
+          try {
+            const seitenmarkiseData = typeof value === 'string' ? JSON.parse(value) : value;
+            const activePositions = Object.keys(seitenmarkiseData).filter(
+              pos => seitenmarkiseData[pos]?.active
+            );
+
+            if (activePositions.length > 0) {
+              displayFields.push(['Seitenmarkise:', '']);
+              activePositions.forEach(position => {
+                const posData = seitenmarkiseData[position];
+                let details = '';
+                if (posData.aufteilung === 'mit') {
+                  details = `${position}: Mit Aufteilung - Links: ${posData.links || 0} cm, Rechts: ${posData.rechts || 0} cm`;
+                } else if (posData.aufteilung === 'ohne') {
+                  details = `${position}: Ohne Aufteilung - Breite: ${posData.breite || 0} cm`;
+                }
+                if (details) {
+                  displayFields.push(['', details]);
+                }
+              });
+            }
+          } catch (e) {
+            // Skip if parsing fails
+          }
+          return; // Skip normal processing for seitenmarkise
+        }
+
         if (value !== undefined && value !== null && value !== '') {
           let displayValue = '';
 
@@ -657,6 +730,8 @@ export const generatePDF = async (formData: FormData) => {
             displayValue = value ? 'Ja' : 'Nein';
           } else if (typeof value === 'number') {
             displayValue = field.unit ? `${value} ${field.unit}` : String(value);
+          } else if (Array.isArray(value)) {
+            displayValue = value.join(', ');
           } else {
             displayValue = String(value);
           }
@@ -746,8 +821,8 @@ export const generatePDF = async (formData: FormData) => {
       }
     }
 
-    // Start attachments on a new page if we have any images or pdfs
-    if (imageItems.length > 0 || pdfFiles.length > 0 || serverPdfFiles.length > 0) {
+    // Start attachments on a new page if we have any images
+    if (imageItems.length > 0) {
       pdf.addPage();
       yPos = 20;
 
@@ -756,56 +831,11 @@ export const generatePDF = async (formData: FormData) => {
       pdf.setFillColor(127, 169, 61);
       pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
       pdf.setTextColor(255, 255, 255);
-      pdf.text('BILDER & ANHÄNGE', margin + 2, yPos);
+      pdf.text('BILDER', margin + 2, yPos);
       yPos += 15;
 
       pdf.setTextColor(0, 0, 0);
       pdf.setFontSize(10);
-
-      // List PDF attachments with clickable links
-      if (pdfFiles.length > 0 || serverPdfFiles.length > 0) {
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('PDF Anhänge:', margin, yPos);
-        yPos += 8;
-        pdf.setFont('helvetica', 'normal');
-
-        // Upload new PDF files and create links
-        for (const file of pdfFiles) {
-          if (!file || !file.name) continue;
-          checkNewPage();
-
-          try {
-            // Upload PDF to server and get URL
-            const uploadResult = await uploadTempFile(file);
-            const linkText = `• ${file.name}`;
-
-            // Add clickable link
-            pdf.setTextColor(0, 102, 204); // Blue color for link
-            pdf.textWithLink(linkText, margin + 5, yPos, { url: uploadResult.url });
-            pdf.setTextColor(0, 0, 0); // Reset to black
-            yPos += 6;
-          } catch {
-            // If upload fails, just show filename without link
-            pdf.text(`• ${file.name} (Link nicht verfügbar)`, margin + 5, yPos);
-            yPos += 6;
-          }
-        }
-
-        // Add links for server PDF files (already uploaded)
-        for (const serverPdf of serverPdfFiles) {
-          checkNewPage();
-          const linkText = `• ${serverPdf.file_name}`;
-          const pdfUrl = getImageUrl(serverPdf.id);
-
-          // Add clickable link
-          pdf.setTextColor(0, 102, 204); // Blue color for link
-          pdf.textWithLink(linkText, margin + 5, yPos, { url: pdfUrl });
-          pdf.setTextColor(0, 0, 0); // Reset to black
-          yPos += 6;
-        }
-
-        yPos += 10;
-      }
 
       // Process each image (both File and ServerImage)
       for (let i = 0; i < imageItems.length; i++) {
@@ -878,6 +908,8 @@ export const generatePDF = async (formData: FormData) => {
         }
       }
     }
+
+    // PDF attachments are accessible via the application dashboard, not embedded in this PDF
   }
 
   // Footer - update page count after all pages are added

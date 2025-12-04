@@ -34,9 +34,12 @@
         {
           "name": "daemmung",
           "label": "Dämmung / Isolation",
-          "type": "number",
-          "unit": "cm",
-          "required": true
+          "type": "conditional",
+          "conditionalType": "ja_nein_with_value",
+          "valueUnit": "cm",
+          "valueLabel": "Dämmung Maß",
+          "required": true,
+          "allowZero": true
         },
         {
           "name": "breite",
@@ -118,7 +121,7 @@
         {
           "name": "statiktraeger",
           "label": "Statikträger",
-          "type": "select",
+          "type": "multiselect",
           "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
           "required": true
         },
@@ -148,6 +151,13 @@
           "label": "Montageteam",
           "type": "select",
           "options": ["SENOL", "APO", "IZAR"],
+          "required": false
+        },
+        {
+          "name": "seitenmarkise",
+          "label": "Seitenmarkise",
+          "type": "seitenmarkise",
+          "positions": ["Rechts", "Links", "Vorne", "Hinten"],
           "required": false
         }
       ]
@@ -178,9 +188,12 @@
         {
           "name": "daemmung",
           "label": "Dämmung / Isolation",
-          "type": "number",
-          "unit": "cm",
-          "required": true
+          "type": "conditional",
+          "conditionalType": "ja_nein_with_value",
+          "valueUnit": "cm",
+          "valueLabel": "Dämmung Maß",
+          "required": true,
+          "allowZero": true
         },
         {
           "name": "breite",
@@ -255,7 +268,7 @@
         {
           "name": "statiktraeger",
           "label": "Statikträger",
-          "type": "select",
+          "type": "multiselect",
           "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
           "required": true
         },
@@ -286,6 +299,13 @@
           "type": "select",
           "options": ["SENOL", "APO", "IZAR"],
           "required": false
+        },
+        {
+          "name": "seitenmarkise",
+          "label": "Seitenmarkise",
+          "type": "seitenmarkise",
+          "positions": ["Rechts", "Links", "Vorne", "Hinten"],
+          "required": false
         }
       ]
     },
@@ -311,9 +331,12 @@
         {
           "name": "daemmung",
           "label": "Dämmung / Isolation",
-          "type": "number",
-          "unit": "cm",
-          "required": true
+          "type": "conditional",
+          "conditionalType": "ja_nein_with_value",
+          "valueUnit": "cm",
+          "valueLabel": "Dämmung Maß",
+          "required": true,
+          "allowZero": true
         },
         {
           "name": "breite",
@@ -395,7 +418,7 @@
         {
           "name": "statiktraeger",
           "label": "Statikträger",
-          "type": "select",
+          "type": "multiselect",
           "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
           "required": true
         },
@@ -426,6 +449,13 @@
           "type": "select",
           "options": ["SENOL", "APO", "IZAR"],
           "required": false
+        },
+        {
+          "name": "seitenmarkise",
+          "label": "Seitenmarkise",
+          "type": "seitenmarkise",
+          "positions": ["Rechts", "Links", "Vorne", "Hinten"],
+          "required": false
         }
       ]
     },
@@ -451,9 +481,12 @@
         {
           "name": "daemmung",
           "label": "Dämmung / Isolation",
-          "type": "number",
-          "unit": "cm",
-          "required": true
+          "type": "conditional",
+          "conditionalType": "ja_nein_with_value",
+          "valueUnit": "cm",
+          "valueLabel": "Dämmung Maß",
+          "required": true,
+          "allowZero": true
         },
         {
           "name": "breite",
@@ -535,7 +568,7 @@
         {
           "name": "statiktraeger",
           "label": "Statikträger",
-          "type": "select",
+          "type": "multiselect",
           "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
           "required": true
         },
@@ -565,6 +598,13 @@
           "label": "Montageteam",
           "type": "select",
           "options": ["SENOL", "APO", "IZAR"],
+          "required": false
+        },
+        {
+          "name": "seitenmarkise",
+          "label": "Seitenmarkise",
+          "type": "seitenmarkise",
+          "positions": ["Rechts", "Links", "Vorne", "Hinten"],
           "required": false
         }
       ]

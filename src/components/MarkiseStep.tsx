@@ -8,7 +8,7 @@ export interface MarkiseData {
   modell: string;
   breite: number;
   laenge: number;
-  hoehe: number;
+  hoehe?: number; // Bodenhöhe - optional
   stoffNummer: string;
   gestellfarbe: string;
   antrieb: string;
@@ -340,7 +340,7 @@ const MarkiseStep = ({ markiseData, updateMarkiseData, markiseBemerkungen = '', 
           </div>
         </motion.div>
 
-        {/* Höhe - only for SENKRECHT */}
+        {/* Höhe - only for SENKRECHT (optional - Bodenhöhe) */}
         <AnimatePresence>
           {selectedType?.showHeight && (
             <motion.div
@@ -351,7 +351,7 @@ const MarkiseStep = ({ markiseData, updateMarkiseData, markiseBemerkungen = '', 
               transition={{ duration: 0.3, delay: 0.3 }}
             >
               <label htmlFor={`hoehe-${index}`}>
-                Markisenhöhe <span className="unit-label">(mm)</span> <span className="required">*</span>
+                Bodenhöhe <span className="unit-label">(mm)</span> <span className="optional-hint">(optional)</span>
               </label>
               <div className="number-input-wrapper">
                 <input
@@ -361,7 +361,6 @@ const MarkiseStep = ({ markiseData, updateMarkiseData, markiseBemerkungen = '', 
                   onChange={(e) => handleChange(index, 'hoehe', parseFloat(e.target.value) || 0)}
                   placeholder="0"
                   min="0"
-                  required
                 />
                 <span className="unit-suffix">mm</span>
               </div>

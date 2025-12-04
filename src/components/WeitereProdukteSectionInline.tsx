@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import productConfigData from '../config/productConfig.json';
 import { WeiteresProdukt } from '../types';
 import './WeitereProdukte.css';
+import './DynamicSpecificationForm.css';
 
 interface ProductConfig {
   [category: string]: {
@@ -26,6 +27,8 @@ interface FieldConfig {
   conditionalType?: string;
   valueUnit?: string;
   valueLabel?: string;
+  allowZero?: boolean;
+  positions?: string[];
   conditionalField?: {
     trigger: string;
     field: string;
@@ -114,7 +117,7 @@ const WeitereProdukteSectionInline = ({
     updateWeitereProdukte(newProducts);
   };
 
-  const handleWPSpecChange = (index: number, fieldName: string, value: string | number | boolean) => {
+  const handleWPSpecChange = (index: number, fieldName: string, value: string | number | boolean | string[]) => {
     const newProducts = [...weitereProdukte];
     newProducts[index] = {
       ...newProducts[index],
@@ -385,6 +388,203 @@ const WeitereProdukteSectionInline = ({
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 'multiselect':
+        const currentMultiValue = (product.specifications[field.name] as string[]) || [];
+        const handleMultiSelectChange = (option: string, checked: boolean) => {
+          let newValue: string[];
+          if (option === 'Keine') {
+            newValue = checked ? ['Keine'] : [];
+          } else {
+            if (checked) {
+              newValue = currentMultiValue.filter(v => v !== 'Keine');
+              newValue.push(option);
+            } else {
+              newValue = currentMultiValue.filter(v => v !== option);
+            }
+          }
+          handleWPSpecChange(index, field.name, newValue);
+        };
+        return (
+          <div key={field.name} className="form-field full-width multiselect-field">
+            <label>
+              {field.label}
+              {field.required && <span className="required">*</span>}
+            </label>
+            <div className="multiselect-options">
+              {field.options?.map(option => {
+                const isSelected = currentMultiValue.includes(option);
+                const isDisabled = option !== 'Keine' && currentMultiValue.includes('Keine');
+                return (
+                  <label
+                    key={option}
+                    className={`multiselect-checkbox ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={isDisabled}
+                      onChange={(e) => handleMultiSelectChange(option, e.target.checked)}
+                    />
+                    <span>{option}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        );
+
+      case 'seitenmarkise':
+        const positions = field.positions || ['Rechts', 'Links', 'Vorne', 'Hinten'];
+        const seitenmarkiseValue = product.specifications[field.name];
+        type SeitenmarkisePos = { active: boolean; aufteilung: string; links?: number; rechts?: number; breite?: number };
+        let seitenmarkiseData: Record<string, SeitenmarkisePos> = {};
+
+        if (typeof seitenmarkiseValue === 'string' && seitenmarkiseValue) {
+          try {
+            seitenmarkiseData = JSON.parse(seitenmarkiseValue);
+          } catch {
+            seitenmarkiseData = {};
+          }
+        } else if (typeof seitenmarkiseValue === 'object' && seitenmarkiseValue && !Array.isArray(seitenmarkiseValue)) {
+          seitenmarkiseData = seitenmarkiseValue as Record<string, SeitenmarkisePos>;
+        }
+
+        const updateSeitenmarkiseWP = (position: string, data: Partial<typeof seitenmarkiseData[string]>) => {
+          const newData = {
+            ...seitenmarkiseData,
+            [position]: {
+              ...seitenmarkiseData[position],
+              ...data
+            }
+          };
+          handleWPSpecChange(index, field.name, JSON.stringify(newData));
+        };
+
+        return (
+          <div key={field.name} className="form-field full-width seitenmarkise-field">
+            <label className="seitenmarkise-main-label">
+              {field.label}
+              <span className="optional-hint">(optional)</span>
+            </label>
+            <div className="seitenmarkise-positions">
+              {positions.map(position => {
+                const posData = seitenmarkiseData[position] || { active: false, aufteilung: '' };
+                const isActive = posData.active === true;
+                const aufteilung = posData.aufteilung || '';
+
+                return (
+                  <div key={position} className={`seitenmarkise-position ${isActive ? 'active' : ''}`}>
+                    <label className="position-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            updateSeitenmarkiseWP(position, { active: true, aufteilung: '' });
+                          } else {
+                            updateSeitenmarkiseWP(position, { active: false });
+                          }
+                        }}
+                      />
+                      <span className="position-label">{position}</span>
+                    </label>
+
+                    {isActive && (
+                      <div className="position-details">
+                        <div className="aufteilung-selection">
+                          <label className="aufteilung-option">
+                            <input
+                              type="radio"
+                              name={`aufteilung-wp-${product.id}-${position}`}
+                              checked={aufteilung === 'mit'}
+                              onChange={() => updateSeitenmarkiseWP(position, { aufteilung: 'mit', breite: undefined })}
+                            />
+                            <span>Mit Aufteilung</span>
+                          </label>
+                          <label className="aufteilung-option">
+                            <input
+                              type="radio"
+                              name={`aufteilung-wp-${product.id}-${position}`}
+                              checked={aufteilung === 'ohne'}
+                              onChange={() => updateSeitenmarkiseWP(position, { aufteilung: 'ohne', links: undefined, rechts: undefined })}
+                            />
+                            <span>Ohne Aufteilung</span>
+                          </label>
+                        </div>
+
+                        {aufteilung === 'mit' && (
+                          <div className="aufteilung-inputs mit-aufteilung">
+                            <div className="input-row">
+                              <label>Links:</label>
+                              <div className="input-with-unit">
+                                <input
+                                  type="number"
+                                  value={posData.links || ''}
+                                  onChange={(e) => updateSeitenmarkiseWP(position, { links: parseFloat(e.target.value) || 0 })}
+                                  placeholder="0"
+                                  min="0"
+                                />
+                                <span className="unit">cm</span>
+                              </div>
+                            </div>
+                            <div className="input-row">
+                              <label>Rechts:</label>
+                              <div className="input-with-unit">
+                                <input
+                                  type="number"
+                                  value={posData.rechts || ''}
+                                  onChange={(e) => updateSeitenmarkiseWP(position, { rechts: parseFloat(e.target.value) || 0 })}
+                                  placeholder="0"
+                                  min="0"
+                                />
+                                <span className="unit">cm</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {aufteilung === 'ohne' && (
+                          <div className="aufteilung-inputs ohne-aufteilung">
+                            <div className="input-row">
+                              <label>Breite:</label>
+                              <div className="input-with-unit">
+                                <input
+                                  type="number"
+                                  value={posData.breite || ''}
+                                  onChange={(e) => updateSeitenmarkiseWP(position, { breite: parseFloat(e.target.value) || 0 })}
+                                  placeholder="0"
+                                  min="0"
+                                />
+                                <span className="unit">cm</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+
+      case 'text':
+        return (
+          <div key={field.name} className="form-field">
+            <label>
+              {field.label}
+              {field.required && <span className="required">*</span>}
+            </label>
+            <input
+              type="text"
+              value={value as string || ''}
+              onChange={(e) => handleWPSpecChange(index, field.name, e.target.value)}
+              placeholder={field.placeholder || ''}
+            />
           </div>
         );
 

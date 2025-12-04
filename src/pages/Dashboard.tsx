@@ -1,16 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getForm } from '../services/api';
+import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getForm, getImageUrl, getStoredUser } from '../services/api';
 import type { FormData, MontageteamStats, Montageteam } from '../services/api';
 import { useStats } from '../AppWrapper';
 import { generatePDF } from '../utils/pdfGenerator';
 import './Dashboard.css';
 
+// Check if current user is admin
+const isAdmin = () => {
+  const user = getStoredUser();
+  return user?.role === 'admin';
+};
+
 // Status options for forms
 const STATUS_OPTIONS = [
   { value: 'alle', label: 'Alle Aufmaße', color: '#7fa93d' },
-  { value: 'neu', label: 'Neu', color: '#8b5cf6' },
+  { value: 'neu', label: 'Aufmaß Genommen', color: '#8b5cf6' },
   { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
   { value: 'bestellt', label: 'Bestellt/In Bearbeitung', color: '#f59e0b' },
   { value: 'abgeschlossen', label: 'Abgeschlossen', color: '#10b981' },
@@ -33,6 +39,7 @@ const Dashboard = () => {
   const [teamDropdownOpen, setTeamDropdownOpen] = useState<number | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<number | null>(null);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -382,41 +389,50 @@ const Dashboard = () => {
                           {form.kundenlokation || 'Keine Adresse'}
                         </p>
                       </div>
-                      <div className="status-selector">
-                        <button
-                          className="status-pill-btn"
+                      {isAdmin() ? (
+                        <div className="status-selector">
+                          <button
+                            className="status-pill-btn"
+                            style={{ backgroundColor: getStatusColor(getFormStatus(form)) }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setStatusDropdownOpen(statusDropdownOpen === form.id ? null : form.id!);
+                            }}
+                          >
+                            {getStatusLabel(getFormStatus(form)).split('/')[0]}
+                            <svg className="chevron-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
+                          </button>
+                          <AnimatePresence>
+                            {statusDropdownOpen === form.id && (
+                              <motion.div
+                                className="status-dropdown"
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {STATUS_OPTIONS.filter(o => o.value !== 'alle').map((option) => (
+                                  <button
+                                    key={option.value}
+                                    className={`status-option ${getFormStatus(form) === option.value ? 'selected' : ''}`}
+                                    onClick={() => handleStatusChange(form.id!, option.value)}
+                                  >
+                                    <span className="status-dot" style={{ backgroundColor: option.color }} />
+                                    <span>{option.label}</span>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      ) : (
+                        <div
+                          className="status-pill-static"
                           style={{ backgroundColor: getStatusColor(getFormStatus(form)) }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setStatusDropdownOpen(statusDropdownOpen === form.id ? null : form.id!);
-                          }}
                         >
                           {getStatusLabel(getFormStatus(form)).split('/')[0]}
-                          <svg className="chevron-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
-                        </button>
-                        <AnimatePresence>
-                          {statusDropdownOpen === form.id && (
-                            <motion.div
-                              className="status-dropdown"
-                              initial={{ opacity: 0, y: -10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -10 }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {STATUS_OPTIONS.filter(o => o.value !== 'alle').map((option) => (
-                                <button
-                                  key={option.value}
-                                  className={`status-option ${getFormStatus(form) === option.value ? 'selected' : ''}`}
-                                  onClick={() => handleStatusChange(form.id!, option.value)}
-                                >
-                                  <span className="status-dot" style={{ backgroundColor: option.color }} />
-                                  <span>{option.label}</span>
-                                </button>
-                              ))}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
+                        </div>
+                      )}
                     </div>
                     <div className="card-body-modern">
                       <div className="product-tags">
@@ -482,9 +498,69 @@ const Dashboard = () => {
                         )}
                       </AnimatePresence>
                     </div>
-                    <button className="action-btn pdf" onClick={() => handleDownloadPDF(form.id!)} title="PDF herunterladen">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14,2 14,8 20,8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="12" y2="18" /><line x1="15" y1="15" x2="12" y2="18" /></svg>
-                    </button>
+                    <div className="attachment-selector">
+                      <button
+                        className={`action-btn attachment ${(form.pdf_count || 0) > 0 ? 'has-files' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAttachmentDropdownOpen(attachmentDropdownOpen === form.id ? null : form.id!);
+                        }}
+                        title="Dateien"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14,2 14,8 20,8" /></svg>
+                        {(form.pdf_count || 0) > 0 && <span className="file-count-badge">{form.pdf_count}</span>}
+                      </button>
+                      <AnimatePresence>
+                        {attachmentDropdownOpen === form.id && (
+                          <motion.div
+                            className="attachment-dropdown"
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              className="attachment-option generate-pdf"
+                              onClick={() => {
+                                handleDownloadPDF(form.id!);
+                                setAttachmentDropdownOpen(null);
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14,2 14,8 20,8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="12" y2="18" /><line x1="15" y1="15" x2="12" y2="18" /></svg>
+                              <span>PDF erstellen</span>
+                            </button>
+                            {form.pdf_files && form.pdf_files.length > 0 && (
+                              <>
+                                <div className="attachment-divider">Angehängte PDFs</div>
+                                {form.pdf_files.map((pdf) => (
+                                  <a
+                                    key={pdf.id}
+                                    href={getImageUrl(pdf.id)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="attachment-option pdf-file"
+                                    onClick={() => setAttachmentDropdownOpen(null)}
+                                  >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14,2 14,8 20,8" /><path d="M9 15h6"/><path d="M9 11h6"/></svg>
+                                    <span className="pdf-filename">{pdf.file_name}</span>
+                                  </a>
+                                ))}
+                              </>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                    {form.kundeEmail && (
+                      <a
+                        href={`mailto:${form.kundeEmail}`}
+                        className="action-btn email"
+                        title={`E-Mail an ${form.kundeEmail}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
+                      </a>
+                    )}
                     <button className="action-btn edit" onClick={() => handleEditForm(form.id!)}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                       <span>Bearbeiten</span>
@@ -515,6 +591,14 @@ const Dashboard = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Powered by Conais Footer */}
+      <footer className="powered-by-footer">
+        <span>Powered by</span>
+        <a href="https://conais.com" target="_blank" rel="noopener noreferrer">
+          <img src="https://conais.in/dev/wp-content/uploads/2020/10/logo2.png" alt="Conais" className="conais-logo" />
+        </a>
+      </footer>
     </>
   );
 };

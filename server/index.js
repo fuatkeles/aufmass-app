@@ -61,6 +61,7 @@ async function initializeTables() {
         aufmasser NVARCHAR(100) NOT NULL,
         kunde_vorname NVARCHAR(100) NOT NULL,
         kunde_nachname NVARCHAR(100) NOT NULL,
+        kunde_email NVARCHAR(255),
         kundenlokation NVARCHAR(255) NOT NULL,
         category NVARCHAR(100) NOT NULL,
         product_type NVARCHAR(100) NOT NULL,
@@ -73,6 +74,14 @@ async function initializeTables() {
         created_at DATETIME DEFAULT GETDATE(),
         updated_at DATETIME DEFAULT GETDATE()
       )
+    `);
+
+    // Add kunde_email column if it doesn't exist (migration for existing tables)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_forms') AND name = 'kunde_email')
+      BEGIN
+        ALTER TABLE aufmass_forms ADD kunde_email NVARCHAR(255)
+      END
     `);
 
     // Images table
@@ -570,9 +579,30 @@ app.get('/api/health', (req, res) => {
 app.get('/api/forms', authenticateToken, async (req, res) => {
   try {
     const result = await pool.request().query(`
-      SELECT * FROM aufmass_forms ORDER BY created_at DESC
+      SELECT
+        f.*,
+        (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND file_type LIKE 'image/%') as image_count,
+        (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND (file_type = 'application/pdf' OR file_name LIKE '%.pdf')) as pdf_count
+      FROM aufmass_forms f
+      ORDER BY f.created_at DESC
     `);
-    res.json(result.recordset);
+
+    // Get PDF files for each form
+    const formsWithPdfs = await Promise.all(result.recordset.map(async (form) => {
+      if (form.pdf_count > 0) {
+        const pdfs = await pool.request()
+          .input('form_id', sql.Int, form.id)
+          .query(`
+            SELECT id, file_name, file_type
+            FROM aufmass_bilder
+            WHERE form_id = @form_id AND (file_type = 'application/pdf' OR file_name LIKE '%.pdf')
+          `);
+        return { ...form, pdf_files: pdfs.recordset };
+      }
+      return { ...form, pdf_files: [] };
+    }));
+
+    res.json(formsWithPdfs);
   } catch (err) {
     console.error('Error fetching forms:', err);
     res.status(500).json({ error: 'Failed to fetch forms' });
@@ -629,6 +659,7 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       aufmasser,
       kundeVorname,
       kundeNachname,
+      kundeEmail,
       kundenlokation,
       category,
       productType,
@@ -645,6 +676,7 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       .input('aufmasser', sql.NVarChar, aufmasser)
       .input('kunde_vorname', sql.NVarChar, kundeVorname)
       .input('kunde_nachname', sql.NVarChar, kundeNachname)
+      .input('kunde_email', sql.NVarChar, kundeEmail || null)
       .input('kundenlokation', sql.NVarChar, kundenlokation)
       .input('category', sql.NVarChar, category)
       .input('product_type', sql.NVarChar, productType)
@@ -656,9 +688,9 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       .input('created_by', sql.Int, req.user.id)
       .query(`
         INSERT INTO aufmass_forms
-        (datum, aufmasser, kunde_vorname, kunde_nachname, kundenlokation, category, product_type, model, specifications, markise_data, bemerkungen, status, created_by)
+        (datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email, kundenlokation, category, product_type, model, specifications, markise_data, bemerkungen, status, created_by)
         OUTPUT INSERTED.id
-        VALUES (@datum, @aufmasser, @kunde_vorname, @kunde_nachname, @kundenlokation, @category, @product_type, @model, @specifications, @markise_data, @bemerkungen, @status, @created_by)
+        VALUES (@datum, @aufmasser, @kunde_vorname, @kunde_nachname, @kunde_email, @kundenlokation, @category, @product_type, @model, @specifications, @markise_data, @bemerkungen, @status, @created_by)
       `);
 
     const newId = result.recordset[0].id;
@@ -700,6 +732,7 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
       aufmasser: { column: 'aufmasser', type: sql.NVarChar },
       kundeVorname: { column: 'kunde_vorname', type: sql.NVarChar },
       kundeNachname: { column: 'kunde_nachname', type: sql.NVarChar },
+      kundeEmail: { column: 'kunde_email', type: sql.NVarChar },
       kundenlokation: { column: 'kundenlokation', type: sql.NVarChar },
       category: { column: 'category', type: sql.NVarChar },
       productType: { column: 'product_type', type: sql.NVarChar },

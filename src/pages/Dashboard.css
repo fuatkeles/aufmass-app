@@ -787,6 +787,105 @@
   opacity: 0.7;
 }
 
+/* Attachment Selector Dropdown */
+.attachment-selector {
+  position: relative;
+}
+
+.action-btn.attachment {
+  position: relative;
+}
+
+.action-btn.attachment.has-files {
+  color: var(--primary-color);
+}
+
+.file-count-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ef4444;
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 600;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.attachment-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  min-width: 220px;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.attachment-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-decoration: none;
+}
+
+.attachment-option:hover {
+  background: rgba(127, 169, 61, 0.1);
+}
+
+.attachment-option svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.attachment-option.generate-pdf {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.attachment-option.generate-pdf svg {
+  color: var(--primary-color);
+}
+
+.attachment-divider {
+  padding: 0.5rem 1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.attachment-option.pdf-file svg {
+  color: #ef4444;
+}
+
+.pdf-filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
 .card-actions-modern {
   display: flex;
   gap: 0.5rem;
@@ -840,6 +939,17 @@
   background: var(--primary-color);
   border-color: var(--primary-color);
   color: var(--bg-primary);
+}
+
+.action-btn.email {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.action-btn.email:hover {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
 }
 
 .action-btn.delete {
@@ -2614,6 +2724,17 @@
   height: 14px;
 }
 
+.status-pill-static {
+  display: flex;
+  align-items: center;
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  white-space: nowrap;
+}
+
 .status-dropdown {
   position: absolute;
   top: calc(100% + 4px);
@@ -2780,5 +2901,29 @@
   /* Add spacing between mobile header and montageteams section */
   .montageteams-section {
     margin-top: 1rem;
+  }
+}
+
+/* Dashboard Powered by Footer - fixed at bottom of content area */
+.dashboard .powered-by-footer {
+  position: fixed;
+  bottom: 0;
+  left: 280px;
+  right: 0;
+  background: linear-gradient(to top, var(--bg-primary) 0%, transparent 100%);
+  padding: 1rem 1.5rem;
+  margin-top: 0;
+  z-index: 50;
+}
+
+@media (max-width: 1024px) {
+  .dashboard .powered-by-footer {
+    left: 240px;
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard .powered-by-footer {
+    left: 0;
   }
 }

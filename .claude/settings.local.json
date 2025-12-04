@@ -16,7 +16,8 @@
       "Bash(dir:*)",
       "Bash(npm run build:*)",
       "Bash(netstat:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(del \"C:\\Users\\fuatk\\aufmass-app\\src\\pages\\FormPage.css\")"
     ],
     "deny": [],
     "ask": []

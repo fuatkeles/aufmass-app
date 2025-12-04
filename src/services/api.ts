@@ -33,7 +33,7 @@ export interface WeiteresProdukt {
   category: string;
   productType: string;
   model: string;
-  specifications: Record<string, string | number | boolean>;
+  specifications: Record<string, string | number | boolean | string[]>;
 }
 
 export interface FormData {
@@ -42,6 +42,7 @@ export interface FormData {
   aufmasser: string;
   kundeVorname: string;
   kundeNachname: string;
+  kundeEmail?: string;
   kundenlokation: string;
   category: string;
   productType: string;
@@ -53,6 +54,9 @@ export interface FormData {
   status?: string;
   created_at?: string;
   updated_at?: string;
+  image_count?: number;
+  pdf_count?: number;
+  pdf_files?: { id: number; file_name: string; file_type: string }[];
 }
 
 export interface ApiForm {
@@ -61,6 +65,7 @@ export interface ApiForm {
   aufmasser: string;
   kunde_vorname: string;
   kunde_nachname: string;
+  kunde_email?: string;
   kundenlokation: string;
   category: string;
   product_type: string;
@@ -72,6 +77,10 @@ export interface ApiForm {
   created_at: string;
   updated_at: string;
   bilder?: { id: number; file_name: string; file_type: string }[];
+  weitereProdukte?: WeiteresProdukt[];
+  image_count?: number;
+  pdf_count?: number;
+  pdf_files?: { id: number; file_name: string; file_type: string }[];
 }
 
 export interface Stats {
@@ -286,16 +295,21 @@ function transformApiToFrontend(apiForm: ApiForm): FormData {
     aufmasser: apiForm.aufmasser,
     kundeVorname: apiForm.kunde_vorname,
     kundeNachname: apiForm.kunde_nachname,
+    kundeEmail: apiForm.kunde_email || '',
     kundenlokation: apiForm.kundenlokation,
     category: apiForm.category,
     productType: apiForm.product_type,
     model: apiForm.model,
     specifications: apiForm.specifications ? JSON.parse(apiForm.specifications) : {},
     markiseData: apiForm.markise_data ? JSON.parse(apiForm.markise_data) : null,
+    weitereProdukte: apiForm.weitereProdukte || [],
     bemerkungen: apiForm.bemerkungen || '',
     status: apiForm.status,
     created_at: apiForm.created_at,
-    updated_at: apiForm.updated_at
+    updated_at: apiForm.updated_at,
+    image_count: apiForm.image_count,
+    pdf_count: apiForm.pdf_count,
+    pdf_files: apiForm.pdf_files
   };
 }
 

@@ -1,4 +1,4 @@
-export type FieldType = 'text' | 'number' | 'select' | 'radio' | 'checkbox' | 'boolean' | 'textarea' | 'fundament' | 'bauform' | 'conditional' | 'modelColorSelect' | 'markise_trigger';
+export type FieldType = 'text' | 'number' | 'select' | 'radio' | 'checkbox' | 'boolean' | 'textarea' | 'fundament' | 'bauform' | 'conditional' | 'modelColorSelect' | 'markise_trigger' | 'multiselect' | 'seitenmarkise' | 'ja_nein';
 
 export interface FieldConfig {
   name: string;
@@ -8,6 +8,19 @@ export interface FieldConfig {
   unit?: string;
   required: boolean;
   placeholder?: string;
+  hasCustomOption?: boolean;
+  conditionalType?: string;
+  valueUnit?: string;
+  valueLabel?: string;
+  allowZero?: boolean;
+  positions?: string[];
+  conditionalField?: {
+    trigger: string;
+    field: string;
+    type: string;
+    unit?: string;
+    label: string;
+  };
 }
 
 export interface ProductTypeConfig {

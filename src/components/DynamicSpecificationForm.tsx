@@ -31,6 +31,8 @@ interface FieldConfig {
   conditionalType?: string;
   valueUnit?: string;
   valueLabel?: string;
+  allowZero?: boolean;
+  positions?: string[];
   conditionalField?: {
     trigger: string;
     field: string;
@@ -299,9 +301,251 @@ const DynamicSpecificationForm = ({
           </motion.div>
         );
 
+      case 'multiselect':
+        const selectedValues = Array.isArray(value) ? value as string[] : [];
+        return (
+          <motion.div
+            key={field.name}
+            className="form-field multiselect-field"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.03 }}
+          >
+            <label>
+              {field.label}
+              {field.required && <span className="required">*</span>}
+            </label>
+            <div className="multiselect-options">
+              {field.options?.map((option) => {
+                const isSelected = selectedValues.includes(option);
+                const isKeineSelected = selectedValues.includes('Keine');
+                // If "Keine" is selected, disable other options; if other option selected, disable "Keine"
+                const isDisabled = option === 'Keine'
+                  ? selectedValues.length > 0 && !isKeineSelected
+                  : isKeineSelected;
+
+                return (
+                  <label
+                    key={option}
+                    className={`multiselect-checkbox ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={isDisabled}
+                      onChange={(e) => {
+                        let newValues: string[];
+                        if (option === 'Keine') {
+                          // If selecting "Keine", clear all others
+                          newValues = e.target.checked ? ['Keine'] : [];
+                        } else {
+                          if (e.target.checked) {
+                            // Add this option, remove "Keine" if present
+                            newValues = [...selectedValues.filter(v => v !== 'Keine'), option];
+                          } else {
+                            // Remove this option
+                            newValues = selectedValues.filter(v => v !== option);
+                          }
+                        }
+                        updateField(field.name, newValues);
+                      }}
+                    />
+                    <span className="checkbox-label">{option}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </motion.div>
+        );
+
+      case 'seitenmarkise':
+        // Parse existing seitenmarkise data
+        type SeitenmarkisePosition = { active: boolean; aufteilung: string; breite?: number; links?: number; rechts?: number };
+        type SeitenmarkiseData = Record<string, SeitenmarkisePosition>;
+
+        let seitenmarkiseData: SeitenmarkiseData = {};
+        const rawSeitenmarkise = formData[field.name];
+        if (typeof rawSeitenmarkise === 'string' && rawSeitenmarkise) {
+          try {
+            seitenmarkiseData = JSON.parse(rawSeitenmarkise);
+          } catch {
+            seitenmarkiseData = {};
+          }
+        } else if (typeof rawSeitenmarkise === 'object' && rawSeitenmarkise && !Array.isArray(rawSeitenmarkise)) {
+          seitenmarkiseData = rawSeitenmarkise as SeitenmarkiseData;
+        }
+
+        const positions = field.positions || ['Rechts', 'Links', 'Vorne', 'Hinten'];
+
+        const updateSeitenmarkise = (position: string, updates: Partial<{ active: boolean; aufteilung: string; breite?: number; links?: number; rechts?: number }>) => {
+          const newData = { ...seitenmarkiseData };
+          newData[position] = { ...newData[position], ...updates };
+          // If deactivating, clear the data for that position
+          if (updates.active === false) {
+            delete newData[position];
+          }
+          updateField(field.name, JSON.stringify(newData));
+        };
+
+        return (
+          <motion.div
+            key={field.name}
+            className="form-field seitenmarkise-field full-width"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.03 }}
+          >
+            <label className="seitenmarkise-main-label">
+              {field.label}
+              <span className="optional-hint">(Optional)</span>
+            </label>
+            <div className="seitenmarkise-positions">
+              {positions.map((position) => {
+                const posData = seitenmarkiseData[position] || { active: false, aufteilung: '' };
+                const isActive = posData.active === true;
+                const aufteilung = posData.aufteilung || '';
+
+                return (
+                  <div key={position} className={`seitenmarkise-position ${isActive ? 'active' : ''}`}>
+                    <label className="position-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            updateSeitenmarkise(position, { active: true, aufteilung: '' });
+                          } else {
+                            updateSeitenmarkise(position, { active: false });
+                          }
+                        }}
+                      />
+                      <span className="position-label">{position}</span>
+                    </label>
+
+                    <AnimatePresence>
+                      {isActive && (
+                        <motion.div
+                          className="position-details"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                        >
+                          <div className="aufteilung-selection">
+                            <label className="aufteilung-option">
+                              <input
+                                type="radio"
+                                name={`aufteilung-${field.name}-${position}`}
+                                checked={aufteilung === 'mit'}
+                                onChange={() => updateSeitenmarkise(position, {
+                                  aufteilung: 'mit',
+                                  breite: undefined,
+                                  links: posData.links || undefined,
+                                  rechts: posData.rechts || undefined
+                                })}
+                              />
+                              <span>Mit Aufteilung</span>
+                            </label>
+                            <label className="aufteilung-option">
+                              <input
+                                type="radio"
+                                name={`aufteilung-${field.name}-${position}`}
+                                checked={aufteilung === 'ohne'}
+                                onChange={() => updateSeitenmarkise(position, {
+                                  aufteilung: 'ohne',
+                                  links: undefined,
+                                  rechts: undefined,
+                                  breite: posData.breite || undefined
+                                })}
+                              />
+                              <span>Ohne Aufteilung</span>
+                            </label>
+                          </div>
+
+                          <AnimatePresence>
+                            {aufteilung === 'mit' && (
+                              <motion.div
+                                className="aufteilung-inputs mit-aufteilung"
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                              >
+                                <div className="input-row">
+                                  <label>Links:</label>
+                                  <div className="input-with-unit">
+                                    <input
+                                      type="number"
+                                      value={posData.links || ''}
+                                      onChange={(e) => updateSeitenmarkise(position, {
+                                        links: e.target.value ? parseFloat(e.target.value) : undefined
+                                      })}
+                                      placeholder="0"
+                                      min="0"
+                                    />
+                                    <span className="unit">cm</span>
+                                  </div>
+                                </div>
+                                <div className="input-row">
+                                  <label>Rechts:</label>
+                                  <div className="input-with-unit">
+                                    <input
+                                      type="number"
+                                      value={posData.rechts || ''}
+                                      onChange={(e) => updateSeitenmarkise(position, {
+                                        rechts: e.target.value ? parseFloat(e.target.value) : undefined
+                                      })}
+                                      placeholder="0"
+                                      min="0"
+                                    />
+                                    <span className="unit">cm</span>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+
+                            {aufteilung === 'ohne' && (
+                              <motion.div
+                                className="aufteilung-inputs ohne-aufteilung"
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                              >
+                                <div className="input-row">
+                                  <label>Breite:</label>
+                                  <div className="input-with-unit">
+                                    <input
+                                      type="number"
+                                      value={posData.breite || ''}
+                                      onChange={(e) => updateSeitenmarkise(position, {
+                                        breite: e.target.value ? parseFloat(e.target.value) : undefined
+                                      })}
+                                      placeholder="0"
+                                      min="0"
+                                    />
+                                    <span className="unit">cm</span>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        );
+
       case 'conditional':
         if (field.conditionalType === 'ja_nein_with_value') {
           const isJa = formData[`${field.name}Active`] === true;
+          const allowZero = field.allowZero === true;
+          // For allowZero fields, show 0 as value; otherwise show empty string when 0
+          const numValue = typeof value === 'number' ? value : (typeof value === 'string' ? parseFloat(value) : undefined);
+          const displayValue: string | number = allowZero
+            ? (numValue !== undefined && !isNaN(numValue) ? numValue : '')
+            : (numValue || '');
           return (
             <motion.div
               key={field.name}
@@ -346,8 +590,15 @@ const DynamicSpecificationForm = ({
                     <label>{field.valueLabel || 'Wert'} ({field.valueUnit || 'cm'})</label>
                     <input
                       type="number"
-                      value={value as number || ''}
-                      onChange={(e) => updateField(field.name, parseFloat(e.target.value) || 0)}
+                      value={displayValue}
+                      onChange={(e) => {
+                        const inputValue = e.target.value;
+                        if (inputValue === '') {
+                          updateField(field.name, '');
+                        } else {
+                          updateField(field.name, parseFloat(inputValue));
+                        }
+                      }}
                       placeholder={`${field.valueUnit || 'cm'} eingeben`}
                       min="0"
                     />
@@ -900,6 +1151,185 @@ const DynamicSpecificationForm = ({
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 'multiselect':
+        const wpMultiValue = (product.specifications[field.name] as string[]) || [];
+        const handleWPMultiSelectChange = (option: string, checked: boolean) => {
+          let newValue: string[];
+          if (option === 'Keine') {
+            newValue = checked ? ['Keine'] : [];
+          } else {
+            if (checked) {
+              newValue = wpMultiValue.filter(v => v !== 'Keine');
+              newValue.push(option);
+            } else {
+              newValue = wpMultiValue.filter(v => v !== option);
+            }
+          }
+          handleWPSpecChange(index, field.name, newValue as unknown as string);
+        };
+        return (
+          <div key={field.name} className="form-field full-width multiselect-field">
+            <label>
+              {field.label}
+              {field.required && <span className="required">*</span>}
+            </label>
+            <div className="multiselect-options">
+              {field.options?.map(option => {
+                const isSelected = wpMultiValue.includes(option);
+                const isDisabled = option !== 'Keine' && wpMultiValue.includes('Keine');
+                return (
+                  <label
+                    key={option}
+                    className={`multiselect-checkbox ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={isDisabled}
+                      onChange={(e) => handleWPMultiSelectChange(option, e.target.checked)}
+                    />
+                    <span>{option}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        );
+
+      case 'seitenmarkise':
+        const wpPositions = field.positions || ['Rechts', 'Links', 'Vorne', 'Hinten'];
+        const wpSeitenmarkiseRaw = product.specifications[field.name];
+        type WPSeitenmarkisePos = { active: boolean; aufteilung: string; links?: number; rechts?: number; breite?: number };
+        let wpSeitenmarkiseData: Record<string, WPSeitenmarkisePos> = {};
+
+        if (typeof wpSeitenmarkiseRaw === 'string' && wpSeitenmarkiseRaw) {
+          try {
+            wpSeitenmarkiseData = JSON.parse(wpSeitenmarkiseRaw);
+          } catch {
+            wpSeitenmarkiseData = {};
+          }
+        } else if (typeof wpSeitenmarkiseRaw === 'object' && wpSeitenmarkiseRaw && !Array.isArray(wpSeitenmarkiseRaw)) {
+          wpSeitenmarkiseData = wpSeitenmarkiseRaw as Record<string, WPSeitenmarkisePos>;
+        }
+
+        const updateWPSeitenmarkise = (position: string, updates: Partial<WPSeitenmarkisePos>) => {
+          const newData = { ...wpSeitenmarkiseData };
+          newData[position] = { ...newData[position], ...updates };
+          if (updates.active === false) {
+            delete newData[position];
+          }
+          handleWPSpecChange(index, field.name, JSON.stringify(newData));
+        };
+
+        return (
+          <div key={field.name} className="form-field full-width seitenmarkise-field">
+            <label className="seitenmarkise-main-label">
+              {field.label}
+              <span className="optional-hint">(Optional)</span>
+            </label>
+            <div className="seitenmarkise-positions">
+              {wpPositions.map(position => {
+                const posData = wpSeitenmarkiseData[position] || { active: false, aufteilung: '' };
+                const isActive = posData.active === true;
+                const aufteilung = posData.aufteilung || '';
+
+                return (
+                  <div key={position} className={`seitenmarkise-position ${isActive ? 'active' : ''}`}>
+                    <label className="position-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            updateWPSeitenmarkise(position, { active: true, aufteilung: '' });
+                          } else {
+                            updateWPSeitenmarkise(position, { active: false });
+                          }
+                        }}
+                      />
+                      <span className="position-label">{position}</span>
+                    </label>
+
+                    {isActive && (
+                      <div className="position-details">
+                        <div className="aufteilung-selection">
+                          <label className="aufteilung-option">
+                            <input
+                              type="radio"
+                              name={`aufteilung-wp-${product.id}-${position}`}
+                              checked={aufteilung === 'mit'}
+                              onChange={() => updateWPSeitenmarkise(position, { aufteilung: 'mit', breite: undefined })}
+                            />
+                            <span>Mit Aufteilung</span>
+                          </label>
+                          <label className="aufteilung-option">
+                            <input
+                              type="radio"
+                              name={`aufteilung-wp-${product.id}-${position}`}
+                              checked={aufteilung === 'ohne'}
+                              onChange={() => updateWPSeitenmarkise(position, { aufteilung: 'ohne', links: undefined, rechts: undefined })}
+                            />
+                            <span>Ohne Aufteilung</span>
+                          </label>
+                        </div>
+
+                        {aufteilung === 'mit' && (
+                          <div className="aufteilung-inputs mit-aufteilung">
+                            <div className="input-row">
+                              <label>Links:</label>
+                              <div className="input-with-unit">
+                                <input
+                                  type="number"
+                                  value={posData.links || ''}
+                                  onChange={(e) => updateWPSeitenmarkise(position, { links: parseFloat(e.target.value) || 0 })}
+                                  placeholder="0"
+                                  min="0"
+                                />
+                                <span className="unit">cm</span>
+                              </div>
+                            </div>
+                            <div className="input-row">
+                              <label>Rechts:</label>
+                              <div className="input-with-unit">
+                                <input
+                                  type="number"
+                                  value={posData.rechts || ''}
+                                  onChange={(e) => updateWPSeitenmarkise(position, { rechts: parseFloat(e.target.value) || 0 })}
+                                  placeholder="0"
+                                  min="0"
+                                />
+                                <span className="unit">cm</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {aufteilung === 'ohne' && (
+                          <div className="aufteilung-inputs ohne-aufteilung">
+                            <div className="input-row">
+                              <label>Breite:</label>
+                              <div className="input-with-unit">
+                                <input
+                                  type="number"
+                                  value={posData.breite || ''}
+                                  onChange={(e) => updateWPSeitenmarkise(position, { breite: parseFloat(e.target.value) || 0 })}
+                                  placeholder="0"
+                                  min="0"
+                                />
+                                <span className="unit">cm</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         );
 

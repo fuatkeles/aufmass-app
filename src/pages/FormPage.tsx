@@ -11,6 +11,18 @@ const FormPage = () => {
   const [initialData, setInitialData] = useState<FormData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [formStatus, setFormStatus] = useState<string>('neu');
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!id || id === 'new') return;
+    try {
+      await updateForm(parseInt(id), { status: newStatus });
+      setFormStatus(newStatus);
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert('Fehler beim Aktualisieren des Status');
+    }
+  };
 
   useEffect(() => {
     const loadForm = async () => {
@@ -29,6 +41,7 @@ const FormPage = () => {
             aufmasser: apiData.aufmasser || '',
             kundeVorname: apiData.kundeVorname || '',
             kundeNachname: apiData.kundeNachname || '',
+            kundeEmail: apiData.kundeEmail || '',
             kundenlokation: apiData.kundenlokation || '',
             productSelection: {
               category: apiData.category || '',
@@ -45,6 +58,7 @@ const FormPage = () => {
           };
 
           setInitialData(formData);
+          setFormStatus(apiData.status || 'neu');
         } catch (err) {
           console.error('Error loading form:', err);
           setError('Formular konnte nicht geladen werden.');
@@ -64,6 +78,7 @@ const FormPage = () => {
         aufmasser: data.aufmasser,
         kundeVorname: data.kundeVorname,
         kundeNachname: data.kundeNachname,
+        kundeEmail: data.kundeEmail || '',
         kundenlokation: data.kundenlokation,
         category: data.productSelection?.category || '',
         productType: data.productSelection?.productType || '',
@@ -159,6 +174,9 @@ const FormPage = () => {
       initialData={initialData}
       onSave={handleSave}
       onCancel={handleCancel}
+      formStatus={formStatus}
+      onStatusChange={handleStatusChange}
+      isExistingForm={id !== 'new'}
     />
   );
 };

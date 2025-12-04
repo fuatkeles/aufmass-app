@@ -13,7 +13,7 @@ export interface WeiteresProdukt {
   category: string;
   productType: string;
   model: string;
-  specifications: Record<string, string | number | boolean>;
+  specifications: Record<string, string | number | boolean | string[]>;
 }
 
 export interface FormData {
@@ -23,6 +23,7 @@ export interface FormData {
   aufmasser: string;
   kundeVorname: string;
   kundeNachname: string;
+  kundeEmail?: string;
   kundenlokation: string;
 
   // Product Selection

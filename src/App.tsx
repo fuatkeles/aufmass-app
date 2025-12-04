@@ -13,19 +13,38 @@ import StepIcon from './components/StepIcon';
 import { FormData, ServerImage, WeiteresProdukt } from './types';
 import { generatePDF } from './utils/pdfGenerator';
 import productConfigData from './config/productConfig.json';
+import { getStoredUser } from './services/api';
+
+// Status options for breadcrumb
+const STATUS_STEPS = [
+  { value: 'neu', label: 'Aufmaß Genommen', color: '#8b5cf6' },
+  { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
+  { value: 'bestellt', label: 'Bestellt', color: '#f59e0b' },
+  { value: 'abgeschlossen', label: 'Abgeschlossen', color: '#10b981' },
+  { value: 'reklamation', label: 'Reklamation', color: '#ef4444' },
+];
+
+const isAdmin = () => {
+  const user = getStoredUser();
+  return user?.role === 'admin';
+};
 
 interface AufmassFormProps {
   initialData?: FormData | null;
   onSave?: (data: FormData) => void;
   onCancel?: () => void;
+  formStatus?: string;
+  onStatusChange?: (status: string) => void;
+  isExistingForm?: boolean;
 }
 
-function AufmassForm({ initialData, onSave, onCancel }: AufmassFormProps) {
+function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange, isExistingForm }: AufmassFormProps) {
   const [formData, setFormData] = useState<FormData>(initialData || {
     datum: new Date().toISOString().split('T')[0],
     aufmasser: '',
     kundeVorname: '',
     kundeNachname: '',
+    kundeEmail: '',
     kundenlokation: '',
     productSelection: {
       category: '',
@@ -51,7 +70,7 @@ function AufmassForm({ initialData, onSave, onCancel }: AufmassFormProps) {
     [category: string]: {
       [productType: string]: {
         models: string[];
-        fields: { name: string; required: boolean; type: string }[];
+        fields: { name: string; required: boolean; type: string; allowZero?: boolean }[];
       };
     };
   }
@@ -73,14 +92,22 @@ function AufmassForm({ initialData, onSave, onCancel }: AufmassFormProps) {
       // Skip markise_trigger field - it's handled separately
       if (field.type === 'markise_trigger') continue;
 
-      // Handle conditional fields (ja_nein_with_value type like Überstand)
+      // Handle conditional fields (ja_nein_with_value type like Überstand, Dämmung)
       if (field.type === 'conditional') {
         const activeValue = formData.specifications[`${field.name}Active`];
         // Must have selected Ja or Nein (activeValue must be boolean)
         if (activeValue === undefined) return false;
-        // If Ja is selected, the value field must have a value > 0
+        // If Ja is selected, the value field must have a value
         if (activeValue === true) {
-          if (!value || (typeof value === 'number' && value <= 0)) return false;
+          // For fields that allow zero (like Dämmung), check if value is a number (including 0)
+          const allowZero = field.allowZero === true;
+          if (allowZero) {
+            // Value must be a number (0 is allowed)
+            if (value === undefined || value === null || value === '' || typeof value !== 'number') return false;
+          } else {
+            // Value must be > 0
+            if (!value || (typeof value === 'number' && value <= 0)) return false;
+          }
         }
         continue;
       }
@@ -109,6 +136,12 @@ function AufmassForm({ initialData, onSave, onCancel }: AufmassFormProps) {
       if (field.type === 'fundament') {
         // Just need to have selected an option (Aylux or Kunde)
         if (!value) return false;
+        continue;
+      }
+
+      // Handle multiselect fields (arrays)
+      if (field.type === 'multiselect') {
+        if (!Array.isArray(value) || value.length === 0) return false;
         continue;
       }
 
@@ -325,8 +358,7 @@ function AufmassForm({ initialData, onSave, onCancel }: AufmassFormProps) {
               const typeConfig = markiseTypes[data.typ];
               if (!typeConfig) return false;
 
-              // Height only required for SENKRECHT
-              if (typeConfig.showHeight && !data.hoehe) return false;
+              // Height (Bodenhöhe) is optional for SENKRECHT - no validation needed
 
               // Position required for SENKRECHT
               if (typeConfig.showPosition && !data.position) return false;
@@ -422,6 +454,7 @@ function AufmassForm({ initialData, onSave, onCancel }: AufmassFormProps) {
               aufmasser: formData.aufmasser,
               kundeVorname: formData.kundeVorname,
               kundeNachname: formData.kundeNachname,
+              kundeEmail: formData.kundeEmail,
               kundenlokation: formData.kundenlokation
             }}
             updateField={updateGrunddatenField}
@@ -576,7 +609,44 @@ function AufmassForm({ initialData, onSave, onCancel }: AufmassFormProps) {
             transition={{ duration: 0.4 }}
             className="form-wrapper"
           >
+            {/* Status Breadcrumb - inside form card, only for admin and existing forms */}
+            {isAdmin() && isExistingForm && formStatus && onStatusChange && (
+              <div className="status-breadcrumb-inner">
+                {STATUS_STEPS.map((step) => {
+                  const isActive = step.value === formStatus;
+                  const currentIndex = STATUS_STEPS.findIndex(s => s.value === formStatus);
+                  const stepIndex = STATUS_STEPS.findIndex(s => s.value === step.value);
+                  const isPast = stepIndex < currentIndex;
+
+                  return (
+                    <button
+                      key={step.value}
+                      className={`breadcrumb-step-inner ${isActive ? 'active' : ''} ${isPast ? 'past' : ''}`}
+                      style={{ '--step-color': step.color } as React.CSSProperties}
+                      onClick={() => onStatusChange(step.value)}
+                    >
+                      <span
+                        className="step-dot-inner"
+                        style={{
+                          backgroundColor: isActive || isPast ? step.color : 'transparent',
+                          borderColor: step.color
+                        }}
+                      />
+                      <span className="step-text-inner">{step.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {renderStepContent()}
+
+            {/* Powered by Conais - inside form card */}
+            <div className="powered-by-form">
+              <span>Powered by</span>
+              <a href="https://conais.com" target="_blank" rel="noopener noreferrer">
+                <img src="https://conais.in/dev/wp-content/uploads/2020/10/logo2.png" alt="Conais" className="conais-logo" />
+              </a>
+            </div>
           </motion.div>
         </AnimatePresence>
 
