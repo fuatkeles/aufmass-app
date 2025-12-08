@@ -82,7 +82,9 @@ const FormPage = () => {
         kundenlokation: data.kundenlokation,
         category: data.productSelection?.category || '',
         productType: data.productSelection?.productType || '',
-        model: data.productSelection?.model || '',
+        model: Array.isArray(data.productSelection?.model)
+          ? JSON.stringify(data.productSelection.model)
+          : (data.productSelection?.model || ''),
         specifications: data.specifications || {},
         markiseData: (data.specifications as Record<string, unknown>)?.markiseData,
         weitereProdukte: data.weitereProdukte || [],

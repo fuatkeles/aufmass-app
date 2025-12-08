@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion';
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import productConfigData from '../config/productConfig.json';
 import type { ProductConfig } from '../types/productConfig';
 import './ProductSelectionSection.css';
@@ -10,13 +11,15 @@ interface ProductSelectionSectionProps {
   selection: {
     category: string;
     productType: string;
-    model: string;
+    model: string | string[];
   };
-  updateSelection: (field: 'category' | 'productType' | 'model', value: string) => void;
+  updateSelection: (field: 'category' | 'productType' | 'model', value: string | string[]) => void;
 }
 
 const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectionSectionProps) => {
   const categories = Object.keys(productConfig);
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const productTypes = selection.category
     ? Object.keys(productConfig[selection.category] || {})
@@ -26,15 +29,37 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
     ? productConfig[selection.category]?.[selection.productType]?.models || []
     : [];
 
+  const selectedModels = Array.isArray(selection.model) ? selection.model : (selection.model ? [selection.model] : []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleCategorySelect = (category: string) => {
     updateSelection('category', category);
     updateSelection('productType', '');
-    updateSelection('model', '');
+    updateSelection('model', []);
   };
 
   const handleProductTypeSelect = (productType: string) => {
     updateSelection('productType', productType);
-    updateSelection('model', '');
+    updateSelection('model', []);
+  };
+
+  // Handle model multi-select toggle
+  const handleModelToggle = (modelName: string) => {
+    if (selectedModels.includes(modelName)) {
+      updateSelection('model', selectedModels.filter(m => m !== modelName));
+    } else {
+      updateSelection('model', [...selectedModels, modelName]);
+    }
   };
 
   return (
@@ -126,7 +151,7 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
         </motion.div>
       )}
 
-      {/* Model Selection */}
+      {/* Model Selection - Dropdown Multi Select */}
       {selection.productType && models.length > 0 && (
         <motion.div
           className="selection-step"
@@ -134,26 +159,56 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
-          <h3 className="step-title">3. Modell wählen</h3>
-          <div className="form-group">
-            <select
-              className="model-select"
-              value={selection.model}
-              onChange={(e) => updateSelection('model', e.target.value)}
+          <h3 className="step-title">3. Modell wählen <span className="multi-hint">(Mehrfachauswahl möglich)</span></h3>
+          <div className="model-dropdown-container" ref={dropdownRef}>
+            <div
+              className={`model-dropdown-trigger ${isModelDropdownOpen ? 'open' : ''}`}
+              onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
             >
-              <option value="">Bitte wählen Sie ein Modell...</option>
-              {models.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
+              <span className="model-dropdown-placeholder">
+                {selectedModels.length === 0
+                  ? 'Bitte Modell(e) wählen...'
+                  : selectedModels.join(', ')}
+              </span>
+              <span className={`model-dropdown-arrow ${isModelDropdownOpen ? 'open' : ''}`}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="6,9 12,15 18,9" />
+                </svg>
+              </span>
+            </div>
+            <AnimatePresence>
+              {isModelDropdownOpen && (
+                <motion.div
+                  className="model-dropdown-menu"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {models.map((model) => {
+                    const isSelected = selectedModels.includes(model);
+                    return (
+                      <div
+                        key={model}
+                        className={`model-dropdown-item ${isSelected ? 'selected' : ''}`}
+                        onClick={() => handleModelToggle(model)}
+                      >
+                        <span className={`model-dropdown-checkbox ${isSelected ? 'checked' : ''}`}>
+                          {isSelected && '✓'}
+                        </span>
+                        <span className="model-dropdown-label">{model}</span>
+                      </div>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </motion.div>
       )}
 
       {/* Selection Summary */}
-      {selection.category && selection.productType && selection.model && (
+      {selection.category && selection.productType && selectedModels.length > 0 && (
         <motion.div
           className="selection-summary"
           initial={{ opacity: 0, scale: 0.95 }}
@@ -171,8 +226,8 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
               <span className="summary-value">{selection.productType}</span>
             </div>
             <div className="summary-item">
-              <span className="summary-label">Modell:</span>
-              <span className="summary-value">{selection.model}</span>
+              <span className="summary-label">Modell{selectedModels.length > 1 ? 'e' : ''}:</span>
+              <span className="summary-value">{selectedModels.join(', ')}</span>
             </div>
           </div>
         </motion.div>

@@ -28,7 +28,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
           "required": true
         },
         {
@@ -120,7 +120,7 @@
         },
         {
           "name": "statiktraeger",
-          "label": "Statikträger",
+          "label": "Statikträger Extra",
           "type": "multiselect",
           "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
           "required": true
@@ -182,7 +182,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
           "required": true
         },
         {
@@ -267,7 +267,7 @@
         },
         {
           "name": "statiktraeger",
-          "label": "Statikträger",
+          "label": "Statikträger Extra",
           "type": "multiselect",
           "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
           "required": true
@@ -325,7 +325,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
           "required": true
         },
         {
@@ -417,7 +417,7 @@
         },
         {
           "name": "statiktraeger",
-          "label": "Statikträger",
+          "label": "Statikträger Extra",
           "type": "multiselect",
           "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
           "required": true
@@ -475,7 +475,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
           "required": true
         },
         {
@@ -567,7 +567,7 @@
         },
         {
           "name": "statiktraeger",
-          "label": "Statikträger",
+          "label": "Statikträger Extra",
           "type": "multiselect",
           "options": ["Keine", "Für Überstand", "Für Decke", "Wand Extra"],
           "required": true
@@ -635,13 +635,6 @@
         {
           "name": "markisenlaenge",
           "label": "Markisenlänge",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "markisenhoehe",
-          "label": "Markisenhöhe",
           "type": "number",
           "unit": "mm",
           "required": true
@@ -803,6 +796,13 @@
           "required": true
         },
         {
+          "name": "markisenhoehe",
+          "label": "Markisenhöhe",
+          "type": "number",
+          "unit": "mm",
+          "required": true
+        },
+        {
           "name": "stoffNummer",
           "label": "Stoff Nummer",
           "type": "text",
@@ -848,7 +848,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
           "required": true
         },
         {
@@ -924,7 +924,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
           "required": true
         },
         {
@@ -1135,6 +1135,13 @@
       },
       "fields": [
         {
+          "name": "elementForm",
+          "label": "Element Form",
+          "type": "select",
+          "options": ["Rechteck", "Trapez"],
+          "required": true
+        },
+        {
           "name": "breite",
           "label": "Breite",
           "type": "number",
@@ -1146,7 +1153,24 @@
           "label": "Höhe",
           "type": "number",
           "unit": "mm",
-          "required": true
+          "required": true,
+          "showWhen": { "field": "elementForm", "value": "Rechteck" }
+        },
+        {
+          "name": "hintenHoehe",
+          "label": "Hinten Höhe",
+          "type": "number",
+          "unit": "mm",
+          "required": true,
+          "showWhen": { "field": "elementForm", "value": "Trapez" }
+        },
+        {
+          "name": "vorneHoehe",
+          "label": "Vorne Höhe",
+          "type": "number",
+          "unit": "mm",
+          "required": true,
+          "showWhen": { "field": "elementForm", "value": "Trapez" }
         },
         {
           "name": "gestellfarbe",

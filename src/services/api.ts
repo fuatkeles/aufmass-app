@@ -370,6 +370,55 @@ export async function deleteForm(id: number): Promise<{ message: string }> {
   return response.json();
 }
 
+// ============ STATUS HISTORY ============
+
+export interface StatusHistoryEntry {
+  id: number;
+  form_id: number;
+  status: string;
+  changed_by: number | null;
+  changed_by_name: string | null;
+  changed_at: string;
+  notes: string | null;
+}
+
+export async function getStatusHistory(formId: number): Promise<StatusHistoryEntry[]> {
+  const response = await authFetch(`${API_BASE_URL}/forms/${formId}/status-history`);
+  if (!response.ok) throw new Error('Failed to fetch status history');
+  return response.json();
+}
+
+// ============ ABNAHME ============
+
+export interface AbnahmeData {
+  id?: number;
+  formId: number;
+  istFertig: boolean;
+  hatProbleme: boolean;
+  problemBeschreibung?: string;
+  kundeName?: string;
+  kundeUnterschrift: boolean;
+  abnahmeDatum?: string;
+  bemerkungen?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export async function getAbnahme(formId: number): Promise<AbnahmeData | null> {
+  const response = await authFetch(`${API_BASE_URL}/forms/${formId}/abnahme`);
+  if (!response.ok) throw new Error('Failed to fetch abnahme');
+  return response.json();
+}
+
+export async function saveAbnahme(formId: number, data: Partial<AbnahmeData>): Promise<{ message: string }> {
+  const response = await authFetch(`${API_BASE_URL}/forms/${formId}/abnahme`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to save abnahme');
+  return response.json();
+}
+
 // Upload images
 export async function uploadImages(formId: number, files: File[]): Promise<{ message: string }> {
   const formData = new window.FormData();

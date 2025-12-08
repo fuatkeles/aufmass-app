@@ -171,6 +171,39 @@ async function initializeTables() {
       WHERE status IN ('draft', 'completed')
     `);
 
+    // Status History table - tracks all status changes with timestamps
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_status_history' AND xtype='U')
+      CREATE TABLE aufmass_status_history (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        form_id INT NOT NULL,
+        status NVARCHAR(50) NOT NULL,
+        changed_by INT,
+        changed_at DATETIME DEFAULT GETDATE(),
+        notes NVARCHAR(MAX),
+        FOREIGN KEY (form_id) REFERENCES aufmass_forms(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Abnahme (acceptance/completion) data table
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_abnahme' AND xtype='U')
+      CREATE TABLE aufmass_abnahme (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        form_id INT NOT NULL UNIQUE,
+        ist_fertig BIT DEFAULT 0,
+        hat_probleme BIT DEFAULT 0,
+        problem_beschreibung NVARCHAR(MAX),
+        kunde_name NVARCHAR(200),
+        kunde_unterschrift BIT DEFAULT 0,
+        abnahme_datum DATETIME,
+        bemerkungen NVARCHAR(MAX),
+        created_at DATETIME DEFAULT GETDATE(),
+        updated_at DATETIME DEFAULT GETDATE(),
+        FOREIGN KEY (form_id) REFERENCES aufmass_forms(id) ON DELETE CASCADE
+      )
+    `);
+
     // Check if admin exists, create default admin if not
     const adminCheck = await pool.request().query(
       "SELECT COUNT(*) as count FROM aufmass_users WHERE role = 'admin'"
@@ -788,6 +821,19 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
       await request.query(`
         UPDATE aufmass_forms SET ${setClauses.join(', ')} WHERE id = @id
       `);
+
+      // If status was changed, add to status history
+      if (updates.status !== undefined) {
+        await pool.request()
+          .input('form_id', sql.Int, id)
+          .input('status', sql.NVarChar, updates.status)
+          .input('changed_by', sql.Int, req.user?.id || null)
+          .input('notes', sql.NVarChar, updates.statusNotes || null)
+          .query(`
+            INSERT INTO aufmass_status_history (form_id, status, changed_by, notes)
+            VALUES (@form_id, @status, @changed_by, @notes)
+          `);
+      }
     }
 
     res.json({ message: 'Form updated successfully' });
@@ -809,6 +855,120 @@ app.delete('/api/forms/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error deleting form:', err);
     res.status(500).json({ error: 'Failed to delete form' });
+  }
+});
+
+// ============ STATUS HISTORY ENDPOINTS ============
+
+// Get status history for a form
+app.get('/api/forms/:id/status-history', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.request()
+      .input('form_id', sql.Int, id)
+      .query(`
+        SELECT sh.*, u.name as changed_by_name
+        FROM aufmass_status_history sh
+        LEFT JOIN aufmass_users u ON sh.changed_by = u.id
+        WHERE sh.form_id = @form_id
+        ORDER BY sh.changed_at DESC
+      `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Error getting status history:', err);
+    res.status(500).json({ error: 'Failed to get status history' });
+  }
+});
+
+// ============ ABNAHME ENDPOINTS ============
+
+// Get abnahme data for a form
+app.get('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.request()
+      .input('form_id', sql.Int, id)
+      .query('SELECT * FROM aufmass_abnahme WHERE form_id = @form_id');
+
+    if (result.recordset.length === 0) {
+      return res.json(null);
+    }
+
+    const abnahme = result.recordset[0];
+    res.json({
+      id: abnahme.id,
+      formId: abnahme.form_id,
+      istFertig: abnahme.ist_fertig,
+      hatProbleme: abnahme.hat_probleme,
+      problemBeschreibung: abnahme.problem_beschreibung,
+      kundeName: abnahme.kunde_name,
+      kundeUnterschrift: abnahme.kunde_unterschrift,
+      abnahmeDatum: abnahme.abnahme_datum,
+      bemerkungen: abnahme.bemerkungen,
+      createdAt: abnahme.created_at,
+      updatedAt: abnahme.updated_at
+    });
+  } catch (err) {
+    console.error('Error getting abnahme:', err);
+    res.status(500).json({ error: 'Failed to get abnahme data' });
+  }
+});
+
+// Create or update abnahme data
+app.post('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { istFertig, hatProbleme, problemBeschreibung, kundeName, kundeUnterschrift, bemerkungen } = req.body;
+
+    // Check if abnahme already exists
+    const existing = await pool.request()
+      .input('form_id', sql.Int, id)
+      .query('SELECT id FROM aufmass_abnahme WHERE form_id = @form_id');
+
+    if (existing.recordset.length > 0) {
+      // Update existing
+      await pool.request()
+        .input('form_id', sql.Int, id)
+        .input('ist_fertig', sql.Bit, istFertig ? 1 : 0)
+        .input('hat_probleme', sql.Bit, hatProbleme ? 1 : 0)
+        .input('problem_beschreibung', sql.NVarChar, problemBeschreibung || null)
+        .input('kunde_name', sql.NVarChar, kundeName || null)
+        .input('kunde_unterschrift', sql.Bit, kundeUnterschrift ? 1 : 0)
+        .input('abnahme_datum', sql.DateTime, new Date())
+        .input('bemerkungen', sql.NVarChar, bemerkungen || null)
+        .query(`
+          UPDATE aufmass_abnahme SET
+            ist_fertig = @ist_fertig,
+            hat_probleme = @hat_probleme,
+            problem_beschreibung = @problem_beschreibung,
+            kunde_name = @kunde_name,
+            kunde_unterschrift = @kunde_unterschrift,
+            abnahme_datum = @abnahme_datum,
+            bemerkungen = @bemerkungen,
+            updated_at = GETDATE()
+          WHERE form_id = @form_id
+        `);
+    } else {
+      // Create new
+      await pool.request()
+        .input('form_id', sql.Int, id)
+        .input('ist_fertig', sql.Bit, istFertig ? 1 : 0)
+        .input('hat_probleme', sql.Bit, hatProbleme ? 1 : 0)
+        .input('problem_beschreibung', sql.NVarChar, problemBeschreibung || null)
+        .input('kunde_name', sql.NVarChar, kundeName || null)
+        .input('kunde_unterschrift', sql.Bit, kundeUnterschrift ? 1 : 0)
+        .input('abnahme_datum', sql.DateTime, new Date())
+        .input('bemerkungen', sql.NVarChar, bemerkungen || null)
+        .query(`
+          INSERT INTO aufmass_abnahme (form_id, ist_fertig, hat_probleme, problem_beschreibung, kunde_name, kunde_unterschrift, abnahme_datum, bemerkungen)
+          VALUES (@form_id, @ist_fertig, @hat_probleme, @problem_beschreibung, @kunde_name, @kunde_unterschrift, @abnahme_datum, @bemerkungen)
+        `);
+    }
+
+    res.json({ message: 'Abnahme saved successfully' });
+  } catch (err) {
+    console.error('Error saving abnahme:', err);
+    res.status(500).json({ error: 'Failed to save abnahme data' });
   }
 });
 

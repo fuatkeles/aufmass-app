@@ -316,10 +316,10 @@ const FinalSection = ({
           {!isSaved && (
             <>
               <div className="export-info">
-                <h3>Bereit zum Speichern</h3>
+                <h3>Bereit zum Absenden</h3>
                 <p>
                   {isValid
-                    ? 'Alle Daten wurden erfasst. Bitte zuerst speichern, dann können Sie das PDF exportieren.'
+                    ? 'Alle Daten wurden erfasst. Bitte zuerst absenden, dann können Sie das PDF exportieren.'
                     : 'Bitte laden Sie mindestens 2 Bilder hoch, um fortzufahren.'}
                 </p>
               </div>
@@ -332,7 +332,7 @@ const FinalSection = ({
                   whileTap={isValid && !isSaving ? { scale: 0.98 } : {}}
                 >
                   <span className="button-text">
-                    {isSaving ? 'Wird gespeichert...' : 'Speichern'}
+                    {isSaving ? 'Wird gesendet...' : 'Absenden'}
                   </span>
                 </motion.button>
               </div>
@@ -346,7 +346,7 @@ const FinalSection = ({
                 <h3>Erfolgreich gespeichert!</h3>
                 <p>Das Aufmaß wurde gespeichert. Sie können jetzt das PDF exportieren.</p>
               </div>
-              <div className="action-buttons">
+              <div className="action-buttons three-buttons">
                 <motion.button
                   className={`export-button ${isExporting ? 'disabled' : ''}`}
                   onClick={handleExport}
@@ -365,6 +365,14 @@ const FinalSection = ({
                   whileTap={{ scale: 0.98 }}
                 >
                   <span className="button-text">Neues Aufmaß erstellen</span>
+                </motion.button>
+                <motion.button
+                  className="back-button secondary"
+                  onClick={() => window.location.href = '/'}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <span className="button-text">Zur Übersicht</span>
                 </motion.button>
               </div>
             </>

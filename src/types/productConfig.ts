@@ -21,6 +21,10 @@ export interface FieldConfig {
     unit?: string;
     label: string;
   };
+  showWhen?: {
+    field: string;
+    value: string;
+  };
 }
 
 export interface ProductTypeConfig {
@@ -39,7 +43,7 @@ export interface ProductConfig {
 export interface ProductSelection {
   category: string;
   productType: string;
-  model: string;
+  model: string | string[];
 }
 
 export interface DynamicFormData {

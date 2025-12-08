@@ -7,6 +7,21 @@ export interface ServerImage {
   file_type: string;
 }
 
+// Abnahme (acceptance) data type
+export interface AbnahmeData {
+  id?: number;
+  formId: number;
+  istFertig: boolean;
+  hatProbleme: boolean;
+  problemBeschreibung?: string;
+  kundeName?: string;
+  kundeUnterschrift: boolean;
+  abnahmeDatum?: string;
+  bemerkungen?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // Weiteres Produkt type for multiple products per form
 export interface WeiteresProdukt {
   id: string;
@@ -43,6 +58,9 @@ export interface FormData {
   createdAt?: string;
   updatedAt?: string;
   status?: 'neu' | 'auftrag_erteilt' | 'bestellt' | 'abgeschlossen' | 'reklamation' | 'draft' | 'completed' | 'archived';
+
+  // Abnahme (acceptance) data - optional, only when status is 'abnahme'
+  abnahme?: AbnahmeData;
 }
 
 // Legacy interfaces (keeping for backward compatibility during migration)

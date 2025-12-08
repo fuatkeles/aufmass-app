@@ -285,3 +285,133 @@
   font-size: clamp(0.9375rem, 2.5vw, 1rem);
   font-weight: 600;
 }
+
+/* Model Dropdown Multi-Select */
+.model-dropdown-container {
+  position: relative;
+  width: 100%;
+}
+
+.model-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, #2D3340 0%, #252B38 100%);
+  border: 2px solid #3a4452;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  color: #E8EAED;
+}
+
+.model-dropdown-trigger:hover {
+  border-color: #7FA93D;
+}
+
+.model-dropdown-trigger.open {
+  border-color: #7FA93D;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.model-dropdown-placeholder {
+  font-size: 1rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.model-dropdown-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.model-dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.model-dropdown-arrow svg {
+  width: 20px;
+  height: 20px;
+  color: #8e9aaf;
+}
+
+.model-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #2D3340;
+  border: 2px solid #7FA93D;
+  border-top: none;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.model-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border-bottom: 1px solid #3a4452;
+}
+
+.model-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.model-dropdown-item:hover {
+  background: rgba(127, 169, 61, 0.15);
+}
+
+.model-dropdown-item.selected {
+  background: rgba(127, 169, 61, 0.2);
+}
+
+.model-dropdown-checkbox {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #5a6572;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  color: transparent;
+}
+
+.model-dropdown-checkbox.checked {
+  background: #7FA93D;
+  border-color: #7FA93D;
+  color: white;
+}
+
+.model-dropdown-label {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #E8EAED;
+}
+
+.step-title .multi-hint {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #8e9aaf;
+  margin-left: 0.5rem;
+}

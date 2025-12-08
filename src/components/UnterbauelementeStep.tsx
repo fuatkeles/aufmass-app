@@ -22,6 +22,8 @@ interface UnterbauelementData {
   fundament?: string;
   fundamentValue?: string;
   montageteam?: string;
+  // Festes Element specific
+  elementForm?: string;
   // Keil specific
   laenge?: number;
   hintenHoehe?: number;
@@ -204,11 +206,19 @@ const UnterbauelementeStep = ({
     return productConfig['UNTERBAUELEMENTE']?.[produktTyp]?.fields || [];
   };
 
-  const renderField = (element: UnterbauelementData, index: number, field: { name: string; label: string; type: string; unit?: string; options?: string[]; required: boolean; hasCustomOption?: boolean }) => {
+  const renderField = (element: UnterbauelementData, index: number, field: { name: string; label: string; type: string; unit?: string; options?: string[]; required: boolean; hasCustomOption?: boolean; showWhen?: { field: string; value: string } }) => {
     const value = element[field.name as keyof UnterbauelementData];
 
     // Skip montageteam - it's optional and handled at main form level
     if (field.name === 'montageteam') return null;
+
+    // Check showWhen condition for conditional field visibility
+    if (field.showWhen) {
+      const dependentValue = element[field.showWhen.field as keyof UnterbauelementData];
+      if (dependentValue !== field.showWhen.value) {
+        return null; // Don't render this field
+      }
+    }
 
     switch (field.type) {
       case 'number':

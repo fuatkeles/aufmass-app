@@ -301,6 +301,18 @@
   flex-wrap: wrap;
 }
 
+.action-buttons.three-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .action-buttons.three-buttons {
+    grid-template-columns: 1fr;
+  }
+}
+
 .save-button,
 .export-button,
 .new-form-button,

@@ -264,6 +264,115 @@ export const generatePDF = async (formData: FormData) => {
 
   yPos = 45;
 
+  // ============ ABNAHME SECTION - If exists ============
+  if (formData.abnahme) {
+    const abnahme = formData.abnahme;
+
+    // Abnahme header with green background
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFillColor(16, 185, 129); // Green color for abnahme
+    pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text('ABNAHME-PROTOKOLL', margin + 2, yPos);
+    yPos += 12;
+
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+
+    // Status row with checkmarks
+    const checkMark = 'Ja';
+    const crossMark = 'Nein';
+
+    // Arbeit fertiggestellt
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Arbeit fertiggestellt:', margin + 2, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(abnahme.istFertig ? checkMark : crossMark, margin + 52, yPos);
+    yPos += 6;
+
+    // Probleme vorhanden
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Probleme/Maengel:', margin + 2, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(abnahme.hatProbleme ? checkMark : crossMark, margin + 52, yPos);
+    yPos += 6;
+
+    // Problem description (if any)
+    if (abnahme.hatProbleme && abnahme.problemBeschreibung) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Problembeschreibung:', margin + 2, yPos);
+      yPos += 5;
+      pdf.setFont('helvetica', 'normal');
+      const problemLines = pdf.splitTextToSize(abnahme.problemBeschreibung, pageWidth - 2 * margin - 10);
+      problemLines.forEach((line: string) => {
+        pdf.text(line, margin + 8, yPos);
+        yPos += 5;
+      });
+      yPos += 2;
+    }
+
+    // Notes (if any)
+    if (abnahme.bemerkungen) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Bemerkungen:', margin + 2, yPos);
+      yPos += 5;
+      pdf.setFont('helvetica', 'normal');
+      const notesLines = pdf.splitTextToSize(abnahme.bemerkungen, pageWidth - 2 * margin - 10);
+      notesLines.forEach((line: string) => {
+        pdf.text(line, margin + 8, yPos);
+        yPos += 5;
+      });
+      yPos += 2;
+    }
+
+    // Customer confirmation section
+    yPos += 3;
+    pdf.setDrawColor(16, 185, 129);
+    pdf.setLineWidth(0.5);
+    pdf.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 5;
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Kundenbestaetigung', margin + 2, yPos);
+    yPos += 6;
+
+    // Customer name
+    if (abnahme.kundeName) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Kundenname:', margin + 2, yPos);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(abnahme.kundeName, margin + 52, yPos);
+      yPos += 6;
+    }
+
+    // Customer confirmation
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('Bestaetigt:', margin + 2, yPos);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(abnahme.kundeUnterschrift ? 'Ja, Kunde hat bestaetigt' : 'Nein, ausstehend', margin + 52, yPos);
+    yPos += 6;
+
+    // Abnahme date
+    if (abnahme.abnahmeDatum) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Abnahmedatum:', margin + 2, yPos);
+      pdf.setFont('helvetica', 'normal');
+      const abnahmeDateFormatted = new Date(abnahme.abnahmeDatum).toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      pdf.text(abnahmeDateFormatted, margin + 52, yPos);
+      yPos += 6;
+    }
+
+    yPos += 10;
+  }
+
   // ============ GRUNDDATEN ============
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
@@ -314,10 +423,15 @@ export const generatePDF = async (formData: FormData) => {
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
 
+  // Handle model as array or string
+  const modelValue = Array.isArray(formData.productSelection.model)
+    ? formData.productSelection.model.join(', ')
+    : formData.productSelection.model;
+
   const produktauswahl = [
     ['Kategorie:', formData.productSelection.category || '-'],
     ['Produkttyp:', formData.productSelection.productType || '-'],
-    ['Modell:', formData.productSelection.model || '-'],
+    ['Modell:', modelValue || '-'],
   ];
 
   produktauswahl.forEach(([label, value]) => {
@@ -351,6 +465,14 @@ export const generatePDF = async (formData: FormData) => {
       pdf.setFont('helvetica', 'normal');
 
       fields.forEach((field: FieldConfig) => {
+        // Check showWhen condition
+        if (field.showWhen) {
+          const dependentValue = formData.specifications[field.showWhen.field];
+          if (dependentValue !== field.showWhen.value) {
+            return; // Skip this field
+          }
+        }
+
         const value = formData.specifications[field.name];
 
         // Handle seitenmarkise field type separately
@@ -597,11 +719,22 @@ export const generatePDF = async (formData: FormData) => {
           if (el.produktTyp) addField('Typ:', String(el.produktTyp), 'left');
           if (el.modell) addField('Modell:', String(el.modell), 'right');
 
-          // Dimension fields
+          // Dimension fields - handle Keil and Festes Element with conditional fields
           if (el.produktTyp === 'Keil') {
             if (el.laenge) addField('Länge:', `${el.laenge} mm`, 'left');
             if (el.hintenHoehe) addField('Hinten:', `${el.hintenHoehe} mm`, 'right');
             if (el.vorneHoehe) addField('Vorne:', `${el.vorneHoehe} mm`, 'left');
+          } else if (el.produktTyp === 'Festes Element') {
+            // Festes Element has conditional fields based on elementForm
+            if (el.elementForm) addField('Form:', String(el.elementForm), 'left');
+            if (el.breite) addField('Breite:', `${el.breite} mm`, 'right');
+            // Show hoehe only for Rechteck, hintenHoehe/vorneHoehe only for Trapez
+            if (el.elementForm === 'Rechteck' && el.hoehe) {
+              addField('Höhe:', `${el.hoehe} mm`, 'left');
+            } else if (el.elementForm === 'Trapez') {
+              if (el.hintenHoehe) addField('Hinten Höhe:', `${el.hintenHoehe} mm`, 'left');
+              if (el.vorneHoehe) addField('Vorne Höhe:', `${el.vorneHoehe} mm`, 'right');
+            }
           } else {
             if (el.breite) addField('Breite:', `${el.breite} mm`, 'left');
             if (el.hoehe) addField('Höhe:', `${el.hoehe} mm`, 'right');
@@ -692,6 +825,14 @@ export const generatePDF = async (formData: FormData) => {
 
       // Add specification fields
       produktFields.forEach((field: FieldConfig) => {
+        // Check showWhen condition
+        if (field.showWhen) {
+          const dependentValue = produkt.specifications[field.showWhen.field];
+          if (dependentValue !== field.showWhen.value) {
+            return; // Skip this field
+          }
+        }
+
         const value = produkt.specifications[field.name];
 
         // Handle seitenmarkise field type separately for Weitere Produkte

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getForm, getImageUrl, getStoredUser } from '../services/api';
-import type { FormData, MontageteamStats, Montageteam } from '../services/api';
+import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme } from '../services/api';
+import type { FormData, MontageteamStats, Montageteam, StatusHistoryEntry, AbnahmeData } from '../services/api';
 import { useStats } from '../AppWrapper';
 import { generatePDF } from '../utils/pdfGenerator';
 import './Dashboard.css';
@@ -13,13 +13,16 @@ const isAdmin = () => {
   return user?.role === 'admin';
 };
 
-// Status options for forms
+// Status options for forms - ordered workflow
 const STATUS_OPTIONS = [
   { value: 'alle', label: 'Alle Aufmaße', color: '#7fa93d' },
   { value: 'neu', label: 'Aufmaß Genommen', color: '#8b5cf6' },
   { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
+  { value: 'anzahlung', label: 'Anzahlung Erhalten', color: '#06b6d4' },
   { value: 'bestellt', label: 'Bestellt/In Bearbeitung', color: '#f59e0b' },
-  { value: 'abgeschlossen', label: 'Abgeschlossen', color: '#10b981' },
+  { value: 'montage_geplant', label: 'Montage Geplant', color: '#a855f7' },
+  { value: 'montage_gestartet', label: 'Montage Gestartet', color: '#ec4899' },
+  { value: 'abnahme', label: 'Abnahme', color: '#10b981' },
   { value: 'reklamation', label: 'Reklamation/Restarbeit', color: '#ef4444' },
 ];
 
@@ -34,12 +37,28 @@ const Dashboard = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [formToDelete, setFormToDelete] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [montageteamStats, setMontageteamStats] = useState<MontageteamStats[]>([]);
+  const [, setMontageteamStats] = useState<MontageteamStats[]>([]);
   const [montageteams, setMontageteams] = useState<Montageteam[]>([]);
   const [teamDropdownOpen, setTeamDropdownOpen] = useState<number | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<number | null>(null);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [attachmentDropdownOpen, setAttachmentDropdownOpen] = useState<number | null>(null);
+  // Status history modal
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [selectedFormHistory, setSelectedFormHistory] = useState<StatusHistoryEntry[]>([]);
+  const [, setSelectedFormId] = useState<number | null>(null);
+  // Abnahme modal
+  const [abnahmeModalOpen, setAbnahmeModalOpen] = useState(false);
+  const [abnahmeFormId, setAbnahmeFormId] = useState<number | null>(null);
+  const [abnahmeData, setAbnahmeData] = useState<Partial<AbnahmeData>>({
+    istFertig: false,
+    hatProbleme: false,
+    problemBeschreibung: '',
+    kundeName: '',
+    kundeUnterschrift: false,
+    bemerkungen: ''
+  });
+  const [abnahmeSaving, setAbnahmeSaving] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -124,6 +143,39 @@ const Dashboard = () => {
   };
 
   const handleStatusChange = async (formId: number, newStatus: string) => {
+    // If selecting abnahme status, open abnahme modal first
+    if (newStatus === 'abnahme') {
+      setAbnahmeFormId(formId);
+      // Load existing abnahme data if any
+      try {
+        const existingAbnahme = await getAbnahme(formId);
+        if (existingAbnahme) {
+          setAbnahmeData(existingAbnahme);
+        } else {
+          setAbnahmeData({
+            istFertig: false,
+            hatProbleme: false,
+            problemBeschreibung: '',
+            kundeName: '',
+            kundeUnterschrift: false,
+            bemerkungen: ''
+          });
+        }
+      } catch {
+        setAbnahmeData({
+          istFertig: false,
+          hatProbleme: false,
+          problemBeschreibung: '',
+          kundeName: '',
+          kundeUnterschrift: false,
+          bemerkungen: ''
+        });
+      }
+      setAbnahmeModalOpen(true);
+      setStatusDropdownOpen(null);
+      return;
+    }
+
     try {
       await updateForm(formId, { status: newStatus });
 
@@ -141,10 +193,69 @@ const Dashboard = () => {
     }
   };
 
+  // Open status history modal
+  const handleOpenHistory = async (formId: number) => {
+    try {
+      const history = await getStatusHistory(formId);
+      setSelectedFormHistory(history);
+      setSelectedFormId(formId);
+      setHistoryModalOpen(true);
+    } catch (err) {
+      console.error('Error loading status history:', err);
+      alert('Fehler beim Laden der Status-Historie');
+    }
+  };
+
+  // Save abnahme and update status
+  const handleSaveAbnahme = async () => {
+    if (!abnahmeFormId) return;
+    setAbnahmeSaving(true);
+    try {
+      // Save abnahme data
+      await saveAbnahme(abnahmeFormId, abnahmeData);
+      // Update status to abnahme
+      await updateForm(abnahmeFormId, { status: 'abnahme' });
+      // Update local state
+      setForms(forms.map(f =>
+        f.id === abnahmeFormId
+          ? { ...f, status: 'abnahme' }
+          : f
+      ));
+      setAbnahmeModalOpen(false);
+      setAbnahmeFormId(null);
+      refreshStats();
+    } catch (err) {
+      console.error('Error saving abnahme:', err);
+      alert('Fehler beim Speichern der Abnahme');
+    } finally {
+      setAbnahmeSaving(false);
+    }
+  };
+
+  // Format date for display
+  const formatDateTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   const handleDownloadPDF = async (formId: number) => {
     try {
       // Get full form data with images
       const fullFormData = await getForm(formId);
+
+      // Get abnahme data if exists
+      let abnahmeData = null;
+      try {
+        abnahmeData = await getAbnahme(formId);
+      } catch {
+        // No abnahme data, that's fine
+      }
 
       // Transform to the format expected by generatePDF
       const pdfData = {
@@ -165,7 +276,8 @@ const Dashboard = () => {
         bemerkungen: fullFormData.bemerkungen || '',
         status: (fullFormData.status as 'draft' | 'completed' | 'archived') || 'draft',
         createdAt: fullFormData.created_at,
-        updatedAt: fullFormData.updated_at
+        updatedAt: fullFormData.updated_at,
+        abnahme: abnahmeData || undefined
       };
 
       await generatePDF(pdfData);
@@ -246,37 +358,6 @@ const Dashboard = () => {
           </motion.button>
         </div>
       </header>
-
-      {/* Montageteams Section */}
-      <motion.div className="montageteams-section" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <div className="section-header">
-          <h2>Montageteams</h2>
-          <button className="section-link" onClick={() => navigate('/montageteam')}>
-            Verwalten
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6" /></svg>
-          </button>
-        </div>
-        {montageteamStats.length > 0 ? (
-          <div className="teams-grid">
-            {montageteamStats.slice(0, 6).map((team) => (
-              <div key={team.montageteam} className="team-card-small" onClick={() => navigate('/montageteam')}>
-                <div className="team-name">{team.montageteam}</div>
-                <div className="team-stats-row">
-                  <span className="team-total">{team.count} Projekte</span>
-                  <span className="team-completed">{team.completed} fertig</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="teams-empty">
-            <p>Noch keine Montageteams erstellt</p>
-            <button className="btn-secondary-small" onClick={() => navigate('/montageteam')}>
-              Team erstellen
-            </button>
-          </div>
-        )}
-      </motion.div>
 
       {/* Toolbar */}
       <div className="content-toolbar">
@@ -429,6 +510,11 @@ const Dashboard = () => {
                         <div
                           className="status-pill-static"
                           style={{ backgroundColor: getStatusColor(getFormStatus(form)) }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenHistory(form.id!);
+                          }}
+                          title="Status-Historie anzeigen"
                         >
                           {getStatusLabel(getFormStatus(form)).split('/')[0]}
                         </div>
@@ -586,6 +672,129 @@ const Dashboard = () => {
               <div className="modal-actions-modern">
                 <button className="modal-btn secondary" onClick={() => setDeleteModalOpen(false)}>Abbrechen</button>
                 <button className="modal-btn danger" onClick={confirmDelete}>Löschen</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Status History Modal */}
+      <AnimatePresence>
+        {historyModalOpen && (
+          <motion.div className="modal-overlay-modern" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setHistoryModalOpen(false)}>
+            <motion.div className="modal-modern modal-large" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={(e) => e.stopPropagation()}>
+              <h3>Status-Historie</h3>
+              <div className="status-history-list">
+                {selectedFormHistory.length === 0 ? (
+                  <p className="history-empty">Keine Status-Änderungen vorhanden</p>
+                ) : (
+                  selectedFormHistory.map((entry) => (
+                    <div key={entry.id} className="history-entry">
+                      <div className="history-status">
+                        <span className="status-dot" style={{ backgroundColor: getStatusColor(entry.status) }} />
+                        <span className="status-label">{getStatusLabel(entry.status)}</span>
+                      </div>
+                      <div className="history-meta">
+                        <span className="history-date">{formatDateTime(entry.changed_at)}</span>
+                        {entry.changed_by_name && <span className="history-user">von {entry.changed_by_name}</span>}
+                      </div>
+                      {entry.notes && <div className="history-notes">{entry.notes}</div>}
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="modal-actions-modern">
+                <button className="modal-btn secondary" onClick={() => setHistoryModalOpen(false)}>Schließen</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Abnahme Modal */}
+      <AnimatePresence>
+        {abnahmeModalOpen && (
+          <motion.div className="modal-overlay-modern" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAbnahmeModalOpen(false)}>
+            <motion.div className="modal-modern modal-large abnahme-modal" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={(e) => e.stopPropagation()}>
+              <h3>Abnahme-Protokoll</h3>
+              <div className="abnahme-form">
+                <div className="abnahme-row">
+                  <label className="abnahme-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={abnahmeData.istFertig || false}
+                      onChange={(e) => setAbnahmeData({ ...abnahmeData, istFertig: e.target.checked })}
+                    />
+                    <span>Arbeit ist fertiggestellt</span>
+                  </label>
+                </div>
+
+                <div className="abnahme-row">
+                  <label className="abnahme-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={abnahmeData.hatProbleme || false}
+                      onChange={(e) => setAbnahmeData({ ...abnahmeData, hatProbleme: e.target.checked })}
+                    />
+                    <span>Es gibt Probleme/Mängel</span>
+                  </label>
+                </div>
+
+                {abnahmeData.hatProbleme && (
+                  <div className="abnahme-row">
+                    <label>Problembeschreibung</label>
+                    <textarea
+                      value={abnahmeData.problemBeschreibung || ''}
+                      onChange={(e) => setAbnahmeData({ ...abnahmeData, problemBeschreibung: e.target.value })}
+                      placeholder="Beschreiben Sie die Probleme..."
+                      rows={3}
+                    />
+                  </div>
+                )}
+
+                <div className="abnahme-row">
+                  <label>Bemerkungen</label>
+                  <textarea
+                    value={abnahmeData.bemerkungen || ''}
+                    onChange={(e) => setAbnahmeData({ ...abnahmeData, bemerkungen: e.target.value })}
+                    placeholder="Zusätzliche Bemerkungen..."
+                    rows={3}
+                  />
+                </div>
+
+                <div className="abnahme-divider">Kundenbestätigung</div>
+
+                <div className="abnahme-row">
+                  <label>Name des Kunden</label>
+                  <input
+                    type="text"
+                    value={abnahmeData.kundeName || ''}
+                    onChange={(e) => setAbnahmeData({ ...abnahmeData, kundeName: e.target.value })}
+                    placeholder="Vor- und Nachname"
+                  />
+                </div>
+
+                <div className="abnahme-row">
+                  <label className="abnahme-checkbox confirmation">
+                    <input
+                      type="checkbox"
+                      checked={abnahmeData.kundeUnterschrift || false}
+                      onChange={(e) => setAbnahmeData({ ...abnahmeData, kundeUnterschrift: e.target.checked })}
+                    />
+                    <span>Kunde hat die Abnahme bestätigt</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="modal-actions-modern">
+                <button className="modal-btn secondary" onClick={() => setAbnahmeModalOpen(false)}>Abbrechen</button>
+                <button
+                  className="modal-btn primary"
+                  onClick={handleSaveAbnahme}
+                  disabled={abnahmeSaving}
+                >
+                  {abnahmeSaving ? 'Speichern...' : 'Abnahme speichern'}
+                </button>
               </div>
             </motion.div>
           </motion.div>

@@ -15,12 +15,15 @@ import { generatePDF } from './utils/pdfGenerator';
 import productConfigData from './config/productConfig.json';
 import { getStoredUser } from './services/api';
 
-// Status options for breadcrumb
+// Status options for breadcrumb - matches Dashboard STATUS_OPTIONS
 const STATUS_STEPS = [
   { value: 'neu', label: 'Aufmaß Genommen', color: '#8b5cf6' },
   { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
+  { value: 'anzahlung', label: 'Anzahlung Erhalten', color: '#06b6d4' },
   { value: 'bestellt', label: 'Bestellt', color: '#f59e0b' },
-  { value: 'abgeschlossen', label: 'Abgeschlossen', color: '#10b981' },
+  { value: 'montage_geplant', label: 'Montage Geplant', color: '#a855f7' },
+  { value: 'montage_gestartet', label: 'Montage Gestartet', color: '#ec4899' },
+  { value: 'abnahme', label: 'Abnahme', color: '#10b981' },
   { value: 'reklamation', label: 'Reklamation', color: '#ef4444' },
 ];
 
@@ -49,7 +52,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     productSelection: {
       category: '',
       productType: '',
-      model: ''
+      model: []
     },
     specifications: {},
     weitereProdukte: [],
@@ -165,7 +168,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
   };
 
   // Update product selection
-  const updateProductSelection = (field: 'category' | 'productType' | 'model', value: string) => {
+  const updateProductSelection = (field: 'category' | 'productType' | 'model', value: string | string[]) => {
     setFormData(prev => ({
       ...prev,
       productSelection: {
@@ -267,9 +270,11 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
         title: 'Produktauswahl',
         icon: '2',
         canProceed: () => {
+          const models = formData.productSelection.model;
+          const hasModels = Array.isArray(models) ? models.length > 0 : !!models;
           return !!(formData.productSelection.category &&
                  formData.productSelection.productType &&
-                 formData.productSelection.model);
+                 hasModels);
         }
       }
     ];
@@ -294,6 +299,11 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
               // Type-specific validation
               if (el.produktTyp === 'Keil') {
                 if (!el.laenge || !el.hintenHoehe || !el.vorneHoehe) return false;
+              } else if (el.produktTyp === 'Festes Element') {
+                // Festes Element has conditional fields based on elementForm
+                if (!el.breite || !el.elementForm) return false;
+                if (el.elementForm === 'Rechteck' && !el.hoehe) return false;
+                if (el.elementForm === 'Trapez' && (!el.hintenHoehe || !el.vorneHoehe)) return false;
               } else {
                 if (!el.breite || !el.hoehe) return false;
               }
@@ -431,7 +441,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       productSelection: {
         category: '',
         productType: '',
-        model: ''
+        model: []
       },
       specifications: {},
       weitereProdukte: [],
@@ -497,7 +507,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             bemerkungen={unterbauelementeBemerkungen}
             updateBemerkungen={updateUnterbauelementeBemerkungen}
             initialProduktTyp={formData.productSelection.productType}
-            initialModell={formData.productSelection.model}
+            initialModell={Array.isArray(formData.productSelection.model) ? formData.productSelection.model[0] : formData.productSelection.model}
             weitereProdukte={formData.weitereProdukte || []}
             updateWeitereProdukte={updateWeitereProdukte}
           />
