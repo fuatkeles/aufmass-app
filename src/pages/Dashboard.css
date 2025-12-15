@@ -583,8 +583,36 @@
 /* ============ FORMS GRID & LIST ============ */
 .forms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
+}
+
+/* 4K displays - 5 columns */
+@media (min-width: 2560px) {
+  .forms-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+/* 1440p displays - 4 columns */
+@media (min-width: 1440px) and (max-width: 2559px) {
+  .forms-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* 1920p and below - 3 columns (default) */
+@media (max-width: 1439px) and (min-width: 1025px) {
+  .forms-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Tablet - 2 columns */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .forms-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .forms-list {
@@ -893,6 +921,8 @@
   padding: 1rem 1.25rem;
   border-top: 1px solid var(--border-color);
   background: rgba(0, 0, 0, 0.15);
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .form-card-modern.list .card-actions-modern {
@@ -938,6 +968,13 @@
   color: var(--primary-color);
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+}
+
+.action-btn.edit span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .action-btn.edit:hover {
