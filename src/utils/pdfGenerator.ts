@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import { FormData } from '../types';
 import productConfigData from '../config/productConfig.json';
 import type { ProductConfig, FieldConfig } from '../types/productConfig';
-import { getImageUrl, getStoredToken } from '../services/api';
+import { getImageUrl, getStoredToken, getAbnahmeImageUrl } from '../services/api';
 
 const productConfig = productConfigData as ProductConfig;
 
@@ -336,6 +336,67 @@ export const generatePDF = async (formData: FormData) => {
           }
         });
         yPos += 2;
+      }
+
+      // Mängel Fotos (if any)
+      if (abnahme.maengelBilder && Array.isArray(abnahme.maengelBilder) && abnahme.maengelBilder.length > 0) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Maengel Fotos:', margin + 2, yPos);
+        yPos += 8;
+
+        const imgWidth = 50;
+        const imgHeight = 50;
+        const imagesPerRow = 3;
+        const imgGap = 5;
+
+        for (let i = 0; i < abnahme.maengelBilder.length; i++) {
+          const img = abnahme.maengelBilder[i];
+          const col = i % imagesPerRow;
+          const xPos = margin + col * (imgWidth + imgGap);
+
+          // Check if we need a new page
+          if (yPos + imgHeight > pageHeight - margin) {
+            pdf.addPage();
+            yPos = margin;
+          }
+
+          try {
+            // Fetch image from server
+            const token = getStoredToken();
+            const imgUrl = getAbnahmeImageUrl(img.id);
+            const response = await fetch(imgUrl, {
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+
+            if (response.ok) {
+              const blob = await response.blob();
+              const base64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+
+              // Get image format
+              const format = img.file_type?.includes('png') ? 'PNG' : 'JPEG';
+              pdf.addImage(base64, format, xPos, yPos, imgWidth, imgHeight);
+            }
+          } catch (err) {
+            // Skip image if fetch fails
+            console.error('Error loading mängel image:', err);
+          }
+
+          // Move to next row after every 3 images
+          if (col === imagesPerRow - 1) {
+            yPos += imgHeight + imgGap;
+          }
+        }
+
+        // If last row was not complete, still move down
+        if (abnahme.maengelBilder.length % imagesPerRow !== 0) {
+          yPos += imgHeight + imgGap;
+        }
+
+        yPos += 5;
       }
 
       // Legacy problem description (for backward compatibility)

@@ -400,6 +400,7 @@ export interface AbnahmeData {
   hatProbleme: boolean;
   problemBeschreibung?: string;
   maengelListe?: string[]; // Numbered list of defects (1, 2, 3, ...)
+  maengelBilder?: AbnahmeImage[]; // Mängel photos
   baustelleSauber?: 'ja' | 'nein' | null; // Baustelle wurde sauber und aufgeräumt gelassen
   monteurNote?: number | null; // Schulnote 1-6
   kundeName?: string;
@@ -469,6 +470,53 @@ export async function deleteImage(imageId: number): Promise<{ message: string }>
     method: 'DELETE'
   });
   if (!response.ok) throw new Error('Failed to delete image');
+  return response.json();
+}
+
+// ============ ABNAHME/MÄNGEL IMAGES ============
+
+export interface AbnahmeImage {
+  id: number;
+  file_name: string;
+  file_type: string;
+  created_at: string;
+}
+
+// Upload Mängel/Abnahme images
+export async function uploadAbnahmeImages(formId: number, files: File[]): Promise<{ message: string }> {
+  const formData = new window.FormData();
+  files.forEach(file => {
+    formData.append('images', file);
+  });
+
+  const token = getStoredToken();
+  const response = await fetch(`${API_BASE_URL}/forms/${formId}/abnahme-images`, {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData
+  });
+  if (!response.ok) throw new Error('Failed to upload Mängel images');
+  return response.json();
+}
+
+// Get Abnahme images list
+export async function getAbnahmeImages(formId: number): Promise<AbnahmeImage[]> {
+  const response = await authFetch(`${API_BASE_URL}/forms/${formId}/abnahme-images`);
+  if (!response.ok) throw new Error('Failed to get Mängel images');
+  return response.json();
+}
+
+// Get Abnahme image URL
+export function getAbnahmeImageUrl(imageId: number): string {
+  return `${API_BASE_URL}/abnahme-images/${imageId}`;
+}
+
+// Delete Abnahme image
+export async function deleteAbnahmeImage(imageId: number): Promise<{ message: string }> {
+  const response = await authFetch(`${API_BASE_URL}/abnahme-images/${imageId}`, {
+    method: 'DELETE'
+  });
+  if (!response.ok) throw new Error('Failed to delete Mängel image');
   return response.json();
 }
 

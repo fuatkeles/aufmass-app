@@ -112,6 +112,20 @@ async function initializeTables() {
       END
     `);
 
+    // Abnahme/Mängel images table
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_abnahme_bilder' AND xtype='U')
+      CREATE TABLE aufmass_abnahme_bilder (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        form_id INT NOT NULL,
+        file_name NVARCHAR(255) NOT NULL,
+        file_data VARBINARY(MAX) NOT NULL,
+        file_type NVARCHAR(100) NOT NULL,
+        created_at DATETIME DEFAULT GETDATE(),
+        FOREIGN KEY (form_id) REFERENCES aufmass_forms(id) ON DELETE CASCADE
+      )
+    `);
+
     // Images table
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_bilder' AND xtype='U')
@@ -1042,6 +1056,87 @@ app.post('/api/forms/:id/images', authenticateToken, upload.array('images', 10),
   } catch (err) {
     console.error('Error uploading images:', err);
     res.status(500).json({ error: 'Failed to upload images' });
+  }
+});
+
+// Upload Mängel/Abnahme images for a form
+app.post('/api/forms/:id/abnahme-images', authenticateToken, upload.array('images', 10), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const files = req.files;
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No images provided' });
+    }
+
+    for (const file of files) {
+      await pool.request()
+        .input('form_id', sql.Int, id)
+        .input('file_name', sql.NVarChar, file.originalname)
+        .input('file_data', sql.VarBinary, file.buffer)
+        .input('file_type', sql.NVarChar, file.mimetype)
+        .query(`
+          INSERT INTO aufmass_abnahme_bilder (form_id, file_name, file_data, file_type)
+          VALUES (@form_id, @file_name, @file_data, @file_type)
+        `);
+    }
+
+    res.json({ message: `${files.length} Mängel images uploaded successfully` });
+  } catch (err) {
+    console.error('Error uploading Mängel images:', err);
+    res.status(500).json({ error: 'Failed to upload Mängel images' });
+  }
+});
+
+// Get Mängel/Abnahme images for a form
+app.get('/api/forms/:id/abnahme-images', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.request()
+      .input('form_id', sql.Int, id)
+      .query('SELECT id, file_name, file_type, created_at FROM aufmass_abnahme_bilder WHERE form_id = @form_id ORDER BY created_at');
+
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Error getting Mängel images:', err);
+    res.status(500).json({ error: 'Failed to get Mängel images' });
+  }
+});
+
+// Get single Mängel image data
+app.get('/api/abnahme-images/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.request()
+      .input('id', sql.Int, id)
+      .query('SELECT file_data, file_type, file_name FROM aufmass_abnahme_bilder WHERE id = @id');
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
+    const image = result.recordset[0];
+    res.setHeader('Content-Type', image.file_type);
+    res.setHeader('Content-Disposition', `inline; filename="${image.file_name}"`);
+    res.send(image.file_data);
+  } catch (err) {
+    console.error('Error getting Mängel image:', err);
+    res.status(500).json({ error: 'Failed to get image' });
+  }
+});
+
+// Delete Mängel image
+app.delete('/api/abnahme-images/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.request()
+      .input('id', sql.Int, id)
+      .query('DELETE FROM aufmass_abnahme_bilder WHERE id = @id');
+
+    res.json({ message: 'Image deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting Mängel image:', err);
+    res.status(500).json({ error: 'Failed to delete image' });
   }
 });
 

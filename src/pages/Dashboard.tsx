@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme } from '../services/api';
+import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage } from '../services/api';
+import type { AbnahmeImage } from '../services/api';
 import type { FormData, MontageteamStats, Montageteam, StatusHistoryEntry, AbnahmeData } from '../services/api';
 import { useStats } from '../AppWrapper';
 import { generatePDF } from '../utils/pdfGenerator';
@@ -62,6 +63,9 @@ const Dashboard = () => {
     bemerkungen: ''
   });
   const [abnahmeSaving, setAbnahmeSaving] = useState(false);
+  // Mängel images
+  const [maengelImages, setMaengelImages] = useState<AbnahmeImage[]>([]);
+  const [maengelImageFiles, setMaengelImageFiles] = useState<File[]>([]);
   // Montage geplant modal
   const [montageModalOpen, setMontageModalOpen] = useState(false);
   const [montageFormId, setMontageFormId] = useState<number | null>(null);
@@ -153,9 +157,14 @@ const Dashboard = () => {
     // If selecting abnahme status, open abnahme modal first
     if (newStatus === 'abnahme') {
       setAbnahmeFormId(formId);
-      // Load existing abnahme data if any
+      // Reset image states
+      setMaengelImageFiles([]);
+      // Load existing abnahme data and images
       try {
-        const existingAbnahme = await getAbnahme(formId);
+        const [existingAbnahme, existingImages] = await Promise.all([
+          getAbnahme(formId),
+          getAbnahmeImages(formId)
+        ]);
         if (existingAbnahme) {
           setAbnahmeData(existingAbnahme);
         } else {
@@ -171,6 +180,7 @@ const Dashboard = () => {
             bemerkungen: ''
           });
         }
+        setMaengelImages(existingImages || []);
       } catch {
         setAbnahmeData({
           istFertig: false,
@@ -183,6 +193,7 @@ const Dashboard = () => {
           kundeUnterschrift: false,
           bemerkungen: ''
         });
+        setMaengelImages([]);
       }
       setAbnahmeModalOpen(true);
       setStatusDropdownOpen(null);
@@ -237,6 +248,13 @@ const Dashboard = () => {
     try {
       // Save abnahme data
       await saveAbnahme(abnahmeFormId, abnahmeData);
+
+      // Upload new mängel images if any
+      if (maengelImageFiles.length > 0) {
+        await uploadAbnahmeImages(abnahmeFormId, maengelImageFiles);
+        setMaengelImageFiles([]);
+      }
+
       // Update status to abnahme
       await updateForm(abnahmeFormId, { status: 'abnahme' });
       // Update local state
@@ -247,6 +265,7 @@ const Dashboard = () => {
       ));
       setAbnahmeModalOpen(false);
       setAbnahmeFormId(null);
+      setMaengelImages([]);
       refreshStats();
     } catch (err) {
       console.error('Error saving abnahme:', err);
@@ -351,10 +370,16 @@ Aylux Team`;
       // Get full form data with images
       const fullFormData = await getForm(formId);
 
-      // Get abnahme data if exists
+      // Get abnahme data and mängel images if exists
       let abnahmeData = null;
+      let maengelBilder: AbnahmeImage[] = [];
       try {
-        abnahmeData = await getAbnahme(formId);
+        const [abnahme, images] = await Promise.all([
+          getAbnahme(formId),
+          getAbnahmeImages(formId)
+        ]);
+        abnahmeData = abnahme;
+        maengelBilder = images || [];
       } catch {
         // No abnahme data, that's fine
       }
@@ -379,7 +404,7 @@ Aylux Team`;
         status: (fullFormData.status as 'draft' | 'completed' | 'archived') || 'draft',
         createdAt: fullFormData.created_at,
         updatedAt: fullFormData.updated_at,
-        abnahme: abnahmeData || undefined
+        abnahme: abnahmeData ? { ...abnahmeData, maengelBilder } : undefined
       };
 
       await generatePDF(pdfData);
@@ -1031,6 +1056,80 @@ Aylux Team`;
                         >
                           + Weiteren Mangel hinzufügen
                         </button>
+                      </div>
+                    </div>
+
+                    {/* Mängel Fotos Section */}
+                    <div className="abnahme-row">
+                      <label className="abnahme-field-label">Mängel Fotos</label>
+                      <div className="maengel-fotos-section">
+                        {/* Existing images from DB */}
+                        {maengelImages.length > 0 && (
+                          <div className="maengel-fotos-grid">
+                            {maengelImages.map((img) => (
+                              <div key={img.id} className="maengel-foto-item">
+                                <img
+                                  src={getAbnahmeImageUrl(img.id)}
+                                  alt={img.file_name}
+                                  onClick={() => window.open(getAbnahmeImageUrl(img.id), '_blank')}
+                                />
+                                <button
+                                  type="button"
+                                  className="remove-foto-btn"
+                                  onClick={async () => {
+                                    try {
+                                      await deleteAbnahmeImage(img.id);
+                                      setMaengelImages(maengelImages.filter(i => i.id !== img.id));
+                                    } catch (err) {
+                                      console.error('Error deleting image:', err);
+                                    }
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* New images to upload */}
+                        {maengelImageFiles.length > 0 && (
+                          <div className="maengel-fotos-grid pending">
+                            {maengelImageFiles.map((file, idx) => (
+                              <div key={idx} className="maengel-foto-item pending">
+                                <img
+                                  src={URL.createObjectURL(file)}
+                                  alt={file.name}
+                                />
+                                <span className="pending-badge">Neu</span>
+                                <button
+                                  type="button"
+                                  className="remove-foto-btn"
+                                  onClick={() => {
+                                    setMaengelImageFiles(maengelImageFiles.filter((_, i) => i !== idx));
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Upload button */}
+                        <label className="add-foto-btn">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              setMaengelImageFiles([...maengelImageFiles, ...files]);
+                              e.target.value = '';
+                            }}
+                          />
+                          📷 Fotos hinzufügen
+                        </label>
                       </div>
                     </div>
                   </motion.div>

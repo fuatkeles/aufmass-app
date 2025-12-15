@@ -1490,6 +1490,111 @@
   border-style: solid;
 }
 
+/* Mängel Fotos Section */
+.maengel-fotos-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.maengel-fotos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.75rem;
+}
+
+.maengel-fotos-grid.pending {
+  border-top: 1px dashed var(--primary-color);
+  padding-top: 1rem;
+}
+
+.maengel-foto-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.maengel-foto-item.pending {
+  border-color: var(--primary-color);
+  border-style: dashed;
+}
+
+.maengel-foto-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.maengel-foto-item img:hover {
+  transform: scale(1.05);
+}
+
+.maengel-foto-item .pending-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: var(--primary-color);
+  color: white;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.maengel-foto-item .remove-foto-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+  border-radius: 50%;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.maengel-foto-item:hover .remove-foto-btn {
+  opacity: 1;
+}
+
+.add-foto-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 2px dashed var(--primary-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--primary-color);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.add-foto-btn:hover {
+  background: rgba(127, 169, 61, 0.1);
+  border-style: solid;
+}
+
+.add-foto-btn input[type="file"] {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .abnahme-radio-group {
     flex-direction: column;

@@ -7,6 +7,14 @@ export interface ServerImage {
   file_type: string;
 }
 
+// Abnahme/Mängel image type
+export interface AbnahmeImage {
+  id: number;
+  file_name: string;
+  file_type: string;
+  created_at?: string;
+}
+
 // Abnahme (acceptance) data type
 export interface AbnahmeData {
   id?: number;
@@ -15,6 +23,7 @@ export interface AbnahmeData {
   hatProbleme: boolean;
   problemBeschreibung?: string;
   maengelListe?: string[]; // Numbered list of defects (1, 2, 3, ...)
+  maengelBilder?: AbnahmeImage[]; // Mängel photos
   baustelleSauber?: 'ja' | 'nein' | null; // Baustelle wurde sauber und aufgeräumt gelassen
   monteurNote?: number | null; // Schulnote 1-6
   kundeName?: string;
