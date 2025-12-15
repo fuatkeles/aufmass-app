@@ -1,4 +1,4 @@
-export type FieldType = 'text' | 'number' | 'select' | 'radio' | 'checkbox' | 'boolean' | 'textarea' | 'fundament' | 'bauform' | 'conditional' | 'modelColorSelect' | 'markise_trigger' | 'multiselect' | 'seitenmarkise' | 'ja_nein';
+export type FieldType = 'text' | 'number' | 'select' | 'radio' | 'checkbox' | 'boolean' | 'textarea' | 'fundament' | 'bauform' | 'conditional' | 'modelColorSelect' | 'markise_trigger' | 'multiselect' | 'seitenmarkise' | 'ja_nein' | 'senkrecht_section';
 
 export interface FieldConfig {
   name: string;
@@ -23,7 +23,8 @@ export interface FieldConfig {
   };
   showWhen?: {
     field: string;
-    value: string;
+    value?: string;
+    notEquals?: string;
   };
 }
 

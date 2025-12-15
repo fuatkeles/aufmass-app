@@ -54,11 +54,18 @@ const Dashboard = () => {
     istFertig: false,
     hatProbleme: false,
     problemBeschreibung: '',
+    maengelListe: [''],
+    baustelleSauber: null,
+    monteurNote: null,
     kundeName: '',
     kundeUnterschrift: false,
     bemerkungen: ''
   });
   const [abnahmeSaving, setAbnahmeSaving] = useState(false);
+  // Montage geplant modal
+  const [montageModalOpen, setMontageModalOpen] = useState(false);
+  const [montageFormId, setMontageFormId] = useState<number | null>(null);
+  const [montageDatum, setMontageDatum] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -156,6 +163,9 @@ const Dashboard = () => {
             istFertig: false,
             hatProbleme: false,
             problemBeschreibung: '',
+            maengelListe: [''],
+            baustelleSauber: null,
+            monteurNote: null,
             kundeName: '',
             kundeUnterschrift: false,
             bemerkungen: ''
@@ -166,12 +176,26 @@ const Dashboard = () => {
           istFertig: false,
           hatProbleme: false,
           problemBeschreibung: '',
+          maengelListe: [''],
+          baustelleSauber: null,
+          monteurNote: null,
           kundeName: '',
           kundeUnterschrift: false,
           bemerkungen: ''
         });
       }
       setAbnahmeModalOpen(true);
+      setStatusDropdownOpen(null);
+      return;
+    }
+
+    // If selecting montage_geplant status, open date picker modal
+    if (newStatus === 'montage_geplant') {
+      setMontageFormId(formId);
+      // Set default date to today
+      const today = new Date().toISOString().split('T')[0];
+      setMontageDatum(today);
+      setMontageModalOpen(true);
       setStatusDropdownOpen(null);
       return;
     }
@@ -242,6 +266,84 @@ const Dashboard = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // Generate mailto link with status-based email template
+  const getEmailMailtoLink = (form: FormData): string => {
+    const kundenName = `${form.kundeVorname} ${form.kundeNachname}`.trim();
+    const status = getFormStatus(form);
+    const montageDatumFormatted = form.montageDatum
+      ? new Date(form.montageDatum).toLocaleDateString('de-DE')
+      : '________';
+
+    let subject = '';
+    let body = '';
+
+    switch (status) {
+      case 'anzahlung':
+        subject = 'Information zu Ihrer Bestellung/Anzahlung';
+        body = `Sehr geehrte/r ${kundenName},
+
+Ihre Anzahlung in Höhe von ______ Euro ist auf unserem Konto eingegangen. Sobald Ihre Bestellung in den Produktionsplan aufgenommen wurde, werden wir Sie zusätzlich informieren.
+
+Vielen Dank, dass Sie sich für Aylux entschieden haben. Unsere voraussichtliche Montagefrist beträgt ca. 8–10 Wochen. Wir danken Ihnen für Ihre Geduld. Diese E-Mail stellt keinen Montagetermin dar. Nachdem Ihre Bestellung speziell nach den Maßen Ihres Hauses produziert wurde, werden wir Sie zur Vereinbarung eines Montagetermins erneut kontaktieren. Bitte verfolgen Sie daher unsere Informations-E-Mails.
+
+Gerne beantworten wir Ihre Fragen, die Sie in dieser Zeit stellen möchten.
+
+Mit freundlichen Grüßen
+Aylux Team`;
+        break;
+
+      case 'bestellt':
+        subject = 'Information zu Ihrer Bestellung';
+        body = `Sehr geehrte/r ${kundenName},
+
+Vielen Dank, dass Sie sich für Aylux entschieden haben. Ihre Bestellung wurde in die Produktion aufgenommen. Die Produktionszeit beträgt etwa 4 Wochen. Wir werden uns so bald wie möglich erneut mit Ihnen in Verbindung setzen, um einen Montagetermin zu vereinbaren. Bitte verfolgen Sie daher unsere Informations-E-Mails. Vielen Dank für Ihre Geduld.
+
+Gerne beantworten wir Ihre Fragen, die Sie in dieser Zeit stellen möchten.
+
+Mit freundlichen Grüßen
+Aylux Team`;
+        break;
+
+      case 'montage_geplant':
+        subject = 'Information zum Montagetermin Ihrer Bestellung';
+        body = `Sehr geehrte/r ${kundenName},
+
+der Produktionsprozess des von Ihnen bestellten Produkts ist abgeschlossen, und der vorgesehene Montagetermin ist der ${montageDatumFormatted}.
+
+Bitte teilen Sie uns mit, ob der genannte Termin für Sie passend ist. Sollte der geplante Termin für Sie nicht geeignet sein, bitten wir Sie, uns die für Sie passenden Tage oder möglichen Zeiträume mitzuteilen. Nach Ihrer Bestätigung wird die Montageplanung finalisiert.
+
+Bei Fragen stehen wir Ihnen jederzeit gerne zur Verfügung.
+
+Vielen Dank für Ihr Interesse und Ihre Zusammenarbeit. Wir wünschen Ihnen einen schönen Tag.
+
+Mit freundlichen Grüßen
+Aylux Team`;
+        break;
+
+      case 'reklamation':
+        subject = 'Information zu Reklamation / Restarbeiten';
+        body = `Sehr geehrte/r ${kundenName},
+
+wir möchten Sie darüber informieren, dass die erforderlichen Arbeiten im Zusammenhang mit Ihrer Reklamation / den Restarbeiten durchgeführt wurden. Die vorgenommenen bzw. noch vorzunehmenden Anpassungen sind in dem beigefügten Dokument detailliert aufgeführt. Wir bitten Sie, dieses entsprechend zu prüfen.
+
+Wir werden Sie in kürzester Zeit bezüglich eines Montagetermins zur finalen Durchführung informieren. Bitte verfolgen Sie hierzu unsere weiteren Informations-E-Mails.
+
+Sollten Sie in der Zwischenzeit Fragen haben, stehen wir Ihnen jederzeit gerne zur Verfügung.
+
+Vielen Dank für Ihre Geduld und Ihr Verständnis.
+
+Mit freundlichen Grüßen
+Aylux Team`;
+        break;
+
+      default:
+        // No template for other statuses, just open empty email
+        return `mailto:${form.kundeEmail}`;
+    }
+
+    return `mailto:${form.kundeEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   const handleDownloadPDF = async (formId: number) => {
@@ -505,18 +607,34 @@ const Dashboard = () => {
                               </motion.div>
                             )}
                           </AnimatePresence>
+                          {/* Montage date under status dropdown */}
+                          {getFormStatus(form) === 'montage_geplant' && form.montageDatum && (
+                            <div className="montage-date-badge">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                              <span>{new Date(form.montageDatum).toLocaleDateString('de-DE')}</span>
+                            </div>
+                          )}
                         </div>
                       ) : (
-                        <div
-                          className="status-pill-static"
-                          style={{ backgroundColor: getStatusColor(getFormStatus(form)) }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenHistory(form.id!);
-                          }}
-                          title="Status-Historie anzeigen"
-                        >
-                          {getStatusLabel(getFormStatus(form)).split('/')[0]}
+                        <div className="status-selector">
+                          <div
+                            className="status-pill-static"
+                            style={{ backgroundColor: getStatusColor(getFormStatus(form)) }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenHistory(form.id!);
+                            }}
+                            title="Status-Historie anzeigen"
+                          >
+                            {getStatusLabel(getFormStatus(form)).split('/')[0]}
+                          </div>
+                          {/* Montage date under status for non-admin */}
+                          {getFormStatus(form) === 'montage_geplant' && form.montageDatum && (
+                            <div className="montage-date-badge">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                              <span>{new Date(form.montageDatum).toLocaleDateString('de-DE')}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -639,7 +757,7 @@ const Dashboard = () => {
                     </div>
                     {form.kundeEmail && (
                       <a
-                        href={`mailto:${form.kundeEmail}`}
+                        href={getEmailMailtoLink(form)}
                         className="action-btn email"
                         title={`E-Mail an ${form.kundeEmail}`}
                         onClick={(e) => e.stopPropagation()}
@@ -711,6 +829,74 @@ const Dashboard = () => {
         )}
       </AnimatePresence>
 
+      {/* Montage Geplant Modal */}
+      <AnimatePresence>
+        {montageModalOpen && (
+          <motion.div
+            className="modal-overlay-modern"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMontageModalOpen(false)}
+          >
+            <motion.div
+              className="modal-modern montage-modal"
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3>Montage Termin</h3>
+              <p className="montage-modal-description">Wann ist die Montage geplant?</p>
+              <div className="montage-date-input">
+                <label>Geplantes Datum</label>
+                <input
+                  type="date"
+                  value={montageDatum}
+                  onChange={(e) => setMontageDatum(e.target.value)}
+                />
+              </div>
+              <div className="modal-actions">
+                <button
+                  className="modal-cancel"
+                  onClick={() => setMontageModalOpen(false)}
+                >
+                  Abbrechen
+                </button>
+                <button
+                  className="modal-confirm"
+                  disabled={!montageDatum}
+                  onClick={async () => {
+                    if (!montageFormId || !montageDatum) return;
+                    try {
+                      // Update form with status and planned date
+                      await updateForm(montageFormId, {
+                        status: 'montage_geplant',
+                        montageDatum: montageDatum
+                      });
+                      setForms(forms.map(f =>
+                        f.id === montageFormId
+                          ? { ...f, status: 'montage_geplant', montageDatum: montageDatum }
+                          : f
+                      ));
+                      setMontageModalOpen(false);
+                      setMontageFormId(null);
+                      setMontageDatum('');
+                      refreshStats();
+                    } catch (err) {
+                      console.error('Error updating status:', err);
+                      alert('Fehler beim Speichern des Montage-Termins');
+                    }
+                  }}
+                >
+                  Speichern
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Abnahme Modal */}
       <AnimatePresence>
         {abnahmeModalOpen && (
@@ -718,38 +904,136 @@ const Dashboard = () => {
             <motion.div className="modal-modern modal-large abnahme-modal" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={(e) => e.stopPropagation()}>
               <h3>Abnahme-Protokoll</h3>
               <div className="abnahme-form">
-                <div className="abnahme-row">
-                  <label className="abnahme-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={abnahmeData.istFertig || false}
-                      onChange={(e) => setAbnahmeData({ ...abnahmeData, istFertig: e.target.checked })}
-                    />
-                    <span>Arbeit ist fertiggestellt</span>
-                  </label>
-                </div>
-
-                <div className="abnahme-row">
-                  <label className="abnahme-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={abnahmeData.hatProbleme || false}
-                      onChange={(e) => setAbnahmeData({ ...abnahmeData, hatProbleme: e.target.checked })}
-                    />
-                    <span>Es gibt Probleme/Mängel</span>
-                  </label>
-                </div>
-
-                {abnahmeData.hatProbleme && (
-                  <div className="abnahme-row">
-                    <label>Problembeschreibung</label>
-                    <textarea
-                      value={abnahmeData.problemBeschreibung || ''}
-                      onChange={(e) => setAbnahmeData({ ...abnahmeData, problemBeschreibung: e.target.value })}
-                      placeholder="Beschreiben Sie die Probleme..."
-                      rows={3}
-                    />
+                {/* Status Selection - Mutually Exclusive */}
+                <div className="abnahme-status-selection">
+                  <label className="abnahme-status-label">Status der Arbeit</label>
+                  <div className="abnahme-radio-group">
+                    <label className={`abnahme-radio-option ${abnahmeData.istFertig && !abnahmeData.hatProbleme ? 'selected' : ''}`}>
+                      <input
+                        type="radio"
+                        name="abnahmeStatus"
+                        checked={abnahmeData.istFertig === true && abnahmeData.hatProbleme === false}
+                        onChange={() => setAbnahmeData({
+                          ...abnahmeData,
+                          istFertig: true,
+                          hatProbleme: false,
+                          maengelListe: [''],
+                          baustelleSauber: null,
+                          monteurNote: null
+                        })}
+                      />
+                      <span className="radio-icon"></span>
+                      <span className="radio-text">ARBEIT IST FERTIG</span>
+                    </label>
+                    <label className={`abnahme-radio-option ${abnahmeData.hatProbleme ? 'selected' : ''}`}>
+                      <input
+                        type="radio"
+                        name="abnahmeStatus"
+                        checked={abnahmeData.hatProbleme === true}
+                        onChange={() => setAbnahmeData({
+                          ...abnahmeData,
+                          istFertig: false,
+                          hatProbleme: true
+                        })}
+                      />
+                      <span className="radio-icon"></span>
+                      <span className="radio-text">ES GIBT MÄNGEL</span>
+                    </label>
                   </div>
+                </div>
+
+                {/* ES GIBT MÄNGEL - Additional Fields */}
+                {abnahmeData.hatProbleme && (
+                  <motion.div
+                    className="abnahme-maengel-section"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    {/* Baustelle Sauber */}
+                    <div className="abnahme-row">
+                      <label className="abnahme-field-label">Baustelle wurde sauber und aufgeräumt gelassen</label>
+                      <div className="abnahme-ja-nein-buttons">
+                        <button
+                          type="button"
+                          className={`abnahme-ja-nein-btn ${abnahmeData.baustelleSauber === 'ja' ? 'active' : ''}`}
+                          onClick={() => setAbnahmeData({ ...abnahmeData, baustelleSauber: 'ja' })}
+                        >
+                          JA
+                        </button>
+                        <button
+                          type="button"
+                          className={`abnahme-ja-nein-btn ${abnahmeData.baustelleSauber === 'nein' ? 'active' : ''}`}
+                          onClick={() => setAbnahmeData({ ...abnahmeData, baustelleSauber: 'nein' })}
+                        >
+                          NEIN
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Monteur Note */}
+                    <div className="abnahme-row">
+                      <label className="abnahme-field-label">Bitte bewerten Sie Monteure Arbeit mit Schulnoten (1-6)</label>
+                      <div className="abnahme-note-buttons">
+                        {[1, 2, 3, 4, 5, 6].map(note => (
+                          <button
+                            key={note}
+                            type="button"
+                            className={`abnahme-note-btn ${abnahmeData.monteurNote === note ? 'active' : ''}`}
+                            onClick={() => setAbnahmeData({ ...abnahmeData, monteurNote: note })}
+                          >
+                            {note}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Numbered Defects List */}
+                    <div className="abnahme-row">
+                      <label className="abnahme-field-label">Mängelliste</label>
+                      <div className="abnahme-maengel-list">
+                        {(abnahmeData.maengelListe || ['']).map((mangel, idx) => (
+                          <div key={idx} className="abnahme-mangel-item">
+                            <span className="mangel-number">{idx + 1})</span>
+                            <input
+                              type="text"
+                              value={mangel}
+                              onChange={(e) => {
+                                const newList = [...(abnahmeData.maengelListe || [''])];
+                                newList[idx] = e.target.value;
+                                setAbnahmeData({ ...abnahmeData, maengelListe: newList });
+                              }}
+                              placeholder={`Mangel ${idx + 1} beschreiben...`}
+                            />
+                            {(abnahmeData.maengelListe || []).length > 1 && (
+                              <button
+                                type="button"
+                                className="remove-mangel-btn"
+                                onClick={() => {
+                                  const newList = (abnahmeData.maengelListe || []).filter((_, i) => i !== idx);
+                                  setAbnahmeData({ ...abnahmeData, maengelListe: newList });
+                                }}
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="add-mangel-btn"
+                          onClick={() => {
+                            setAbnahmeData({
+                              ...abnahmeData,
+                              maengelListe: [...(abnahmeData.maengelListe || []), '']
+                            });
+                          }}
+                        >
+                          + Weiteren Mangel hinzufügen
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
                 )}
 
                 <div className="abnahme-row">

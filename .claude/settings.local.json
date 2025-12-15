@@ -17,7 +17,18 @@
       "Bash(npm run build:*)",
       "Bash(netstat:*)",
       "Bash(curl:*)",
-      "Bash(del \"C:\\Users\\fuatk\\aufmass-app\\src\\pages\\FormPage.css\")"
+      "Bash(del \"C:\\Users\\fuatk\\aufmass-app\\src\\pages\\FormPage.css\")",
+      "Bash(git push:*)",
+      "Bash(ssh root@72.62.34.253 \"ls -la /var/www/ && echo ''---'' && ls -la /root/ 2>/dev/null | head -20\")",
+      "Bash(ssh root@72.62.34.253 \"pm2 list && echo ''---NGINX---'' && ls -la /etc/nginx/sites-enabled/\")",
+      "Bash(ssh root@72.62.34.253 \"cat /etc/nginx/sites-available/aufmass-api\")",
+      "Bash(ssh root@72.62.34.253 \"cd /var/www/aufmass-api && git remote -v && git status\")",
+      "Bash(ssh root@72.62.34.253 \"cd /var/www/aufmass-api && git pull origin main\")",
+      "Bash(ssh root@72.62.34.253 \"cd /var/www/aufmass-api && npm install && pm2 restart aufmass-api\")",
+      "Bash(ssh:*)",
+      "Bash(npm start)",
+      "Bash(npm start --prefix \"C:\\Users\\fuatk\\aufmass-app\\server\")",
+      "Bash(taskkill:*)"
     ],
     "deny": [],
     "ask": []

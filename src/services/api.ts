@@ -52,6 +52,7 @@ export interface FormData {
   weitereProdukte?: WeiteresProdukt[];
   bemerkungen: string;
   status?: string;
+  montageDatum?: string;
   created_at?: string;
   updated_at?: string;
   image_count?: number;
@@ -74,6 +75,7 @@ export interface ApiForm {
   markise_data: string | null;
   bemerkungen: string;
   status: string;
+  montage_datum?: string;
   created_at: string;
   updated_at: string;
   bilder?: { id: number; file_name: string; file_type: string }[];
@@ -305,6 +307,7 @@ function transformApiToFrontend(apiForm: ApiForm): FormData {
     weitereProdukte: apiForm.weitereProdukte || [],
     bemerkungen: apiForm.bemerkungen || '',
     status: apiForm.status,
+    montageDatum: apiForm.montage_datum?.split('T')[0] || '',
     created_at: apiForm.created_at,
     updated_at: apiForm.updated_at,
     image_count: apiForm.image_count,
@@ -396,6 +399,9 @@ export interface AbnahmeData {
   istFertig: boolean;
   hatProbleme: boolean;
   problemBeschreibung?: string;
+  maengelListe?: string[]; // Numbered list of defects (1, 2, 3, ...)
+  baustelleSauber?: 'ja' | 'nein' | null; // Baustelle wurde sauber und aufgeräumt gelassen
+  monteurNote?: number | null; // Schulnote 1-6
   kundeName?: string;
   kundeUnterschrift: boolean;
   abnahmeDatum?: string;

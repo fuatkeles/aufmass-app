@@ -84,6 +84,14 @@ async function initializeTables() {
       END
     `);
 
+    // Add montage_datum column if it doesn't exist (for planned montage date)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_forms') AND name = 'montage_datum')
+      BEGIN
+        ALTER TABLE aufmass_forms ADD montage_datum DATE
+      END
+    `);
+
     // Images table
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_bilder' AND xtype='U')
@@ -773,7 +781,8 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
       specifications: { column: 'specifications', type: sql.NVarChar, transform: v => JSON.stringify(v || {}) },
       markiseData: { column: 'markise_data', type: sql.NVarChar, transform: v => JSON.stringify(v || null) },
       bemerkungen: { column: 'bemerkungen', type: sql.NVarChar },
-      status: { column: 'status', type: sql.NVarChar }
+      status: { column: 'status', type: sql.NVarChar },
+      montageDatum: { column: 'montage_datum', type: sql.Date }
     };
 
     const setClauses = [];

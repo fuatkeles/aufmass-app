@@ -299,18 +299,58 @@ export const generatePDF = async (formData: FormData) => {
     pdf.text(abnahme.hatProbleme ? checkMark : crossMark, margin + 52, yPos);
     yPos += 6;
 
-    // Problem description (if any)
-    if (abnahme.hatProbleme && abnahme.problemBeschreibung) {
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Problembeschreibung:', margin + 2, yPos);
-      yPos += 5;
-      pdf.setFont('helvetica', 'normal');
-      const problemLines = pdf.splitTextToSize(abnahme.problemBeschreibung, pageWidth - 2 * margin - 10);
-      problemLines.forEach((line: string) => {
-        pdf.text(line, margin + 8, yPos);
+    // If ES GIBT MÄNGEL, show additional fields
+    if (abnahme.hatProbleme) {
+      // Baustelle sauber
+      if (abnahme.baustelleSauber) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Baustelle sauber:', margin + 2, yPos);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(abnahme.baustelleSauber === 'ja' ? 'JA' : 'NEIN', margin + 52, yPos);
+        yPos += 6;
+      }
+
+      // Monteur Note
+      if (abnahme.monteurNote) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Monteur Note:', margin + 2, yPos);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(String(abnahme.monteurNote), margin + 52, yPos);
+        yPos += 6;
+      }
+
+      // Mängel Liste (numbered defects)
+      if (abnahme.maengelListe && Array.isArray(abnahme.maengelListe) && abnahme.maengelListe.some((m: string) => m.trim())) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Maengelliste:', margin + 2, yPos);
         yPos += 5;
-      });
-      yPos += 2;
+        pdf.setFont('helvetica', 'normal');
+        abnahme.maengelListe.forEach((mangel: string, idx: number) => {
+          if (mangel && mangel.trim()) {
+            const mangelText = `${idx + 1}) ${mangel}`;
+            const mangelLines = pdf.splitTextToSize(mangelText, pageWidth - 2 * margin - 15);
+            mangelLines.forEach((line: string) => {
+              pdf.text(line, margin + 8, yPos);
+              yPos += 5;
+            });
+          }
+        });
+        yPos += 2;
+      }
+
+      // Legacy problem description (for backward compatibility)
+      if (abnahme.problemBeschreibung) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Problembeschreibung:', margin + 2, yPos);
+        yPos += 5;
+        pdf.setFont('helvetica', 'normal');
+        const problemLines = pdf.splitTextToSize(abnahme.problemBeschreibung, pageWidth - 2 * margin - 10);
+        problemLines.forEach((line: string) => {
+          pdf.text(line, margin + 8, yPos);
+          yPos += 5;
+        });
+        yPos += 2;
+      }
     }
 
     // Notes (if any)
@@ -502,9 +542,9 @@ export const generatePDF = async (formData: FormData) => {
 
                 let details = '';
                 if (posData.aufteilung === 'mit') {
-                  details = `Mit Aufteilung - Links: ${posData.links || 0} cm, Rechts: ${posData.rechts || 0} cm`;
+                  details = `Mit Aufteilung - Links: ${posData.links || 0} mm, Rechts: ${posData.rechts || 0} mm`;
                 } else if (posData.aufteilung === 'ohne') {
-                  details = `Ohne Aufteilung - Breite: ${posData.breite || 0} cm`;
+                  details = `Ohne Aufteilung - Breite: ${posData.breite || 0} mm`;
                 }
 
                 pdf.text(details, margin + 30, yPos);
@@ -642,6 +682,114 @@ export const generatePDF = async (formData: FormData) => {
           }
         } catch (e) {
           // Skip markise data if parsing fails
+        }
+      }
+
+      // ============ INTEGRATED AUFGLAS/UNTERGLAS MARKISE (for ÜBERDACHUNG) ============
+      const glasMarkiseType = formData.specifications.glasMarkiseType as string;
+      if (glasMarkiseType && glasMarkiseType !== 'Keine') {
+        checkNewPage(30);
+        yPos += 5;
+
+        // Section header
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFillColor(127, 169, 61);
+        pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(glasMarkiseType, margin + 2, yPos);
+        pdf.setTextColor(0, 0, 0);
+        yPos += 10;
+
+        pdf.setFontSize(10);
+        const glasMarkiseFields: [string, string][] = [];
+
+        if (formData.specifications.glasMarkiseAufteilung) {
+          glasMarkiseFields.push(['Aufteilung:', String(formData.specifications.glasMarkiseAufteilung)]);
+        }
+        if (formData.specifications.glasMarkiseStoffNummer) {
+          glasMarkiseFields.push(['Stoff Nummer:', String(formData.specifications.glasMarkiseStoffNummer)]);
+        }
+        if (formData.specifications.glasMarkiseZip) {
+          glasMarkiseFields.push(['ZIP:', String(formData.specifications.glasMarkiseZip)]);
+        }
+        if (formData.specifications.glasMarkiseAntrieb) {
+          glasMarkiseFields.push(['Antrieb:', String(formData.specifications.glasMarkiseAntrieb)]);
+        }
+        if (formData.specifications.glasMarkiseAntriebseite) {
+          glasMarkiseFields.push(['Antriebseite:', String(formData.specifications.glasMarkiseAntriebseite)]);
+        }
+
+        glasMarkiseFields.forEach(([label, value]) => {
+          checkNewPage();
+          pdf.setFont('helvetica', 'bold');
+          pdf.text(label, margin + 5, yPos);
+          pdf.setFont('helvetica', 'normal');
+          pdf.text(value, margin + 52, yPos);
+          yPos += 6;
+        });
+
+        yPos += 5;
+      }
+
+      // ============ INTEGRATED SENKRECHT MARKISE (for ÜBERDACHUNG) ============
+      const senkrechtActive = formData.specifications.senkrechtMarkiseActive as string;
+      if (senkrechtActive === 'Ja' && formData.specifications.senkrechtMarkiseData) {
+        try {
+          const senkrechtData = JSON.parse(formData.specifications.senkrechtMarkiseData as string);
+          if (Array.isArray(senkrechtData) && senkrechtData.length > 0) {
+            checkNewPage(30);
+            yPos += 5;
+
+            // Section header
+            pdf.setFontSize(12);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFillColor(127, 169, 61);
+            pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.text(`SENKRECHT MARKISE (${senkrechtData.length} Stück)`, margin + 2, yPos);
+            pdf.setTextColor(0, 0, 0);
+            yPos += 10;
+
+            pdf.setFontSize(10);
+
+            senkrechtData.forEach((senkrecht: Record<string, unknown>, index: number) => {
+              checkNewPage(25);
+
+              // Item header
+              pdf.setFont('helvetica', 'bold');
+              pdf.text(`Senkrecht ${index + 1}${senkrecht.position ? ` - ${senkrecht.position}` : ''}:`, margin + 5, yPos);
+              yPos += 7;
+              pdf.setFont('helvetica', 'normal');
+
+              const senkrechtFields: [string, string][] = [];
+
+              if (senkrecht.position) senkrechtFields.push(['Position:', String(senkrecht.position)]);
+              if (senkrecht.modell) senkrechtFields.push(['Modell:', String(senkrecht.modell)]);
+              if (senkrecht.befestigungsart) senkrechtFields.push(['Befestigungsart:', String(senkrecht.befestigungsart)]);
+              if (senkrecht.breite) senkrechtFields.push(['Breite:', `${senkrecht.breite} mm`]);
+              if (senkrecht.laenge) senkrechtFields.push(['Länge:', `${senkrecht.laenge} mm`]);
+              if (senkrecht.hoehe) senkrechtFields.push(['Höhe:', `${senkrecht.hoehe} mm`]);
+              if (senkrecht.gestellfarbe) senkrechtFields.push(['Gestellfarbe:', String(senkrecht.gestellfarbe)]);
+              if (senkrecht.zip) senkrechtFields.push(['ZIP:', String(senkrecht.zip)]);
+              if (senkrecht.antrieb) senkrechtFields.push(['Antrieb:', String(senkrecht.antrieb)]);
+              if (senkrecht.antriebseite) senkrechtFields.push(['Antriebseite:', String(senkrecht.antriebseite)]);
+              if (senkrecht.stoffNummer) senkrechtFields.push(['Senkrecht Stoff Nummer:', String(senkrecht.stoffNummer)]);
+
+              senkrechtFields.forEach(([label, value]) => {
+                checkNewPage();
+                pdf.setFont('helvetica', 'bold');
+                pdf.text(label, margin + 10, yPos);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(value, margin + 55, yPos);
+                yPos += 6;
+              });
+
+              yPos += 5;
+            });
+          }
+        } catch (e) {
+          // Skip senkrecht data if parsing fails
         }
       }
 
@@ -849,9 +997,9 @@ export const generatePDF = async (formData: FormData) => {
                 const posData = seitenmarkiseData[position];
                 let details = '';
                 if (posData.aufteilung === 'mit') {
-                  details = `${position}: Mit Aufteilung - Links: ${posData.links || 0} cm, Rechts: ${posData.rechts || 0} cm`;
+                  details = `${position}: Mit Aufteilung - Links: ${posData.links || 0} mm, Rechts: ${posData.rechts || 0} mm`;
                 } else if (posData.aufteilung === 'ohne') {
-                  details = `${position}: Ohne Aufteilung - Breite: ${posData.breite || 0} cm`;
+                  details = `${position}: Ohne Aufteilung - Breite: ${posData.breite || 0} mm`;
                 }
                 if (details) {
                   displayFields.push(['', details]);

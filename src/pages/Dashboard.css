@@ -1261,6 +1261,250 @@
   border-bottom: 1px solid var(--border-color);
 }
 
+/* Status Selection - Radio Buttons */
+.abnahme-status-selection {
+  margin-bottom: 1.5rem;
+}
+
+.abnahme-status-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+}
+
+.abnahme-radio-group {
+  display: flex;
+  gap: 1rem;
+}
+
+.abnahme-radio-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.abnahme-radio-option:hover {
+  border-color: var(--primary-color);
+}
+
+.abnahme-radio-option.selected {
+  border-color: var(--primary-color);
+  background: rgba(127, 169, 61, 0.15);
+}
+
+.abnahme-radio-option input[type="radio"] {
+  display: none;
+}
+
+.abnahme-radio-option .radio-icon {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.abnahme-radio-option.selected .radio-icon {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+}
+
+.abnahme-radio-option.selected .radio-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  background: white;
+  border-radius: 50%;
+}
+
+.abnahme-radio-option .radio-text {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+/* ES GIBT MÄNGEL Section */
+.abnahme-maengel-section {
+  padding: 1.25rem;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+}
+
+.abnahme-field-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+}
+
+/* JA/NEIN Buttons */
+.abnahme-ja-nein-buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.abnahme-ja-nein-btn {
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.abnahme-ja-nein-btn:hover {
+  border-color: var(--primary-color);
+}
+
+.abnahme-ja-nein-btn.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+/* Note Buttons (Schulnoten 1-6) */
+.abnahme-note-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.abnahme-note-btn {
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.abnahme-note-btn:hover {
+  border-color: var(--primary-color);
+  transform: scale(1.05);
+}
+
+.abnahme-note-btn.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+/* Mängel List */
+.abnahme-maengel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.abnahme-mangel-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.abnahme-mangel-item .mangel-number {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #ef4444;
+  min-width: 28px;
+}
+
+.abnahme-mangel-item input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.abnahme-mangel-item input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.remove-mangel-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-radius: 6px;
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-mangel-btn:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.add-mangel-btn {
+  padding: 0.75rem 1rem;
+  border: 2px dashed var(--primary-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--primary-color);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.add-mangel-btn:hover {
+  background: rgba(127, 169, 61, 0.1);
+  border-style: solid;
+}
+
+@media (max-width: 768px) {
+  .abnahme-radio-group {
+    flex-direction: column;
+  }
+
+  .abnahme-note-buttons {
+    flex-wrap: wrap;
+  }
+
+  .abnahme-note-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 /* ============ RESPONSIVE ============ */
 @media (max-width: 1200px) {
   .quick-stats {
@@ -2859,6 +3103,10 @@
 /* ============ STATUS SELECTOR ON CARDS ============ */
 .status-selector {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
 }
 
 .status-pill-btn {
@@ -3089,4 +3337,118 @@
   .dashboard .powered-by-footer {
     left: 0;
   }
+}
+
+/* ============================================
+   MONTAGE GEPLANT MODAL
+   ============================================ */
+
+.montage-modal {
+  max-width: 400px;
+  padding: 2rem;
+}
+
+.montage-modal h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  color: #1a1a1a;
+}
+
+.montage-modal-description {
+  color: #666;
+  margin: 0 0 1.5rem 0;
+  font-size: 0.95rem;
+}
+
+.montage-date-input {
+  margin-bottom: 1.5rem;
+}
+
+.montage-date-input label {
+  display: block;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.montage-date-input input[type="date"] {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 1rem;
+  color: #1a1a1a;
+  transition: border-color 0.2s ease;
+}
+
+.montage-date-input input[type="date"]:focus {
+  outline: none;
+  border-color: #7fa93d;
+}
+
+.montage-modal .modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.montage-modal .modal-cancel {
+  padding: 0.75rem 1.5rem;
+  border: 2px solid #e0e0e0;
+  background: white;
+  color: #666;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.montage-modal .modal-cancel:hover {
+  border-color: #ccc;
+  background: #f5f5f5;
+}
+
+.montage-modal .modal-confirm {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  background: #7fa93d;
+  color: white;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.montage-modal .modal-confirm:hover {
+  background: #6d9235;
+}
+
+.montage-modal .modal-confirm:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Montage Date Badge on Cards */
+.montage-date-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 600;
+  width: 100%;
+  min-width: 120px;
+}
+
+.montage-date-badge svg {
+  width: 14px;
+  height: 14px;
+  stroke: #a855f7;
+  flex-shrink: 0;
 }

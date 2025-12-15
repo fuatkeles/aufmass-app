@@ -42,11 +42,17 @@ interface FieldConfig {
   };
   showWhen?: {
     field: string;
-    value: string;
+    value?: string;
+    notEquals?: string;
   };
 }
 
 const productConfig = productConfigData as ProductConfig;
+
+interface MissingField {
+  name: string;
+  label: string;
+}
 
 interface DynamicSpecificationFormProps {
   category: string;
@@ -56,6 +62,8 @@ interface DynamicSpecificationFormProps {
   updateField: (fieldName: string, value: string | number | boolean | string[]) => void;
   weitereProdukte?: WeiteresProdukt[];
   updateWeitereProdukte?: (data: WeiteresProdukt[]) => void;
+  showValidationErrors?: boolean;
+  missingFields?: MissingField[];
 }
 
 const categories = Object.keys(productConfig);
@@ -76,12 +84,28 @@ const DynamicSpecificationForm = ({
   formData,
   updateField,
   weitereProdukte = [],
-  updateWeitereProdukte
+  updateWeitereProdukte,
+  showValidationErrors = false,
+  missingFields = []
 }: DynamicSpecificationFormProps) => {
   // State for dynamic Montageteams from database
   const [montageteams, setMontageteams] = useState<Montageteam[]>([]);
   // State for expanded product in weitere produkte
   const [expandedProduktIndex, setExpandedProduktIndex] = useState<number>(-1);
+  // State for mobile missing fields dropdown
+  const [showMissingDropdown, setShowMissingDropdown] = useState(false);
+
+  // Scroll to field function
+  const scrollToField = (fieldName: string) => {
+    const fieldElement = document.getElementById(fieldName);
+    if (fieldElement) {
+      fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Add highlight animation
+      fieldElement.classList.add('field-highlight');
+      setTimeout(() => fieldElement.classList.remove('field-highlight'), 2000);
+    }
+    setShowMissingDropdown(false);
+  };
 
   // Fetch Montageteams from database on mount
   useEffect(() => {
@@ -98,6 +122,9 @@ const DynamicSpecificationForm = ({
 
   // Get fields and model colors for selected product
   const productTypeConfig = productConfig[category]?.[productType];
+  // Get total required fields count
+  const totalRequiredFields = productTypeConfig?.fields?.filter((f: FieldConfig) => f.required).length || 0;
+  const filledRequiredFields = totalRequiredFields - missingFields.length;
   const fields = productTypeConfig?.fields || [];
   // For model colors, use first selected model if array
   const firstModel = Array.isArray(model) ? model[0] : model;
@@ -113,23 +140,31 @@ const DynamicSpecificationForm = ({
     );
   }
 
-  const renderField = (field: FieldConfig, index: number) => {
+  const renderField = (field: FieldConfig, index: number, hasError: boolean = false) => {
     // Check showWhen condition
     if (field.showWhen) {
       const dependentValue = formData[field.showWhen.field];
-      if (dependentValue !== field.showWhen.value) {
-        return null; // Don't render this field
+      // Support both value (equals) and notEquals conditions
+      if (field.showWhen.value !== undefined) {
+        if (dependentValue !== field.showWhen.value) {
+          return null; // Don't render this field
+        }
+      } else if (field.showWhen.notEquals !== undefined) {
+        if (dependentValue === field.showWhen.notEquals || !dependentValue) {
+          return null; // Don't render this field
+        }
       }
     }
 
     const value = formData[field.name] ?? '';
+    const errorClass = hasError ? ' field-error' : '';
 
     switch (field.type) {
       case 'text':
         return (
           <motion.div
             key={field.name}
-            className="form-field"
+            className={`form-field${errorClass}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: index * 0.03 }}
@@ -153,7 +188,7 @@ const DynamicSpecificationForm = ({
         return (
           <motion.div
             key={field.name}
-            className="form-field"
+            className={`form-field${errorClass}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: index * 0.03 }}
@@ -188,7 +223,7 @@ const DynamicSpecificationForm = ({
         return (
           <motion.div
             key={field.name}
-            className="form-field"
+            className={`form-field${errorClass}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: index * 0.03 }}
@@ -322,7 +357,8 @@ const DynamicSpecificationForm = ({
         return (
           <motion.div
             key={field.name}
-            className="form-field multiselect-field"
+            id={field.name}
+            className={`form-field multiselect-field${errorClass}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: index * 0.03 }}
@@ -406,6 +442,7 @@ const DynamicSpecificationForm = ({
         return (
           <motion.div
             key={field.name}
+            id={field.name}
             className="form-field seitenmarkise-field full-width"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -497,7 +534,7 @@ const DynamicSpecificationForm = ({
                                       placeholder="0"
                                       min="0"
                                     />
-                                    <span className="unit">cm</span>
+                                    <span className="unit">mm</span>
                                   </div>
                                 </div>
                                 <div className="input-row">
@@ -512,7 +549,7 @@ const DynamicSpecificationForm = ({
                                       placeholder="0"
                                       min="0"
                                     />
-                                    <span className="unit">cm</span>
+                                    <span className="unit">mm</span>
                                   </div>
                                 </div>
                               </motion.div>
@@ -537,7 +574,7 @@ const DynamicSpecificationForm = ({
                                       placeholder="0"
                                       min="0"
                                     />
-                                    <span className="unit">cm</span>
+                                    <span className="unit">mm</span>
                                   </div>
                                 </div>
                               </motion.div>
@@ -565,7 +602,8 @@ const DynamicSpecificationForm = ({
           return (
             <motion.div
               key={field.name}
-              className="form-field conditional-ja-nein"
+              id={field.name}
+              className={`form-field conditional-ja-nein${errorClass}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: index * 0.03 }}
@@ -603,7 +641,7 @@ const DynamicSpecificationForm = ({
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                   >
-                    <label>{field.valueLabel || 'Wert'} ({field.valueUnit || 'cm'})</label>
+                    <label>{field.valueLabel || 'Wert'} ({field.valueUnit || 'mm'})</label>
                     <input
                       type="number"
                       value={displayValue}
@@ -615,7 +653,7 @@ const DynamicSpecificationForm = ({
                           updateField(field.name, parseFloat(inputValue));
                         }
                       }}
-                      placeholder={`${field.valueUnit || 'cm'} eingeben`}
+                      placeholder={`${field.valueUnit || 'mm'} eingeben`}
                       min="0"
                     />
                   </motion.div>
@@ -634,7 +672,8 @@ const DynamicSpecificationForm = ({
         return (
           <motion.div
             key={field.name}
-            className="form-field bauform-field"
+            id={field.name}
+            className={`form-field bauform-field${errorClass}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: index * 0.03 }}
@@ -701,9 +740,9 @@ const DynamicSpecificationForm = ({
                         onChange={(e) => {
                           updateField('bauformLinksValue', e.target.value);
                           const rechtsVal = eingeruecktRechts ? (formData['bauformRechtsValue'] || '') : '';
-                          updateField(field.name, `EINGERUCKT LINKS ${e.target.value} CM${rechtsVal ? ` RECHTS ${rechtsVal} CM` : ''}`);
+                          updateField(field.name, `EINGERUCKT LINKS ${e.target.value} MM${rechtsVal ? ` RECHTS ${rechtsVal} MM` : ''}`);
                         }}
-                        placeholder="cm"
+                        placeholder="mm"
                         min="0"
                       />
                     )}
@@ -719,7 +758,7 @@ const DynamicSpecificationForm = ({
                           // Update combined value
                           const linksVal = eingeruecktLinks ? (formData['bauformLinksValue'] || '') : '';
                           const rechtsVal = e.target.checked ? (formData['bauformRechtsValue'] || '') : '';
-                          updateField(field.name, `EINGERUCKT${linksVal ? ` LINKS ${linksVal} CM` : ''}${rechtsVal ? ` RECHTS ${rechtsVal} CM` : ''}`);
+                          updateField(field.name, `EINGERUCKT${linksVal ? ` LINKS ${linksVal} MM` : ''}${rechtsVal ? ` RECHTS ${rechtsVal} MM` : ''}`);
                         }}
                       />
                       <span>Rechts</span>
@@ -732,9 +771,9 @@ const DynamicSpecificationForm = ({
                         onChange={(e) => {
                           updateField('bauformRechtsValue', e.target.value);
                           const linksVal = eingeruecktLinks ? (formData['bauformLinksValue'] || '') : '';
-                          updateField(field.name, `EINGERUCKT${linksVal ? ` LINKS ${linksVal} CM` : ''} RECHTS ${e.target.value} CM`);
+                          updateField(field.name, `EINGERUCKT${linksVal ? ` LINKS ${linksVal} MM` : ''} RECHTS ${e.target.value} MM`);
                         }}
-                        placeholder="cm"
+                        placeholder="mm"
                         min="0"
                       />
                     )}
@@ -752,7 +791,8 @@ const DynamicSpecificationForm = ({
         return (
           <motion.div
             key={field.name}
-            className="form-field"
+            id={`${field.name}-container`}
+            className={`form-field${errorClass}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: index * 0.03 }}
@@ -842,6 +882,248 @@ const DynamicSpecificationForm = ({
                 <span>Die Markise-Konfiguration erfolgt im nächsten Schritt.</span>
               </div>
             )}
+          </motion.div>
+        );
+
+      case 'senkrecht_section':
+        const senkrechtActive = formData['senkrechtMarkiseActive'] === 'Ja';
+        const senkrechtData = (() => {
+          try {
+            const data = formData['senkrechtMarkiseData'];
+            if (typeof data === 'string') return JSON.parse(data);
+            if (Array.isArray(data)) return data;
+            return [];
+          } catch { return []; }
+        })();
+
+        const emptySenkrecht = {
+          position: '',
+          modell: '',
+          befestigungsart: '',
+          breite: '',
+          laenge: '',
+          hoehe: '',
+          gestellfarbe: '',
+          zip: '',
+          antrieb: '',
+          antriebseite: '',
+          stoffNummer: ''
+        };
+
+        const updateSenkrechtData = (newData: typeof senkrechtData) => {
+          updateField('senkrechtMarkiseData', JSON.stringify(newData));
+        };
+
+        const addSenkrecht = () => {
+          updateSenkrechtData([...senkrechtData, { ...emptySenkrecht }]);
+        };
+
+        const removeSenkrecht = (idx: number) => {
+          const newData = senkrechtData.filter((_: unknown, i: number) => i !== idx);
+          updateSenkrechtData(newData);
+        };
+
+        const updateSenkrechtField = (idx: number, fieldName: string, fieldValue: string | number) => {
+          const newData = [...senkrechtData];
+          newData[idx] = { ...newData[idx], [fieldName]: fieldValue };
+          updateSenkrechtData(newData);
+        };
+
+        return (
+          <motion.div
+            key={field.name}
+            id={field.name}
+            className="form-field senkrecht-section full-width"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.03 }}
+          >
+            <div className="section-divider">
+              <h3>SENKRECHT MARKISE</h3>
+            </div>
+            <div className="senkrecht-active-toggle">
+              <label>Senkrecht Markise hinzufügen?</label>
+              <div className="senkrecht-toggle-buttons">
+                <button
+                  type="button"
+                  className={`senkrecht-toggle-btn ${senkrechtActive ? 'active' : ''}`}
+                  onClick={() => {
+                    updateField('senkrechtMarkiseActive', 'Ja');
+                    if (senkrechtData.length === 0) {
+                      updateSenkrechtData([{ ...emptySenkrecht }]);
+                    }
+                  }}
+                >
+                  Ja
+                </button>
+                <button
+                  type="button"
+                  className={`senkrecht-toggle-btn ${!senkrechtActive && formData['senkrechtMarkiseActive'] !== undefined ? 'active' : ''}`}
+                  onClick={() => {
+                    updateField('senkrechtMarkiseActive', 'Keine');
+                    updateField('senkrechtMarkiseData', '[]');
+                  }}
+                >
+                  Keine
+                </button>
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {senkrechtActive && senkrechtData.length > 0 && (
+                <motion.div
+                  className="senkrecht-items"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  {senkrechtData.map((senkrecht: typeof emptySenkrecht, idx: number) => (
+                    <div key={idx} className="senkrecht-item-card">
+                      <div className="senkrecht-item-header">
+                        <span>Senkrecht Markise {idx + 1}</span>
+                        {senkrechtData.length > 1 && (
+                          <button
+                            type="button"
+                            className="remove-senkrecht-btn"
+                            onClick={() => removeSenkrecht(idx)}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                      <div className="senkrecht-fields-grid">
+                        <div className="form-field">
+                          <label>Position</label>
+                          <select
+                            value={senkrecht.position || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'position', e.target.value)}
+                          >
+                            <option value="">Bitte wählen</option>
+                            <option value="LINKS">LINKS</option>
+                            <option value="RECHTS">RECHTS</option>
+                            <option value="FRONT">FRONT</option>
+                            <option value="FRONT LINKS">FRONT LINKS</option>
+                            <option value="FRONT RECHTS">FRONT RECHTS</option>
+                            <option value="HINTEN LINKS">HINTEN LINKS</option>
+                            <option value="HINTEN RECHTS">HINTEN RECHTS</option>
+                          </select>
+                        </div>
+                        <div className="form-field">
+                          <label>Modell</label>
+                          <select
+                            value={senkrecht.modell || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'modell', e.target.value)}
+                          >
+                            <option value="">Bitte wählen</option>
+                            <option value="2020Z">2020Z</option>
+                            <option value="1616Z">1616Z</option>
+                          </select>
+                        </div>
+                        <div className="form-field">
+                          <label>Befestigungsart</label>
+                          <select
+                            value={senkrecht.befestigungsart || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'befestigungsart', e.target.value)}
+                          >
+                            <option value="">Bitte wählen</option>
+                            <option value="Zwischen Pfosten">Zwischen Pfosten</option>
+                            <option value="Vor Pfosten">Vor Pfosten</option>
+                          </select>
+                        </div>
+                        <div className="form-field">
+                          <label>Breite <span className="unit-label">(mm)</span></label>
+                          <input
+                            type="number"
+                            value={senkrecht.breite || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'breite', e.target.value)}
+                            placeholder="0"
+                            min="0"
+                          />
+                        </div>
+                        <div className="form-field">
+                          <label>Länge <span className="unit-label">(mm)</span></label>
+                          <input
+                            type="number"
+                            value={senkrecht.laenge || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'laenge', e.target.value)}
+                            placeholder="0"
+                            min="0"
+                          />
+                        </div>
+                        <div className="form-field">
+                          <label>Höhe (Bodenhöhe) <span className="unit-label">(mm)</span></label>
+                          <input
+                            type="number"
+                            value={senkrecht.hoehe || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'hoehe', e.target.value)}
+                            placeholder="0"
+                            min="0"
+                          />
+                        </div>
+                        <div className="form-field">
+                          <label>Gestellfarbe</label>
+                          <input
+                            type="text"
+                            value={senkrecht.gestellfarbe || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'gestellfarbe', e.target.value)}
+                            placeholder="z.B. RAL 7016"
+                          />
+                        </div>
+                        <div className="form-field">
+                          <label>ZIP</label>
+                          <select
+                            value={senkrecht.zip || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'zip', e.target.value)}
+                          >
+                            <option value="">Bitte wählen</option>
+                            <option value="Ja">Ja</option>
+                            <option value="Nein">Nein</option>
+                          </select>
+                        </div>
+                        <div className="form-field">
+                          <label>Antrieb</label>
+                          <select
+                            value={senkrecht.antrieb || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'antrieb', e.target.value)}
+                          >
+                            <option value="">Bitte wählen</option>
+                            <option value="Funk">Funk</option>
+                            <option value="E-Motor">E-Motor</option>
+                          </select>
+                        </div>
+                        <div className="form-field">
+                          <label>Antriebseite</label>
+                          <select
+                            value={senkrecht.antriebseite || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'antriebseite', e.target.value)}
+                          >
+                            <option value="">Bitte wählen</option>
+                            <option value="Links">Links</option>
+                            <option value="Rechts">Rechts</option>
+                          </select>
+                        </div>
+                        <div className="form-field full-width">
+                          <label>Senkrecht Stoff Nummer</label>
+                          <input
+                            type="text"
+                            value={senkrecht.stoffNummer || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'stoffNummer', e.target.value)}
+                            placeholder="Stoff Nummer eingeben"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="add-senkrecht-btn"
+                    onClick={addSenkrecht}
+                  >
+                    + Weitere Senkrecht Markise hinzufügen
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         );
 
@@ -992,14 +1274,21 @@ const DynamicSpecificationForm = ({
 
   const renderWPSpecField = (product: WeiteresProdukt, index: number, field: FieldConfig) => {
     const value = product.specifications[field.name];
-    // Skip montageteam and markise_trigger fields in weitere produkte
-    if (field.name === 'montageteam' || field.type === 'markise_trigger') return null;
+    // Skip montageteam, markise_trigger, and senkrecht_section fields in weitere produkte
+    if (field.name === 'montageteam' || field.type === 'markise_trigger' || field.type === 'senkrecht_section') return null;
 
     // Check showWhen condition for conditional field visibility
     if (field.showWhen) {
       const dependentValue = product.specifications[field.showWhen.field];
-      if (dependentValue !== field.showWhen.value) {
-        return null; // Don't render this field
+      // Support both value (equals) and notEquals conditions
+      if (field.showWhen.value !== undefined) {
+        if (dependentValue !== field.showWhen.value) {
+          return null; // Don't render this field
+        }
+      } else if (field.showWhen.notEquals !== undefined) {
+        if (dependentValue === field.showWhen.notEquals || !dependentValue) {
+          return null; // Don't render this field
+        }
       }
     }
 
@@ -1127,7 +1416,7 @@ const DynamicSpecificationForm = ({
                   type="text"
                   value={product.specifications.fundamentValue as string || ''}
                   onChange={(e) => handleWPSpecChange(index, 'fundamentValue', e.target.value)}
-                  placeholder="z.B. 4 Stück, 80x80cm"
+                  placeholder="z.B. 4 Stück, 80x80mm"
                 />
               </div>
             )}
@@ -1335,7 +1624,7 @@ const DynamicSpecificationForm = ({
                                   placeholder="0"
                                   min="0"
                                 />
-                                <span className="unit">cm</span>
+                                <span className="unit">mm</span>
                               </div>
                             </div>
                             <div className="input-row">
@@ -1348,7 +1637,7 @@ const DynamicSpecificationForm = ({
                                   placeholder="0"
                                   min="0"
                                 />
-                                <span className="unit">cm</span>
+                                <span className="unit">mm</span>
                               </div>
                             </div>
                           </div>
@@ -1366,7 +1655,7 @@ const DynamicSpecificationForm = ({
                                   placeholder="0"
                                   min="0"
                                 />
-                                <span className="unit">cm</span>
+                                <span className="unit">mm</span>
                               </div>
                             </div>
                           </div>
@@ -1509,6 +1798,11 @@ const DynamicSpecificationForm = ({
     );
   };
 
+  // Helper function to check if a field is in the missing fields list
+  const isFieldMissing = (fieldName: string): boolean => {
+    return showValidationErrors && missingFields.some(f => f.name === fieldName || f.name.startsWith(fieldName));
+  };
+
   return (
     <div className="dynamic-specification-form">
       <motion.div
@@ -1523,8 +1817,110 @@ const DynamicSpecificationForm = ({
         </p>
       </motion.div>
 
+      {/* Missing Fields Progress Bar - Always visible when there are missing fields */}
+      <AnimatePresence>
+        {missingFields.length > 0 && (
+          <motion.div
+            className="missing-fields-bar"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="missing-bar-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+
+            {/* Desktop: Show field names */}
+            <div className="missing-bar-content desktop-only">
+              <span className="missing-label">Fehlt:</span>
+              <div className="missing-fields-tags">
+                {missingFields.slice(0, 4).map((field, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className="missing-field-tag"
+                    onClick={() => scrollToField(field.name)}
+                  >
+                    {field.label}
+                  </button>
+                ))}
+                {missingFields.length > 4 && (
+                  <span className="missing-more">+{missingFields.length - 4} weitere</span>
+                )}
+              </div>
+            </div>
+
+            {/* Mobile: Show count with dropdown */}
+            <div className="missing-bar-content mobile-only">
+              <button
+                type="button"
+                className="missing-count-btn"
+                onClick={() => setShowMissingDropdown(!showMissingDropdown)}
+              >
+                <span>{missingFields.length} Felder fehlen</span>
+                <svg className={`dropdown-arrow ${showMissingDropdown ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="6,9 12,15 18,9" />
+                </svg>
+              </button>
+
+              <AnimatePresence>
+                {showMissingDropdown && (
+                  <motion.div
+                    className="missing-dropdown"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                  >
+                    {missingFields.map((field, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        className="missing-dropdown-item"
+                        onClick={() => scrollToField(field.name)}
+                      >
+                        {field.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="missing-bar-progress">
+              <span className="progress-text">{filledRequiredFields}/{totalRequiredFields}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* All fields complete message */}
+      <AnimatePresence>
+        {missingFields.length === 0 && totalRequiredFields > 0 && (
+          <motion.div
+            className="fields-complete-bar"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="complete-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22,4 12,14.01 9,11.01" />
+              </svg>
+            </div>
+            <span>Alle Pflichtfelder ausgefüllt</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="specifications-grid">
-        {fields.map((field, index) => renderField(field, index))}
+        {fields.map((field, index) => renderField(field, index, isFieldMissing(field.name)))}
       </div>
 
       {/* Weitere Produkte Section */}
@@ -1537,7 +1933,7 @@ const DynamicSpecificationForm = ({
             transition={{ duration: 0.5, delay: 0.2 }}
           >
             <h3>Weitere Produkte</h3>
-            <p className="section-description">Fügen Sie weitere Produkte für diesen Kunden hinzu (optional)</p>
+            <p className="section-description">Nur für komplett unabhängige Zusatzprodukte verwenden (z.B. 2. Überdachung am gleichen Haus, oder Wintergarten + separate Gelenkarmmarkise)</p>
           </motion.div>
 
           {/* Product Cards */}

@@ -61,12 +61,16 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
   });
 
   const [currentStep, setCurrentStep] = useState(0);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
 
   // Check if Markise is active
   const hasMarkise = formData.specifications?.markiseActive === true;
 
   // Check if category is UNTERBAUELEMENTE
   const isUnterbauelemente = formData.productSelection.category === 'UNTERBAUELEMENTE';
+
+  // Check if category is ÜBERDACHUNG (markise is integrated in specs, not separate step)
+  const isUeberdachung = formData.productSelection.category === 'ÜBERDACHUNG';
 
   // Type for product config
   interface ProductConfig {
@@ -160,6 +164,103 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     }
 
     return true;
+  }, [formData.productSelection, formData.specifications, productConfig]);
+
+  // Get list of missing required fields with their labels
+  const getMissingFields = useCallback((): { name: string; label: string }[] => {
+    const { category, productType } = formData.productSelection;
+    if (!category || !productType) return [];
+
+    const productTypeConfig = productConfig[category]?.[productType];
+    if (!productTypeConfig?.fields) return [];
+
+    const missingFields: { name: string; label: string }[] = [];
+    const requiredFields = productTypeConfig.fields.filter((f: { required: boolean }) => f.required);
+
+    for (const field of requiredFields) {
+      const value = formData.specifications[field.name];
+      const fieldLabel = (field as { label?: string }).label || field.name;
+
+      // Skip markise_trigger field
+      if (field.type === 'markise_trigger') continue;
+
+      // Handle conditional fields
+      if (field.type === 'conditional') {
+        const activeValue = formData.specifications[`${field.name}Active`];
+        if (activeValue === undefined) {
+          missingFields.push({ name: field.name, label: fieldLabel });
+          continue;
+        }
+        if (activeValue === true) {
+          const allowZero = field.allowZero === true;
+          if (allowZero) {
+            if (value === undefined || value === null || value === '' || typeof value !== 'number') {
+              missingFields.push({ name: field.name, label: `${fieldLabel} (Wert)` });
+            }
+          } else {
+            if (!value || (typeof value === 'number' && value <= 0)) {
+              missingFields.push({ name: field.name, label: `${fieldLabel} (Wert)` });
+            }
+          }
+        }
+        continue;
+      }
+
+      // Handle bauform field
+      if (field.type === 'bauform') {
+        const bauformType = formData.specifications['bauformType'];
+        if (!bauformType) {
+          missingFields.push({ name: field.name, label: fieldLabel });
+          continue;
+        }
+        if (bauformType === 'EINGERUCKT') {
+          const linksActive = formData.specifications['bauformLinksActive'];
+          const rechtsActive = formData.specifications['bauformRechtsActive'];
+          const linksValue = formData.specifications['bauformLinksValue'];
+          const rechtsValue = formData.specifications['bauformRechtsValue'];
+          if (!linksActive && !rechtsActive) {
+            missingFields.push({ name: field.name, label: `${fieldLabel} (mindestens eine Seite)` });
+          } else {
+            if (linksActive && (!linksValue || Number(linksValue) <= 0)) {
+              missingFields.push({ name: 'bauformLinksValue', label: `${fieldLabel} Links (Wert)` });
+            }
+            if (rechtsActive && (!rechtsValue || Number(rechtsValue) <= 0)) {
+              missingFields.push({ name: 'bauformRechtsValue', label: `${fieldLabel} Rechts (Wert)` });
+            }
+          }
+        }
+        continue;
+      }
+
+      // Handle fundament field
+      if (field.type === 'fundament') {
+        if (!value) {
+          missingFields.push({ name: field.name, label: fieldLabel });
+        }
+        continue;
+      }
+
+      // Handle multiselect fields
+      if (field.type === 'multiselect') {
+        if (!Array.isArray(value) || value.length === 0) {
+          missingFields.push({ name: field.name, label: fieldLabel });
+        }
+        continue;
+      }
+
+      // Check if value exists and is not empty
+      if (value === undefined || value === null || value === '') {
+        missingFields.push({ name: field.name, label: fieldLabel });
+        continue;
+      }
+
+      // For number fields, check if it's a valid number > 0
+      if (field.type === 'number' && (typeof value !== 'number' || value <= 0)) {
+        missingFields.push({ name: field.name, label: fieldLabel });
+      }
+    }
+
+    return missingFields;
   }, [formData.productSelection, formData.specifications, productConfig]);
 
   // Update grunddaten fields
@@ -333,8 +434,8 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       });
     }
 
-    // Add Markise step if markiseActive is true
-    if (hasMarkise) {
+    // Add Markise step if markiseActive is true (but NOT for ÜBERDACHUNG - markise is integrated there)
+    if (hasMarkise && !isUeberdachung) {
       baseSteps.push({
         id: 'markise',
         title: 'Markise',
@@ -401,14 +502,25 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     });
 
     return baseSteps;
-  }, [formData, hasMarkise, isUnterbauelemente, checkSpecificationsValid]);
+  }, [formData, hasMarkise, isUnterbauelemente, isUeberdachung, checkSpecificationsValid]);
 
   const currentStepInfo = steps[currentStep];
 
   const nextStep = () => {
-    if (currentStep < steps.length - 1 && currentStepInfo.canProceed()) {
-      setCurrentStep(currentStep + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (currentStep < steps.length - 1) {
+      if (currentStepInfo.canProceed()) {
+        setShowValidationErrors(false);
+        setCurrentStep(currentStep + 1);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        // Show validation errors when user tries to proceed with invalid form
+        setShowValidationErrors(true);
+        // Scroll to validation message
+        const errorElement = document.querySelector('.validation-error-message');
+        if (errorElement) {
+          errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
     }
   };
 
@@ -487,6 +599,8 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             updateField={updateSpecificationField}
             weitereProdukte={formData.weitereProdukte || []}
             updateWeitereProdukte={updateWeitereProdukte}
+            showValidationErrors={showValidationErrors}
+            missingFields={getMissingFields()}
           />
         );
       case 'unterbauelemente':

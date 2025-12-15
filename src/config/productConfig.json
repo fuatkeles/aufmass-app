@@ -36,7 +36,7 @@
           "label": "Dämmung / Isolation",
           "type": "conditional",
           "conditionalType": "ja_nein_with_value",
-          "valueUnit": "cm",
+          "valueUnit": "mm",
           "valueLabel": "Dämmung Maß",
           "required": true,
           "allowZero": true
@@ -101,7 +101,7 @@
           "label": "Überstand",
           "type": "conditional",
           "conditionalType": "ja_nein_with_value",
-          "valueUnit": "cm",
+          "valueUnit": "mm",
           "valueLabel": "Überstand Maß",
           "required": true
         },
@@ -158,6 +158,58 @@
           "label": "Seitenmarkise",
           "type": "seitenmarkise",
           "positions": ["Rechts", "Links", "Vorne", "Hinten"],
+          "required": false
+        },
+        {
+          "name": "glasMarkiseType",
+          "label": "Aufglas / Unterglas Markise",
+          "type": "select",
+          "options": ["Keine", "AUFGLASMARKISE", "UNTERGLASMARKISE"],
+          "required": false
+        },
+        {
+          "name": "glasMarkiseAufteilung",
+          "label": "Aufteilung",
+          "type": "select",
+          "options": ["MIT AUFTEILUNG", "OHNE AUFTEILUNG"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseStoffNummer",
+          "label": "Stoff Nummer",
+          "type": "text",
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseZip",
+          "label": "ZIP",
+          "type": "select",
+          "options": ["Ja", "Nein"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseAntrieb",
+          "label": "Antrieb",
+          "type": "select",
+          "options": ["Funk", "E-Motor"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseAntriebseite",
+          "label": "Antriebseite",
+          "type": "select",
+          "options": ["Links", "Rechts"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "senkrechtMarkise",
+          "label": "Senkrecht Markise",
+          "type": "senkrecht_section",
           "required": false
         }
       ]
@@ -190,7 +242,7 @@
           "label": "Dämmung / Isolation",
           "type": "conditional",
           "conditionalType": "ja_nein_with_value",
-          "valueUnit": "cm",
+          "valueUnit": "mm",
           "valueLabel": "Dämmung Maß",
           "required": true,
           "allowZero": true
@@ -255,7 +307,7 @@
           "label": "Überstand",
           "type": "conditional",
           "conditionalType": "ja_nein_with_value",
-          "valueUnit": "cm",
+          "valueUnit": "mm",
           "valueLabel": "Überstand Maß",
           "required": true
         },
@@ -305,6 +357,58 @@
           "label": "Seitenmarkise",
           "type": "seitenmarkise",
           "positions": ["Rechts", "Links", "Vorne", "Hinten"],
+          "required": false
+        },
+        {
+          "name": "glasMarkiseType",
+          "label": "Aufglas / Unterglas Markise",
+          "type": "select",
+          "options": ["Keine", "AUFGLASMARKISE", "UNTERGLASMARKISE"],
+          "required": false
+        },
+        {
+          "name": "glasMarkiseAufteilung",
+          "label": "Aufteilung",
+          "type": "select",
+          "options": ["MIT AUFTEILUNG", "OHNE AUFTEILUNG"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseStoffNummer",
+          "label": "Stoff Nummer",
+          "type": "text",
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseZip",
+          "label": "ZIP",
+          "type": "select",
+          "options": ["Ja", "Nein"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseAntrieb",
+          "label": "Antrieb",
+          "type": "select",
+          "options": ["Funk", "E-Motor"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseAntriebseite",
+          "label": "Antriebseite",
+          "type": "select",
+          "options": ["Links", "Rechts"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "senkrechtMarkise",
+          "label": "Senkrecht Markise",
+          "type": "senkrecht_section",
           "required": false
         }
       ]
@@ -333,7 +437,7 @@
           "label": "Dämmung / Isolation",
           "type": "conditional",
           "conditionalType": "ja_nein_with_value",
-          "valueUnit": "cm",
+          "valueUnit": "mm",
           "valueLabel": "Dämmung Maß",
           "required": true,
           "allowZero": true
@@ -398,7 +502,7 @@
           "label": "Überstand",
           "type": "conditional",
           "conditionalType": "ja_nein_with_value",
-          "valueUnit": "cm",
+          "valueUnit": "mm",
           "valueLabel": "Überstand Maß",
           "required": true
         },
@@ -409,10 +513,10 @@
           "required": true
         },
         {
-          "name": "eindeckung",
-          "label": "Eindeckung",
-          "type": "select",
-          "options": ["8 MM KLAR", "8 MM MILCH", "10 MM KLAR", "10 MM MILCH", "16 MM PCS KLAR", "16 MM PCS MILCH"],
+          "name": "stoffNummer",
+          "label": "Stoff Nummer",
+          "type": "text",
+          "placeholder": "Stoff Nummer eingeben",
           "required": true
         },
         {
@@ -456,6 +560,58 @@
           "type": "seitenmarkise",
           "positions": ["Rechts", "Links", "Vorne", "Hinten"],
           "required": false
+        },
+        {
+          "name": "glasMarkiseType",
+          "label": "Aufglas / Unterglas Markise",
+          "type": "select",
+          "options": ["Keine", "AUFGLASMARKISE", "UNTERGLASMARKISE"],
+          "required": false
+        },
+        {
+          "name": "glasMarkiseAufteilung",
+          "label": "Aufteilung",
+          "type": "select",
+          "options": ["MIT AUFTEILUNG", "OHNE AUFTEILUNG"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseStoffNummer",
+          "label": "Stoff Nummer",
+          "type": "text",
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseZip",
+          "label": "ZIP",
+          "type": "select",
+          "options": ["Ja", "Nein"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseAntrieb",
+          "label": "Antrieb",
+          "type": "select",
+          "options": ["Funk", "E-Motor"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseAntriebseite",
+          "label": "Antriebseite",
+          "type": "select",
+          "options": ["Links", "Rechts"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "senkrechtMarkise",
+          "label": "Senkrecht Markise",
+          "type": "senkrecht_section",
+          "required": false
         }
       ]
     },
@@ -483,7 +639,7 @@
           "label": "Dämmung / Isolation",
           "type": "conditional",
           "conditionalType": "ja_nein_with_value",
-          "valueUnit": "cm",
+          "valueUnit": "mm",
           "valueLabel": "Dämmung Maß",
           "required": true,
           "allowZero": true
@@ -548,7 +704,7 @@
           "label": "Überstand",
           "type": "conditional",
           "conditionalType": "ja_nein_with_value",
-          "valueUnit": "cm",
+          "valueUnit": "mm",
           "valueLabel": "Überstand Maß",
           "required": true
         },
@@ -605,6 +761,58 @@
           "label": "Seitenmarkise",
           "type": "seitenmarkise",
           "positions": ["Rechts", "Links", "Vorne", "Hinten"],
+          "required": false
+        },
+        {
+          "name": "glasMarkiseType",
+          "label": "Aufglas / Unterglas Markise",
+          "type": "select",
+          "options": ["Keine", "AUFGLASMARKISE", "UNTERGLASMARKISE"],
+          "required": false
+        },
+        {
+          "name": "glasMarkiseAufteilung",
+          "label": "Aufteilung",
+          "type": "select",
+          "options": ["MIT AUFTEILUNG", "OHNE AUFTEILUNG"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseStoffNummer",
+          "label": "Stoff Nummer",
+          "type": "text",
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseZip",
+          "label": "ZIP",
+          "type": "select",
+          "options": ["Ja", "Nein"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseAntrieb",
+          "label": "Antrieb",
+          "type": "select",
+          "options": ["Funk", "E-Motor"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "glasMarkiseAntriebseite",
+          "label": "Antriebseite",
+          "type": "select",
+          "options": ["Links", "Rechts"],
+          "required": false,
+          "showWhen": { "field": "glasMarkiseType", "notEquals": "Keine" }
+        },
+        {
+          "name": "senkrechtMarkise",
+          "label": "Senkrecht Markise",
+          "type": "senkrecht_section",
           "required": false
         }
       ]

@@ -14,6 +14,9 @@ export interface AbnahmeData {
   istFertig: boolean;
   hatProbleme: boolean;
   problemBeschreibung?: string;
+  maengelListe?: string[]; // Numbered list of defects (1, 2, 3, ...)
+  baustelleSauber?: 'ja' | 'nein' | null; // Baustelle wurde sauber und aufgeräumt gelassen
+  monteurNote?: number | null; // Schulnote 1-6
   kundeName?: string;
   kundeUnterschrift: boolean;
   abnahmeDatum?: string;
