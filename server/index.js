@@ -92,6 +92,26 @@ async function initializeTables() {
       END
     `);
 
+    // Add missing columns to aufmass_abnahme table
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_abnahme') AND name = 'maengel_liste')
+      BEGIN
+        ALTER TABLE aufmass_abnahme ADD maengel_liste NVARCHAR(MAX)
+      END
+    `);
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_abnahme') AND name = 'baustelle_sauber')
+      BEGIN
+        ALTER TABLE aufmass_abnahme ADD baustelle_sauber NVARCHAR(10)
+      END
+    `);
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_abnahme') AND name = 'monteur_note')
+      BEGIN
+        ALTER TABLE aufmass_abnahme ADD monteur_note INT
+      END
+    `);
+
     // Images table
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_bilder' AND xtype='U')
@@ -910,6 +930,9 @@ app.get('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
       istFertig: abnahme.ist_fertig,
       hatProbleme: abnahme.hat_probleme,
       problemBeschreibung: abnahme.problem_beschreibung,
+      maengelListe: abnahme.maengel_liste ? JSON.parse(abnahme.maengel_liste) : [],
+      baustelleSauber: abnahme.baustelle_sauber,
+      monteurNote: abnahme.monteur_note,
       kundeName: abnahme.kunde_name,
       kundeUnterschrift: abnahme.kunde_unterschrift,
       abnahmeDatum: abnahme.abnahme_datum,
@@ -927,7 +950,10 @@ app.get('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
 app.post('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { istFertig, hatProbleme, problemBeschreibung, kundeName, kundeUnterschrift, bemerkungen } = req.body;
+    const { istFertig, hatProbleme, problemBeschreibung, maengelListe, baustelleSauber, monteurNote, kundeName, kundeUnterschrift, bemerkungen } = req.body;
+
+    // Serialize maengelListe to JSON
+    const maengelListeJson = maengelListe ? JSON.stringify(maengelListe) : null;
 
     // Check if abnahme already exists
     const existing = await pool.request()
@@ -941,6 +967,9 @@ app.post('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
         .input('ist_fertig', sql.Bit, istFertig ? 1 : 0)
         .input('hat_probleme', sql.Bit, hatProbleme ? 1 : 0)
         .input('problem_beschreibung', sql.NVarChar, problemBeschreibung || null)
+        .input('maengel_liste', sql.NVarChar, maengelListeJson)
+        .input('baustelle_sauber', sql.NVarChar, baustelleSauber || null)
+        .input('monteur_note', sql.Int, monteurNote || null)
         .input('kunde_name', sql.NVarChar, kundeName || null)
         .input('kunde_unterschrift', sql.Bit, kundeUnterschrift ? 1 : 0)
         .input('abnahme_datum', sql.DateTime, new Date())
@@ -950,6 +979,9 @@ app.post('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
             ist_fertig = @ist_fertig,
             hat_probleme = @hat_probleme,
             problem_beschreibung = @problem_beschreibung,
+            maengel_liste = @maengel_liste,
+            baustelle_sauber = @baustelle_sauber,
+            monteur_note = @monteur_note,
             kunde_name = @kunde_name,
             kunde_unterschrift = @kunde_unterschrift,
             abnahme_datum = @abnahme_datum,
@@ -964,13 +996,16 @@ app.post('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
         .input('ist_fertig', sql.Bit, istFertig ? 1 : 0)
         .input('hat_probleme', sql.Bit, hatProbleme ? 1 : 0)
         .input('problem_beschreibung', sql.NVarChar, problemBeschreibung || null)
+        .input('maengel_liste', sql.NVarChar, maengelListeJson)
+        .input('baustelle_sauber', sql.NVarChar, baustelleSauber || null)
+        .input('monteur_note', sql.Int, monteurNote || null)
         .input('kunde_name', sql.NVarChar, kundeName || null)
         .input('kunde_unterschrift', sql.Bit, kundeUnterschrift ? 1 : 0)
         .input('abnahme_datum', sql.DateTime, new Date())
         .input('bemerkungen', sql.NVarChar, bemerkungen || null)
         .query(`
-          INSERT INTO aufmass_abnahme (form_id, ist_fertig, hat_probleme, problem_beschreibung, kunde_name, kunde_unterschrift, abnahme_datum, bemerkungen)
-          VALUES (@form_id, @ist_fertig, @hat_probleme, @problem_beschreibung, @kunde_name, @kunde_unterschrift, @abnahme_datum, @bemerkungen)
+          INSERT INTO aufmass_abnahme (form_id, ist_fertig, hat_probleme, problem_beschreibung, maengel_liste, baustelle_sauber, monteur_note, kunde_name, kunde_unterschrift, abnahme_datum, bemerkungen)
+          VALUES (@form_id, @ist_fertig, @hat_probleme, @problem_beschreibung, @maengel_liste, @baustelle_sauber, @monteur_note, @kunde_name, @kunde_unterschrift, @abnahme_datum, @bemerkungen)
         `);
     }
 
