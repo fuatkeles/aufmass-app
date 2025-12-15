@@ -1182,10 +1182,32 @@
 /* ============ ABNAHME MODAL STYLES ============ */
 .abnahme-modal {
   max-width: 520px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0 !important;
+}
+
+.abnahme-modal h3 {
+  padding: 1.5rem 1.5rem 1rem;
+  margin: 0;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .abnahme-form {
-  margin-bottom: 1.5rem;
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  margin-bottom: 0;
+}
+
+.abnahme-modal .modal-actions-modern {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+  border-radius: 0 0 20px 20px;
 }
 
 .abnahme-row {
