@@ -578,6 +578,11 @@ export const generatePDF = async (formData: FormData) => {
             displayValue += ` - ${formData.specifications[`${field.name}Value`]}`;
           }
 
+          // For conditional fields with valueUnit (like Dämmung, Überstand), append value with unit
+          if (field.type === 'conditional' && field.valueUnit && formData.specifications[`${field.name}Value`]) {
+            displayValue += ` - ${formData.specifications[`${field.name}Value`]} ${field.valueUnit}`;
+          }
+
           pdf.setFont('helvetica', 'bold');
           pdf.text(`${field.label}:`, margin + 2, yPos);
           pdf.setFont('helvetica', 'normal');
@@ -1028,6 +1033,11 @@ export const generatePDF = async (formData: FormData) => {
           // For fundament field, append the additional details if available
           if (field.type === 'fundament' && produkt.specifications[`${field.name}Value`]) {
             displayValue += ` - ${produkt.specifications[`${field.name}Value`]}`;
+          }
+
+          // For conditional fields with valueUnit (like Dämmung, Überstand), append value with unit
+          if (field.type === 'conditional' && field.valueUnit && produkt.specifications[`${field.name}Value`]) {
+            displayValue += ` - ${produkt.specifications[`${field.name}Value`]} ${field.valueUnit}`;
           }
 
           displayFields.push([`${field.label}:`, displayValue]);
