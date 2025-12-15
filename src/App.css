@@ -597,3 +597,119 @@ body {
     height: 20px;
   }
 }
+
+/* ============================================
+   MODAL STYLES
+   ============================================ */
+
+.modal-overlay-modern {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-modern {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 2rem;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+}
+
+.modal-modern h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-modern p {
+  margin: 0 0 2rem 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.modal-actions-modern {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.modal-btn {
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-btn.secondary {
+  background: transparent;
+  border: 2px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.modal-btn.secondary:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.modal-btn.primary {
+  background: var(--primary-color);
+  border: none;
+  color: var(--bg-primary);
+}
+
+.modal-btn.primary:hover {
+  background: var(--primary-hover);
+}
+
+.modal-btn.primary:disabled {
+  background: var(--border-color);
+  cursor: not-allowed;
+}
+
+/* Montage Modal */
+.montage-modal {
+  max-width: 400px;
+  padding: 2rem;
+}
+
+.montage-modal-description {
+  color: var(--text-secondary);
+  margin: 0 0 1.5rem 0;
+  font-size: 0.95rem;
+}
+
+.montage-date-input {
+  margin-bottom: 1.5rem;
+}
+
+.montage-date-input input[type="date"] {
+  width: 100%;
+  padding: 0.875rem 1rem;
+  border: 2px solid var(--border-color);
+  border-radius: 10px;
+  font-size: 1rem;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  transition: border-color 0.2s ease;
+}
+
+.montage-date-input input[type="date"]:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}

@@ -63,6 +63,10 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
   const [currentStep, setCurrentStep] = useState(0);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
 
+  // Montage geplant modal state
+  const [montageModalOpen, setMontageModalOpen] = useState(false);
+  const [montageDatum, setMontageDatum] = useState<string>('');
+
   // Check if Markise is active
   const hasMarkise = formData.specifications?.markiseActive === true;
 
@@ -747,7 +751,14 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
                       key={step.value}
                       className={`breadcrumb-step-inner ${isActive ? 'active' : ''} ${isPast ? 'past' : ''}`}
                       style={{ '--step-color': step.color } as React.CSSProperties}
-                      onClick={() => onStatusChange(step.value)}
+                      onClick={() => {
+                        if (step.value === 'montage_geplant') {
+                          setMontageDatum(new Date().toISOString().split('T')[0]);
+                          setMontageModalOpen(true);
+                        } else {
+                          onStatusChange(step.value);
+                        }
+                      }}
                     >
                       <span
                         className="step-dot-inner"
@@ -811,6 +822,58 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
           )}
         </div>
       </main>
+
+      {/* Montage Geplant Modal */}
+      <AnimatePresence>
+        {montageModalOpen && (
+          <motion.div
+            className="modal-overlay-modern"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMontageModalOpen(false)}
+          >
+            <motion.div
+              className="modal-modern montage-modal"
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3>Montage Termin</h3>
+              <p className="montage-modal-description">Wann ist die Montage geplant?</p>
+              <div className="montage-date-input">
+                <input
+                  type="date"
+                  value={montageDatum}
+                  onChange={(e) => setMontageDatum(e.target.value)}
+                />
+              </div>
+              <div className="modal-actions-modern">
+                <button
+                  className="modal-btn secondary"
+                  onClick={() => setMontageModalOpen(false)}
+                >
+                  Abbrechen
+                </button>
+                <button
+                  className="modal-btn primary"
+                  disabled={!montageDatum}
+                  onClick={() => {
+                    if (onStatusChange && montageDatum) {
+                      onStatusChange(`montage_geplant:${montageDatum}`);
+                      setMontageModalOpen(false);
+                      setMontageDatum('');
+                    }
+                  }}
+                >
+                  Speichern
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

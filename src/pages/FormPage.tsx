@@ -16,8 +16,15 @@ const FormPage = () => {
   const handleStatusChange = async (newStatus: string) => {
     if (!id || id === 'new') return;
     try {
-      await updateForm(parseInt(id), { status: newStatus });
-      setFormStatus(newStatus);
+      // Check if status includes montage date (format: montage_geplant:2025-12-15)
+      if (newStatus.startsWith('montage_geplant:')) {
+        const [status, datum] = newStatus.split(':');
+        await updateForm(parseInt(id), { status, montageDatum: datum });
+        setFormStatus(status);
+      } else {
+        await updateForm(parseInt(id), { status: newStatus });
+        setFormStatus(newStatus);
+      }
     } catch (err) {
       console.error('Error updating status:', err);
       alert('Fehler beim Aktualisieren des Status');
