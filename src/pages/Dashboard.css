@@ -587,26 +587,21 @@
   gap: 1.5rem;
 }
 
-/* 4K displays - 5 columns */
-@media (min-width: 2560px) {
+/* 4K displays (3840px+) - 5 columns */
+@media (min-width: 3840px) {
   .forms-grid {
     grid-template-columns: repeat(5, 1fr);
   }
 }
 
-/* 1440p displays - 4 columns */
-@media (min-width: 1440px) and (max-width: 2559px) {
+/* 1440p/WQHD displays (2560px-3839px) - 4 columns */
+@media (min-width: 2560px) and (max-width: 3839px) {
   .forms-grid {
     grid-template-columns: repeat(4, 1fr);
   }
 }
 
-/* 1920p and below - 3 columns (default) */
-@media (max-width: 1439px) and (min-width: 1025px) {
-  .forms-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
+/* 1920px and below - 3 columns (default is already 3) */
 
 /* Tablet - 2 columns */
 @media (max-width: 1024px) and (min-width: 769px) {
