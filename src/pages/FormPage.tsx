@@ -126,8 +126,9 @@ const FormPage = () => {
         await uploadImages(formId, newImages);
       }
 
-      // Generate and save PDF in background - fetch fresh data from server first
-      getForm(formId).then(async (freshData) => {
+      // Generate and save PDF - WAIT for it to complete
+      try {
+        const freshData = await getForm(formId);
         const pdfData = {
           id: String(freshData.id),
           datum: freshData.datum || '',
@@ -151,9 +152,11 @@ const FormPage = () => {
           await savePdf(formId, pdfResult.blob);
           console.log('PDF generated and saved successfully');
         }
-      }).catch(err => console.error('Background PDF generation failed:', err));
+      } catch (pdfErr) {
+        console.error('PDF generation failed:', pdfErr);
+        // Don't block save if PDF fails, just log it
+      }
 
-      // Return formId immediately - don't wait for PDF
       return formId;
     } catch (err) {
       console.error('Error saving form:', err);
