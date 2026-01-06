@@ -6,6 +6,8 @@ import multer from 'multer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -947,7 +949,15 @@ app.delete('/api/forms/:id', authenticateToken, async (req, res) => {
 
 // ============ PDF STORAGE ENDPOINTS ============
 
-// Save generated PDF for a form
+// PDF storage directory
+const PDF_DIR = '/var/www/aufmass-pdfs';
+
+// Ensure PDF directory exists
+if (!fs.existsSync(PDF_DIR)) {
+  fs.mkdirSync(PDF_DIR, { recursive: true });
+}
+
+// Save generated PDF for a form (to filesystem - much faster than database)
 app.post('/api/forms/:id/pdf', authenticateToken, upload.single('pdf'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -956,12 +966,16 @@ app.post('/api/forms/:id/pdf', authenticateToken, upload.single('pdf'), async (r
       return res.status(400).json({ error: 'No PDF file provided' });
     }
 
+    // Save PDF to filesystem
+    const pdfPath = path.join(PDF_DIR, `${id}.pdf`);
+    fs.writeFileSync(pdfPath, req.file.buffer);
+
+    // Update database to mark PDF as generated
     await pool.request()
       .input('id', sql.Int, id)
-      .input('pdf_data', sql.VarBinary, req.file.buffer)
       .query(`
         UPDATE aufmass_forms
-        SET generated_pdf = @pdf_data, pdf_generated_at = GETDATE(), updated_at = GETDATE()
+        SET pdf_generated_at = GETDATE(), updated_at = GETDATE()
         WHERE id = @id
       `);
 
@@ -972,31 +986,30 @@ app.post('/api/forms/:id/pdf', authenticateToken, upload.single('pdf'), async (r
   }
 });
 
-// Get generated PDF for a form
+// Get generated PDF for a form (from filesystem - very fast)
 app.get('/api/forms/:id/pdf', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const pdfPath = path.join(PDF_DIR, `${id}.pdf`);
 
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      .query('SELECT generated_pdf, pdf_generated_at FROM aufmass_forms WHERE id = @id');
-
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ error: 'Form not found' });
-    }
-
-    const { generated_pdf, pdf_generated_at } = result.recordset[0];
-
-    if (!generated_pdf) {
+    // Check if PDF file exists
+    if (!fs.existsSync(pdfPath)) {
       return res.status(404).json({ error: 'No PDF generated for this form', needsGeneration: true });
     }
+
+    // Get file stats for headers
+    const stats = fs.statSync(pdfPath);
 
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="aufmass_${id}.pdf"`,
-      'X-PDF-Generated-At': pdf_generated_at ? pdf_generated_at.toISOString() : ''
+      'Content-Length': stats.size,
+      'Cache-Control': 'public, max-age=3600' // Cache for 1 hour
     });
-    res.send(generated_pdf);
+
+    // Stream file directly - very fast
+    const fileStream = fs.createReadStream(pdfPath);
+    fileStream.pipe(res);
   } catch (err) {
     console.error('Error getting PDF:', err);
     res.status(500).json({ error: 'Failed to get PDF' });
@@ -1007,22 +1020,31 @@ app.get('/api/forms/:id/pdf', authenticateToken, async (req, res) => {
 app.get('/api/forms/:id/pdf/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    const pdfPath = path.join(PDF_DIR, `${id}.pdf`);
 
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      .query('SELECT pdf_generated_at, updated_at FROM aufmass_forms WHERE id = @id');
+    // Check filesystem for PDF
+    const hasPdf = fs.existsSync(pdfPath);
+    let pdfGeneratedAt = null;
+    let isOutdated = false;
 
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ error: 'Form not found' });
+    if (hasPdf) {
+      const stats = fs.statSync(pdfPath);
+      pdfGeneratedAt = stats.mtime.toISOString();
+
+      // Check if form was updated after PDF was generated
+      const result = await pool.request()
+        .input('id', sql.Int, id)
+        .query('SELECT updated_at FROM aufmass_forms WHERE id = @id');
+
+      if (result.recordset.length > 0) {
+        const { updated_at } = result.recordset[0];
+        isOutdated = updated_at && new Date(updated_at) > stats.mtime;
+      }
     }
-
-    const { pdf_generated_at, updated_at } = result.recordset[0];
-    const hasPdf = !!pdf_generated_at;
-    const isOutdated = hasPdf && updated_at && new Date(updated_at) > new Date(pdf_generated_at);
 
     res.json({
       hasPdf,
-      pdfGeneratedAt: pdf_generated_at,
+      pdfGeneratedAt: pdfGeneratedAt,
       isOutdated,
       needsRegeneration: !hasPdf || isOutdated
     });
