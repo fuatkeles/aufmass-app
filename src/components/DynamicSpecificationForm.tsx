@@ -33,6 +33,7 @@ interface FieldConfig {
   valueLabel?: string;
   allowZero?: boolean;
   positions?: string[];
+  gridGroup?: string;
   conditionalField?: {
     trigger: string;
     field: string;
@@ -64,6 +65,8 @@ interface DynamicSpecificationFormProps {
   updateWeitereProdukte?: (data: WeiteresProdukt[]) => void;
   showValidationErrors?: boolean;
   missingFields?: MissingField[];
+  bemerkungen?: string;
+  updateBemerkungen?: (value: string) => void;
 }
 
 const categories = Object.keys(productConfig);
@@ -86,7 +89,9 @@ const DynamicSpecificationForm = ({
   weitereProdukte = [],
   updateWeitereProdukte,
   showValidationErrors = false,
-  missingFields = []
+  missingFields = [],
+  bemerkungen = '',
+  updateBemerkungen
 }: DynamicSpecificationFormProps) => {
   // State for dynamic Montageteams from database
   const [montageteams, setMontageteams] = useState<Montageteam[]>([]);
@@ -901,12 +906,12 @@ const DynamicSpecificationForm = ({
           modell: '',
           befestigungsart: '',
           breite: '',
-          laenge: '',
           hoehe: '',
-          gestellfarbe: '',
           zip: '',
           antrieb: '',
           antriebseite: '',
+          anschlussseite: '',
+          gestellfarbe: '',
           stoffNummer: ''
         };
 
@@ -992,6 +997,7 @@ const DynamicSpecificationForm = ({
                         )}
                       </div>
                       <div className="senkrecht-fields-grid">
+                        {/* Row 1: Position, Modell, Befestigungsart */}
                         <div className="form-field">
                           <label>Position</label>
                           <select
@@ -1030,6 +1036,7 @@ const DynamicSpecificationForm = ({
                             <option value="Vor Pfosten">Vor Pfosten</option>
                           </select>
                         </div>
+                        {/* Row 2: Breite, Höhe, ZIP */}
                         <div className="form-field">
                           <label>Breite <span className="unit-label">(mm)</span></label>
                           <input
@@ -1041,32 +1048,13 @@ const DynamicSpecificationForm = ({
                           />
                         </div>
                         <div className="form-field">
-                          <label>Länge <span className="unit-label">(mm)</span></label>
-                          <input
-                            type="number"
-                            value={senkrecht.laenge || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'laenge', e.target.value)}
-                            placeholder="0"
-                            min="0"
-                          />
-                        </div>
-                        <div className="form-field">
-                          <label>Höhe (Bodenhöhe) <span className="unit-label">(mm)</span></label>
+                          <label>Höhe <span className="unit-label">(mm)</span></label>
                           <input
                             type="number"
                             value={senkrecht.hoehe || ''}
                             onChange={(e) => updateSenkrechtField(idx, 'hoehe', e.target.value)}
                             placeholder="0"
                             min="0"
-                          />
-                        </div>
-                        <div className="form-field">
-                          <label>Gestellfarbe</label>
-                          <input
-                            type="text"
-                            value={senkrecht.gestellfarbe || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'gestellfarbe', e.target.value)}
-                            placeholder="z.B. RAL 7016"
                           />
                         </div>
                         <div className="form-field">
@@ -1080,6 +1068,7 @@ const DynamicSpecificationForm = ({
                             <option value="Nein">Nein</option>
                           </select>
                         </div>
+                        {/* Row 3: Antrieb, Antriebseite, Anschlussseite */}
                         <div className="form-field">
                           <label>Antrieb</label>
                           <select
@@ -1102,14 +1091,37 @@ const DynamicSpecificationForm = ({
                             <option value="Rechts">Rechts</option>
                           </select>
                         </div>
-                        <div className="form-field full-width">
-                          <label>Senkrecht Stoff Nummer</label>
-                          <input
-                            type="text"
-                            value={senkrecht.stoffNummer || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'stoffNummer', e.target.value)}
-                            placeholder="Stoff Nummer eingeben"
-                          />
+                        <div className="form-field">
+                          <label>Anschlussseite</label>
+                          <select
+                            value={senkrecht.anschlussseite || ''}
+                            onChange={(e) => updateSenkrechtField(idx, 'anschlussseite', e.target.value)}
+                          >
+                            <option value="">Bitte wählen</option>
+                            <option value="Links">Links</option>
+                            <option value="Rechts">Rechts</option>
+                          </select>
+                        </div>
+                        {/* Row 4: Gestellfarbe, Stoff Nummer */}
+                        <div className="senkrecht-bottom-row">
+                          <div className="form-field">
+                            <label>Gestellfarbe</label>
+                            <input
+                              type="text"
+                              value={senkrecht.gestellfarbe || ''}
+                              onChange={(e) => updateSenkrechtField(idx, 'gestellfarbe', e.target.value)}
+                              placeholder="z.B. RAL 7016"
+                            />
+                          </div>
+                          <div className="form-field">
+                            <label>Stoff Nummer</label>
+                            <input
+                              type="text"
+                              value={senkrecht.stoffNummer || ''}
+                              onChange={(e) => updateSenkrechtField(idx, 'stoffNummer', e.target.value)}
+                              placeholder="Stoff Nummer eingeben"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1920,7 +1932,31 @@ const DynamicSpecificationForm = ({
       </AnimatePresence>
 
       <div className="specifications-grid">
-        {fields.map((field, index) => renderField(field, index, isFieldMissing(field.name)))}
+        {(() => {
+          const renderedGroups = new Set<string>();
+          return fields.map((field, index) => {
+            // If field has gridGroup, render as part of group
+            if (field.gridGroup) {
+              // Skip if already rendered this group
+              if (renderedGroups.has(field.gridGroup)) {
+                return null;
+              }
+              renderedGroups.add(field.gridGroup);
+
+              // Get all fields in this group
+              const groupFields = fields.filter(f => f.gridGroup === field.gridGroup);
+
+              return (
+                <div key={`group-${field.gridGroup}`} className={`field-grid-group field-grid-group-${groupFields.length}`}>
+                  {groupFields.map((gf, gi) => renderField(gf, index + gi, isFieldMissing(gf.name)))}
+                </div>
+              );
+            }
+
+            // Regular field without group
+            return renderField(field, index, isFieldMissing(field.name));
+          });
+        })()}
       </div>
 
       {/* Weitere Produkte Section */}
@@ -2011,6 +2047,25 @@ const DynamicSpecificationForm = ({
           </motion.button>
         </div>
       )}
+
+      {/* Global Bemerkungen Section */}
+      <motion.div
+        className="global-bemerkungen-section"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.3 }}
+      >
+        <label htmlFor="globalBemerkungen">
+          Bemerkungen
+        </label>
+        <textarea
+          id="globalBemerkungen"
+          value={bemerkungen}
+          onChange={(e) => updateBemerkungen?.(e.target.value)}
+          placeholder="Zusätzliche Anmerkungen oder Bemerkungen..."
+          rows={4}
+        />
+      </motion.div>
     </div>
   );
 };

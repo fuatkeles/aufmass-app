@@ -57,3 +57,12 @@
   color: #9AA0A6;
   margin: 0;
 }
+
+/* Light Theme Overrides */
+.light-theme .section-header h2 {
+  color: #1F2328;
+}
+
+.light-theme .section-description {
+  color: #4b5563;
+}

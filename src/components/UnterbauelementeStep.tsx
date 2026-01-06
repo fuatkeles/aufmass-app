@@ -36,12 +36,12 @@ interface UnterbauelementData {
 interface UnterbauelementeStepProps {
   unterbauelemente: UnterbauelementData[];
   updateUnterbauelemente: (data: UnterbauelementData[]) => void;
-  bemerkungen?: string;
-  updateBemerkungen?: (bemerkungen: string) => void;
   initialProduktTyp?: string;
   initialModell?: string;
   weitereProdukte?: WeiteresProdukt[];
   updateWeitereProdukte?: (data: WeiteresProdukt[]) => void;
+  bemerkungen?: string;
+  updateBemerkungen?: (value: string) => void;
 }
 
 interface ProductConfig {
@@ -79,12 +79,12 @@ const createEmptyElement = (): UnterbauelementData => ({
 const UnterbauelementeStep = ({
   unterbauelemente,
   updateUnterbauelemente,
-  bemerkungen = '',
-  updateBemerkungen,
   initialProduktTyp = '',
   initialModell = '',
   weitereProdukte = [],
-  updateWeitereProdukte
+  updateWeitereProdukte,
+  bemerkungen = '',
+  updateBemerkungen
 }: UnterbauelementeStepProps) => {
   // Create initial element with values from ProductSelection
   const createInitialElement = (): UnterbauelementData => ({
@@ -101,7 +101,6 @@ const UnterbauelementeStep = ({
     if (unterbauelemente.length > 0) return unterbauelemente;
     return [createInitialElement()];
   });
-  const [localBemerkungen, setLocalBemerkungen] = useState(bemerkungen);
   const [expandedIndex, setExpandedIndex] = useState<number>(0);
   const [initialized, setInitialized] = useState(false);
 
@@ -122,10 +121,6 @@ const UnterbauelementeStep = ({
       setElements(unterbauelemente);
     }
   }, [unterbauelemente, initialized]);
-
-  useEffect(() => {
-    setLocalBemerkungen(bemerkungen);
-  }, [bemerkungen]);
 
   const handleFieldChange = (index: number, field: keyof UnterbauelementData, value: string | number) => {
     const newElements = [...elements];
@@ -170,13 +165,6 @@ const UnterbauelementeStep = ({
     updateUnterbauelemente(newElements);
     if (expandedIndex >= newElements.length) {
       setExpandedIndex(newElements.length - 1);
-    }
-  };
-
-  const handleBemerkungenChange = (value: string) => {
-    setLocalBemerkungen(value);
-    if (updateBemerkungen) {
-      updateBemerkungen(value);
     }
   };
 
@@ -504,25 +492,6 @@ const UnterbauelementeStep = ({
         Weiteres Unterbauelement hinzufügen
       </motion.button>
 
-      {/* Bemerkungen */}
-      <motion.div
-        className="unterbauelemente-bemerkungen"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.3 }}
-      >
-        <label htmlFor="unterbauelementeBemerkungen">
-          Bemerkungen zu Unterbauelementen
-        </label>
-        <textarea
-          id="unterbauelementeBemerkungen"
-          value={localBemerkungen}
-          onChange={(e) => handleBemerkungenChange(e.target.value)}
-          placeholder="Zusätzliche Anmerkungen..."
-          rows={3}
-        />
-      </motion.div>
-
       {/* Weitere Produkte Section */}
       {updateWeitereProdukte && (
         <WeitereProdukteSectionInline
@@ -530,6 +499,25 @@ const UnterbauelementeStep = ({
           updateWeitereProdukte={updateWeitereProdukte}
         />
       )}
+
+      {/* Global Bemerkungen Section */}
+      <motion.div
+        className="global-bemerkungen-section"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.3 }}
+      >
+        <label htmlFor="globalBemerkungen">
+          Bemerkungen
+        </label>
+        <textarea
+          id="globalBemerkungen"
+          value={bemerkungen}
+          onChange={(e) => updateBemerkungen?.(e.target.value)}
+          placeholder="Zusätzliche Anmerkungen oder Bemerkungen..."
+          rows={4}
+        />
+      </motion.div>
     </div>
   );
 };

@@ -1537,6 +1537,44 @@
   grid-column: 1 / -1;
 }
 
+.senkrecht-bottom-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+}
+
+.senkrecht-bottom-row .form-field {
+  background: var(--bg-tertiary);
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.senkrecht-bottom-row .form-field:hover {
+  border-color: rgba(127, 169, 61, 0.3);
+}
+
+.senkrecht-bottom-row .form-field:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(127, 169, 61, 0.1);
+}
+
+.senkrecht-bottom-row .form-field label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .senkrecht-bottom-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .add-senkrecht-btn {
   background: transparent;
   border: 2px dashed var(--primary-color);
@@ -1846,4 +1884,72 @@
     width: 24px;
     height: 24px;
   }
+}
+
+/* ===== FIELD GRID GROUPS (for side-by-side fields) ===== */
+.field-grid-group {
+  display: grid;
+  gap: 1rem;
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.field-grid-group-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.field-grid-group-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.field-grid-group .form-field {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .field-grid-group-2,
+  .field-grid-group-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Global Bemerkungen Section */
+.global-bemerkungen-section {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.global-bemerkungen-section label {
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+}
+
+.global-bemerkungen-section textarea {
+  width: 100%;
+  padding: 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 100px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.global-bemerkungen-section textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(127, 169, 61, 0.1);
+}
+
+.global-bemerkungen-section textarea::placeholder {
+  color: var(--text-muted);
 }

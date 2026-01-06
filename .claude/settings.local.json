@@ -28,7 +28,10 @@
       "Bash(ssh:*)",
       "Bash(npm start)",
       "Bash(npm start --prefix \"C:\\Users\\fuatk\\aufmass-app\\server\")",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(timeout:*)",
+      "Bash(cmd //c \"taskkill /F /PID 29412\")",
+      "Bash(ping:*)"
     ],
     "deny": [],
     "ask": []

@@ -92,6 +92,30 @@ async function initializeTables() {
       END
     `);
 
+    // Add status_date column if it doesn't exist (for current status date)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_forms') AND name = 'status_date')
+      BEGIN
+        ALTER TABLE aufmass_forms ADD status_date DATE
+      END
+    `);
+
+    // Add generated_pdf column to store pre-generated PDF
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_forms') AND name = 'generated_pdf')
+      BEGIN
+        ALTER TABLE aufmass_forms ADD generated_pdf VARBINARY(MAX)
+      END
+    `);
+
+    // Add pdf_generated_at column to track when PDF was last generated
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_forms') AND name = 'pdf_generated_at')
+      BEGIN
+        ALTER TABLE aufmass_forms ADD pdf_generated_at DATETIME
+      END
+    `);
+
     // Add missing columns to aufmass_abnahme table
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_abnahme') AND name = 'maengel_liste')
@@ -222,9 +246,16 @@ async function initializeTables() {
         status NVARCHAR(50) NOT NULL,
         changed_by INT,
         changed_at DATETIME DEFAULT GETDATE(),
+        status_date DATE,
         notes NVARCHAR(MAX),
         FOREIGN KEY (form_id) REFERENCES aufmass_forms(id) ON DELETE CASCADE
       )
+    `);
+
+    // Add status_date column if not exists (for existing tables)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_status_history') AND name = 'status_date')
+      ALTER TABLE aufmass_status_history ADD status_date DATE
     `);
 
     // Abnahme (acceptance/completion) data table
@@ -816,7 +847,8 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
       markiseData: { column: 'markise_data', type: sql.NVarChar, transform: v => JSON.stringify(v || null) },
       bemerkungen: { column: 'bemerkungen', type: sql.NVarChar },
       status: { column: 'status', type: sql.NVarChar },
-      montageDatum: { column: 'montage_datum', type: sql.Date }
+      montageDatum: { column: 'montage_datum', type: sql.Date },
+      statusDate: { column: 'status_date', type: sql.Date }
     };
 
     const setClauses = [];
@@ -871,10 +903,11 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
           .input('form_id', sql.Int, id)
           .input('status', sql.NVarChar, updates.status)
           .input('changed_by', sql.Int, req.user?.id || null)
+          .input('status_date', sql.Date, updates.statusDate || null)
           .input('notes', sql.NVarChar, updates.statusNotes || null)
           .query(`
-            INSERT INTO aufmass_status_history (form_id, status, changed_by, notes)
-            VALUES (@form_id, @status, @changed_by, @notes)
+            INSERT INTO aufmass_status_history (form_id, status, changed_by, status_date, notes)
+            VALUES (@form_id, @status, @changed_by, @status_date, @notes)
           `);
       }
     }
@@ -898,6 +931,93 @@ app.delete('/api/forms/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error deleting form:', err);
     res.status(500).json({ error: 'Failed to delete form' });
+  }
+});
+
+// ============ PDF STORAGE ENDPOINTS ============
+
+// Save generated PDF for a form
+app.post('/api/forms/:id/pdf', authenticateToken, upload.single('pdf'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No PDF file provided' });
+    }
+
+    await pool.request()
+      .input('id', sql.Int, id)
+      .input('pdf_data', sql.VarBinary, req.file.buffer)
+      .query(`
+        UPDATE aufmass_forms
+        SET generated_pdf = @pdf_data, pdf_generated_at = GETDATE(), updated_at = GETDATE()
+        WHERE id = @id
+      `);
+
+    res.json({ message: 'PDF saved successfully' });
+  } catch (err) {
+    console.error('Error saving PDF:', err);
+    res.status(500).json({ error: 'Failed to save PDF' });
+  }
+});
+
+// Get generated PDF for a form
+app.get('/api/forms/:id/pdf', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.request()
+      .input('id', sql.Int, id)
+      .query('SELECT generated_pdf, pdf_generated_at FROM aufmass_forms WHERE id = @id');
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
+
+    const { generated_pdf, pdf_generated_at } = result.recordset[0];
+
+    if (!generated_pdf) {
+      return res.status(404).json({ error: 'No PDF generated for this form', needsGeneration: true });
+    }
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="aufmass_${id}.pdf"`,
+      'X-PDF-Generated-At': pdf_generated_at ? pdf_generated_at.toISOString() : ''
+    });
+    res.send(generated_pdf);
+  } catch (err) {
+    console.error('Error getting PDF:', err);
+    res.status(500).json({ error: 'Failed to get PDF' });
+  }
+});
+
+// Check if PDF exists for a form
+app.get('/api/forms/:id/pdf/status', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.request()
+      .input('id', sql.Int, id)
+      .query('SELECT pdf_generated_at, updated_at FROM aufmass_forms WHERE id = @id');
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
+
+    const { pdf_generated_at, updated_at } = result.recordset[0];
+    const hasPdf = !!pdf_generated_at;
+    const isOutdated = hasPdf && updated_at && new Date(updated_at) > new Date(pdf_generated_at);
+
+    res.json({
+      hasPdf,
+      pdfGeneratedAt: pdf_generated_at,
+      isOutdated,
+      needsRegeneration: !hasPdf || isOutdated
+    });
+  } catch (err) {
+    console.error('Error checking PDF status:', err);
+    res.status(500).json({ error: 'Failed to check PDF status' });
   }
 });
 
@@ -1244,19 +1364,15 @@ app.delete('/api/images/:id', authenticateToken, async (req, res) => {
 app.get('/api/stats', authenticateToken, async (req, res) => {
   try {
     const total = await pool.request().query('SELECT COUNT(*) as count FROM aufmass_forms');
-    const neu = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'neu' OR status = 'draft' OR status = 'completed'");
-    const auftragErteilt = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'auftrag_erteilt'");
-    const bestellt = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'bestellt'");
-    const abgeschlossen = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'abgeschlossen'");
-    const reklamation = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'reklamation'");
+    // completed = abnahme (finished/accepted)
+    const completed = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'abnahme'");
+    // draft = neu, angebot_versendet (still in progress, not yet ordered)
+    const draft = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status IN ('neu', 'angebot_versendet')");
 
     res.json({
       total: total.recordset[0].count,
-      neu: neu.recordset[0].count,
-      auftrag_erteilt: auftragErteilt.recordset[0].count,
-      bestellt: bestellt.recordset[0].count,
-      abgeschlossen: abgeschlossen.recordset[0].count,
-      reklamation: reklamation.recordset[0].count
+      completed: completed.recordset[0].count,
+      draft: draft.recordset[0].count
     });
   } catch (err) {
     console.error('Error fetching stats:', err);

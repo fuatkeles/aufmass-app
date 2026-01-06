@@ -229,7 +229,7 @@ const isServerImage = (obj: unknown): obj is ServerImage => {
          typeof (obj as ServerImage).id === 'number';
 };
 
-export const generatePDF = async (formData: FormData) => {
+export const generatePDF = async (formData: FormData, options?: { returnBlob?: boolean }): Promise<{ blob: Blob; fileName: string } | void> => {
   const pdf = new jsPDF();
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -648,8 +648,24 @@ export const generatePDF = async (formData: FormData) => {
           pdf.text(`${field.label}:`, margin + 2, yPos);
           pdf.setFont('helvetica', 'normal');
 
+          // Set red color for conditional/bauform fields with "Ja" values
+          // For conditional fields, check the ${field.name}Active flag
+          const isConditionalActive = field.type === 'conditional' &&
+            formData.specifications[`${field.name}Active`] === true;
+          const isBauformActive = field.type === 'bauform' &&
+            (displayValue.includes('EINGERÜCKT') || displayValue.includes('EINGERUCKT'));
+          const isConditionalWithValue = isConditionalActive || isBauformActive;
+          if (isConditionalWithValue) {
+            pdf.setTextColor(220, 38, 38); // Red color
+          }
+
           const lines = pdf.splitTextToSize(displayValue, pageWidth - margin - 60);
           pdf.text(lines, margin + 52, yPos);
+
+          // Reset text color
+          if (isConditionalWithValue) {
+            pdf.setTextColor(0, 0, 0); // Back to black
+          }
           yPos += 6 * lines.length;
         }
       });
@@ -834,13 +850,13 @@ export const generatePDF = async (formData: FormData) => {
               if (senkrecht.modell) senkrechtFields.push(['Modell:', String(senkrecht.modell)]);
               if (senkrecht.befestigungsart) senkrechtFields.push(['Befestigungsart:', String(senkrecht.befestigungsart)]);
               if (senkrecht.breite) senkrechtFields.push(['Breite:', `${senkrecht.breite} mm`]);
-              if (senkrecht.laenge) senkrechtFields.push(['Länge:', `${senkrecht.laenge} mm`]);
               if (senkrecht.hoehe) senkrechtFields.push(['Höhe:', `${senkrecht.hoehe} mm`]);
-              if (senkrecht.gestellfarbe) senkrechtFields.push(['Gestellfarbe:', String(senkrecht.gestellfarbe)]);
               if (senkrecht.zip) senkrechtFields.push(['ZIP:', String(senkrecht.zip)]);
               if (senkrecht.antrieb) senkrechtFields.push(['Antrieb:', String(senkrecht.antrieb)]);
               if (senkrecht.antriebseite) senkrechtFields.push(['Antriebseite:', String(senkrecht.antriebseite)]);
-              if (senkrecht.stoffNummer) senkrechtFields.push(['Senkrecht Stoff Nummer:', String(senkrecht.stoffNummer)]);
+              if (senkrecht.anschlussseite) senkrechtFields.push(['Anschlussseite:', String(senkrecht.anschlussseite)]);
+              if (senkrecht.gestellfarbe) senkrechtFields.push(['Gestellfarbe:', String(senkrecht.gestellfarbe)]);
+              if (senkrecht.stoffNummer) senkrechtFields.push(['Stoff Nummer:', String(senkrecht.stoffNummer)]);
 
               senkrechtFields.forEach(([label, value]) => {
                 checkNewPage();
@@ -1031,11 +1047,11 @@ export const generatePDF = async (formData: FormData) => {
       const produktFields = productConfig[produkt.category]?.[produkt.productType]?.fields || [];
 
       // Build display fields
-      const displayFields: [string, string][] = [];
+      const displayFields: { label: string; value: string; isConditional: boolean }[] = [];
 
-      if (produkt.category) displayFields.push(['Kategorie:', produkt.category]);
-      if (produkt.productType) displayFields.push(['Produkttyp:', produkt.productType]);
-      if (produkt.model) displayFields.push(['Modell:', produkt.model]);
+      if (produkt.category) displayFields.push({ label: 'Kategorie:', value: produkt.category, isConditional: false });
+      if (produkt.productType) displayFields.push({ label: 'Produkttyp:', value: produkt.productType, isConditional: false });
+      if (produkt.model) displayFields.push({ label: 'Modell:', value: produkt.model, isConditional: false });
 
       // Add specification fields
       produktFields.forEach((field: FieldConfig) => {
@@ -1058,7 +1074,7 @@ export const generatePDF = async (formData: FormData) => {
             );
 
             if (activePositions.length > 0) {
-              displayFields.push(['Seitenmarkise:', '']);
+              displayFields.push({ label: 'Seitenmarkise:', value: '', isConditional: false });
               activePositions.forEach(position => {
                 const posData = seitenmarkiseData[position];
                 let details = '';
@@ -1068,7 +1084,7 @@ export const generatePDF = async (formData: FormData) => {
                   details = `${position}: Ohne Aufteilung - Breite: ${posData.breite || 0} mm`;
                 }
                 if (details) {
-                  displayFields.push(['', details]);
+                  displayFields.push({ label: '', value: details, isConditional: false });
                 }
               });
             }
@@ -1101,17 +1117,38 @@ export const generatePDF = async (formData: FormData) => {
             displayValue += ` ${field.valueUnit}`;
           }
 
-          displayFields.push([`${field.label}:`, displayValue]);
+          // Check if conditional field has Active flag set
+          const isCondActive = field.type === 'conditional' &&
+            produkt.specifications[`${field.name}Active`] === true;
+          const isBauActive = field.type === 'bauform' &&
+            (displayValue.includes('EINGERÜCKT') || displayValue.includes('EINGERUCKT'));
+
+          displayFields.push({
+            label: `${field.label}:`,
+            value: displayValue,
+            isConditional: isCondActive || isBauActive
+          });
         }
       });
 
-      displayFields.forEach(([label, value]) => {
+      displayFields.forEach((item) => {
         checkNewPage();
         pdf.setFont('helvetica', 'bold');
-        pdf.text(label, margin + 8, yPos);
+        pdf.text(item.label, margin + 8, yPos);
         pdf.setFont('helvetica', 'normal');
-        const lines = pdf.splitTextToSize(value, pageWidth - margin - 70);
+
+        // Set red color for conditional/bauform fields with "Ja" values
+        if (item.isConditional) {
+          pdf.setTextColor(220, 38, 38); // Red color
+        }
+
+        const lines = pdf.splitTextToSize(item.value, pageWidth - margin - 70);
         pdf.text(lines, margin + 52, yPos);
+
+        // Reset text color
+        if (item.isConditional) {
+          pdf.setTextColor(0, 0, 0);
+        }
         yPos += 6 * lines.length;
       });
 
@@ -1134,7 +1171,8 @@ export const generatePDF = async (formData: FormData) => {
     pdf.text('BEMERKUNGEN', margin + 2, yPos);
     yPos += 10;
 
-    pdf.setTextColor(0, 0, 0);
+    // Use blue color for Bemerkungen text
+    pdf.setTextColor(37, 99, 235); // Blue color for Bemerkungen
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
 
@@ -1145,6 +1183,9 @@ export const generatePDF = async (formData: FormData) => {
       pdf.text(line, margin + 2, yPos);
       yPos += 6;
     });
+
+    // Reset text color
+    pdf.setTextColor(0, 0, 0);
   }
 
   // ============ BILDER & ANHÄNGE ============
@@ -1292,10 +1333,16 @@ export const generatePDF = async (formData: FormData) => {
     );
   }
 
-  // Save PDF
+  // Generate filename
   const customerName = `${formData.kundeVorname || ''}_${formData.kundeNachname || ''}`.trim().replace(/\s+/g, '_') || 'Kunde';
   const date = formData.datum || new Date().toISOString().split('T')[0];
   const fileName = `Aufmass_${customerName}_${date}.pdf`;
+
+  // Return blob for preview or save directly
+  if (options?.returnBlob) {
+    const blob = pdf.output('blob');
+    return { blob, fileName };
+  }
 
   pdf.save(fileName);
 };

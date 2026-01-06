@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage } from '../services/api';
+import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage, uploadImages, getPdfBlob, getPdfStatus } from '../services/api';
 import type { AbnahmeImage } from '../services/api';
 import type { FormData, MontageteamStats, Montageteam, StatusHistoryEntry, AbnahmeData } from '../services/api';
 import { useStats } from '../AppWrapper';
@@ -17,14 +17,22 @@ const isAdmin = () => {
 // Status options for forms - ordered workflow
 const STATUS_OPTIONS = [
   { value: 'alle', label: 'Alle Aufmaße', color: '#7fa93d' },
+  { value: 'auftrag_abgelehnt', label: 'Auftrag Abgelehnt', color: '#6b7280' },
   { value: 'neu', label: 'Aufmaß Genommen', color: '#8b5cf6' },
+  { value: 'angebot_versendet', label: 'Angebot Versendet', color: '#a78bfa' },
   { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
   { value: 'anzahlung', label: 'Anzahlung Erhalten', color: '#06b6d4' },
   { value: 'bestellt', label: 'Bestellt/In Bearbeitung', color: '#f59e0b' },
   { value: 'montage_geplant', label: 'Montage Geplant', color: '#a855f7' },
   { value: 'montage_gestartet', label: 'Montage Gestartet', color: '#ec4899' },
   { value: 'abnahme', label: 'Abnahme', color: '#10b981' },
-  { value: 'reklamation', label: 'Reklamation/Restarbeit', color: '#ef4444' },
+  { value: 'reklamation_eingegangen', label: 'Reklamation Eingegangen', color: '#ef4444' },
+  { value: 'reklamation_anerkannt', label: 'Reklamation Anerkannt', color: '#dc2626' },
+  { value: 'reklamation_abgelehnt', label: 'Reklamation Abgelehnt', color: '#b91c1c' },
+  { value: 'reklamation_in_bearbeitung', label: 'Reklamation in Bearbeitung', color: '#f97316' },
+  { value: 'reklamation_in_planung', label: 'Reklamation in Planung', color: '#fb923c' },
+  { value: 'reklamation_behoben', label: 'Reklamation Behoben', color: '#22c55e' },
+  { value: 'reklamation_geschlossen', label: 'Reklamation Geschlossen', color: '#16a34a' },
 ];
 
 const Dashboard = () => {
@@ -66,10 +74,20 @@ const Dashboard = () => {
   // Mängel images
   const [maengelImages, setMaengelImages] = useState<AbnahmeImage[]>([]);
   const [maengelImageFiles, setMaengelImageFiles] = useState<File[]>([]);
-  // Montage geplant modal
-  const [montageModalOpen, setMontageModalOpen] = useState(false);
-  const [montageFormId, setMontageFormId] = useState<number | null>(null);
-  const [montageDatum, setMontageDatum] = useState<string>('');
+  // Status date modal (for all status changes)
+  const [statusDateModalOpen, setStatusDateModalOpen] = useState(false);
+  const [statusDateFormId, setStatusDateFormId] = useState<number | null>(null);
+  const [statusDateValue, setStatusDateValue] = useState<string>('');
+  const [pendingStatus, setPendingStatus] = useState<string>('');
+
+  // Document/Video upload state
+  const [uploadingDocFormId, setUploadingDocFormId] = useState<number | null>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
+
+  // PDF Preview state
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfPreviewFileName, setPdfPreviewFileName] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -200,32 +218,14 @@ const Dashboard = () => {
       return;
     }
 
-    // If selecting montage_geplant status, open date picker modal
-    if (newStatus === 'montage_geplant') {
-      setMontageFormId(formId);
-      // Set default date to today
-      const today = new Date().toISOString().split('T')[0];
-      setMontageDatum(today);
-      setMontageModalOpen(true);
-      setStatusDropdownOpen(null);
-      return;
-    }
-
-    try {
-      await updateForm(formId, { status: newStatus });
-
-      // Update local state
-      setForms(forms.map(f =>
-        f.id === formId
-          ? { ...f, status: newStatus }
-          : f
-      ));
-      setStatusDropdownOpen(null);
-      refreshStats();
-    } catch (err) {
-      console.error('Error updating status:', err);
-      alert(`Fehler beim Aktualisieren des Status: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`);
-    }
+    // For all other status changes, open date picker modal
+    setStatusDateFormId(formId);
+    setPendingStatus(newStatus);
+    // Set default date to today
+    const today = new Date().toISOString().split('T')[0];
+    setStatusDateValue(today);
+    setStatusDateModalOpen(true);
+    setStatusDropdownOpen(null);
   };
 
   // Open status history modal
@@ -241,9 +241,22 @@ const Dashboard = () => {
     }
   };
 
+  // Check if abnahme is locked (already completed with customer signature)
+  const isAbnahmeLocked = !!(abnahmeData.kundeUnterschrift && abnahmeData.abnahmeDatum);
+
+  // Check if Mängel photos are required but missing
+  const maengelPhotosRequired = abnahmeData.hatProbleme && (maengelImages.length + maengelImageFiles.length === 0);
+
   // Save abnahme and update status
   const handleSaveAbnahme = async () => {
     if (!abnahmeFormId) return;
+
+    // Validate: If ES GIBT MÄNGEL, photos are required
+    if (abnahmeData.hatProbleme && (maengelImages.length + maengelImageFiles.length === 0)) {
+      alert('Bitte fügen Sie mindestens ein Foto der Mängel hinzu.');
+      return;
+    }
+
     setAbnahmeSaving(true);
     try {
       // Save abnahme data
@@ -255,12 +268,14 @@ const Dashboard = () => {
         setMaengelImageFiles([]);
       }
 
-      // Update status to abnahme
-      await updateForm(abnahmeFormId, { status: 'abnahme' });
+      // Determine status: ES GIBT MÄNGEL → reklamation_eingegangen, otherwise → abnahme
+      const newStatus = abnahmeData.hatProbleme ? 'reklamation_eingegangen' : 'abnahme';
+
+      await updateForm(abnahmeFormId, { status: newStatus });
       // Update local state
       setForms(forms.map(f =>
         f.id === abnahmeFormId
-          ? { ...f, status: 'abnahme' }
+          ? { ...f, status: newStatus }
           : f
       ));
       setAbnahmeModalOpen(false);
@@ -272,6 +287,36 @@ const Dashboard = () => {
       alert('Fehler beim Speichern der Abnahme');
     } finally {
       setAbnahmeSaving(false);
+    }
+  };
+
+  // Handle document/video upload
+  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !uploadingDocFormId) return;
+
+    const file = files[0];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+
+    if (file.size > maxSize) {
+      alert('Die Datei ist zu groß. Maximale Größe: 10MB');
+      return;
+    }
+
+    try {
+      await uploadImages(uploadingDocFormId, [file]);
+      // Refresh forms to show new file
+      const formsData = await getForms();
+      setForms(formsData);
+      setAttachmentDropdownOpen(null);
+    } catch (err) {
+      console.error('Error uploading document:', err);
+      alert('Fehler beim Hochladen der Datei');
+    } finally {
+      setUploadingDocFormId(null);
+      if (docInputRef.current) {
+        docInputRef.current.value = '';
+      }
     }
   };
 
@@ -365,8 +410,43 @@ Aylux Team`;
     return `mailto:${form.kundeEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
-  const handleDownloadPDF = async (formId: number) => {
+  const handleDownloadPDF = async (formId: number, forPreview: boolean = true) => {
     try {
+      // First try to get stored PDF from server (much faster)
+      try {
+        const pdfStatus = await getPdfStatus(formId);
+        if (pdfStatus.hasPdf) {
+          // Stored PDF exists, fetch it
+          const pdfBlob = await getPdfBlob(formId);
+          const form = forms.find(f => f.id === formId);
+          const fileName = `Aufmass_${form?.kundeNachname || 'Kunde'}_${form?.kundeVorname || ''}.pdf`;
+
+          if (forPreview) {
+            // Clean up previous blob URL if exists
+            if (pdfPreviewUrl) {
+              URL.revokeObjectURL(pdfPreviewUrl);
+            }
+            const blobUrl = URL.createObjectURL(pdfBlob);
+            setPdfPreviewUrl(blobUrl);
+            setPdfPreviewFileName(fileName);
+            setPdfPreviewOpen(true);
+          } else {
+            // Direct download
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(pdfBlob);
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+          return;
+        }
+      } catch {
+        // No stored PDF, fall back to generating
+        console.log('No stored PDF found, generating on-the-fly');
+      }
+
+      // Fallback: Generate PDF on-the-fly (slower)
       // Get full form data with images
       const fullFormData = await getForm(formId);
 
@@ -407,11 +487,49 @@ Aylux Team`;
         abnahme: abnahmeData ? { ...abnahmeData, maengelBilder } : undefined
       };
 
-      await generatePDF(pdfData);
+      if (forPreview) {
+        // Generate PDF blob for preview
+        const result = await generatePDF(pdfData, { returnBlob: true });
+        if (result) {
+          // Clean up previous blob URL if exists
+          if (pdfPreviewUrl) {
+            URL.revokeObjectURL(pdfPreviewUrl);
+          }
+          const blobUrl = URL.createObjectURL(result.blob);
+          setPdfPreviewUrl(blobUrl);
+          setPdfPreviewFileName(result.fileName);
+          setPdfPreviewOpen(true);
+        }
+      } else {
+        // Direct download
+        await generatePDF(pdfData);
+      }
     } catch (err) {
       console.error('Error generating PDF:', err);
       alert(`Fehler beim Erstellen der PDF: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`);
     }
+  };
+
+  // Download PDF from preview
+  const handleDownloadFromPreview = () => {
+    if (pdfPreviewUrl && pdfPreviewFileName) {
+      const link = document.createElement('a');
+      link.href = pdfPreviewUrl;
+      link.download = pdfPreviewFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  // Close PDF preview and clean up
+  const closePdfPreview = () => {
+    if (pdfPreviewUrl) {
+      URL.revokeObjectURL(pdfPreviewUrl);
+    }
+    setPdfPreviewUrl(null);
+    setPdfPreviewFileName('');
+    setPdfPreviewOpen(false);
   };
 
   const confirmDelete = async () => {
@@ -494,6 +612,14 @@ Aylux Team`;
             <input type="text" placeholder="Suchen..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             {searchTerm && <button className="clear-search" onClick={() => setSearchTerm('')}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button>}
           </div>
+          <div className="view-toggle">
+            <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
+            </button>
+            <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+            </button>
+          </div>
           {/* Desktop: Horizontal tabs */}
           <div className="status-filter-tabs desktop-only">
             {STATUS_OPTIONS.map((option) => (
@@ -559,16 +685,6 @@ Aylux Team`;
             </AnimatePresence>
           </div>
         </div>
-        <div className="toolbar-right">
-          <div className="view-toggle">
-            <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
-            </button>
-            <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Forms Grid */}
@@ -632,11 +748,11 @@ Aylux Team`;
                               </motion.div>
                             )}
                           </AnimatePresence>
-                          {/* Montage date under status dropdown */}
-                          {getFormStatus(form) === 'montage_geplant' && form.montageDatum && (
-                            <div className="montage-date-badge">
+                          {/* Status date under status dropdown - show for all statuses */}
+                          {(form.statusDate || (getFormStatus(form) === 'montage_geplant' && form.montageDatum)) && (
+                            <div className="montage-date-badge" style={{ '--badge-color': getStatusColor(getFormStatus(form)) } as React.CSSProperties}>
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
-                              <span>{new Date(form.montageDatum).toLocaleDateString('de-DE')}</span>
+                              <span>{new Date(form.statusDate || form.montageDatum!).toLocaleDateString('de-DE')}</span>
                             </div>
                           )}
                         </div>
@@ -653,11 +769,11 @@ Aylux Team`;
                           >
                             {getStatusLabel(getFormStatus(form)).split('/')[0]}
                           </div>
-                          {/* Montage date under status for non-admin */}
-                          {getFormStatus(form) === 'montage_geplant' && form.montageDatum && (
-                            <div className="montage-date-badge">
+                          {/* Status date under status for non-admin - show for all statuses */}
+                          {(form.statusDate || (getFormStatus(form) === 'montage_geplant' && form.montageDatum)) && (
+                            <div className="montage-date-badge" style={{ '--badge-color': getStatusColor(getFormStatus(form)) } as React.CSSProperties}>
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
-                              <span>{new Date(form.montageDatum).toLocaleDateString('de-DE')}</span>
+                              <span>{new Date(form.statusDate || form.montageDatum!).toLocaleDateString('de-DE')}</span>
                             </div>
                           )}
                         </div>
@@ -751,12 +867,23 @@ Aylux Team`;
                             <button
                               className="attachment-option generate-pdf"
                               onClick={() => {
-                                handleDownloadPDF(form.id!);
+                                handleDownloadPDF(form.id!, true);
                                 setAttachmentDropdownOpen(null);
                               }}
                             >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14,2 14,8 20,8" /><line x1="12" y1="18" x2="12" y2="12" /><line x1="9" y1="15" x2="12" y2="18" /><line x1="15" y1="15" x2="12" y2="18" /></svg>
-                              <span>PDF erstellen</span>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14,2 14,8 20,8" /><path d="M12 11v6M9 14h6" /></svg>
+                              <span>PDF Vorschau</span>
+                            </button>
+                            <button
+                              className="attachment-option upload-doc"
+                              onClick={() => {
+                                setUploadingDocFormId(form.id!);
+                                docInputRef.current?.click();
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                              <span>Datei hochladen</span>
+                              <span className="upload-hint">(max. 10MB)</span>
                             </button>
                             {form.pdf_files && form.pdf_files.length > 0 && (
                               <>
@@ -854,15 +981,15 @@ Aylux Team`;
         )}
       </AnimatePresence>
 
-      {/* Montage Geplant Modal */}
+      {/* Status Date Modal - for all status changes */}
       <AnimatePresence>
-        {montageModalOpen && (
+        {statusDateModalOpen && (
           <motion.div
             className="modal-overlay-modern"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setMontageModalOpen(false)}
+            onClick={() => setStatusDateModalOpen(false)}
           >
             <motion.div
               className="modal-modern montage-modal"
@@ -871,46 +998,57 @@ Aylux Team`;
               exit={{ scale: 0.9 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3>Montage Termin</h3>
-              <p className="montage-modal-description">Wann ist die Montage geplant?</p>
+              <h3>{STATUS_OPTIONS.find(s => s.value === pendingStatus)?.label || 'Status ändern'}</h3>
+              <p className="montage-modal-description">Datum für diese Statusänderung</p>
               <div className="montage-date-input">
-                <label>Geplantes Datum</label>
+                <label>Datum</label>
                 <input
                   type="date"
-                  value={montageDatum}
-                  onChange={(e) => setMontageDatum(e.target.value)}
+                  value={statusDateValue}
+                  onChange={(e) => setStatusDateValue(e.target.value)}
                 />
               </div>
               <div className="modal-actions">
                 <button
                   className="modal-cancel"
-                  onClick={() => setMontageModalOpen(false)}
+                  onClick={() => setStatusDateModalOpen(false)}
                 >
                   Abbrechen
                 </button>
                 <button
                   className="modal-confirm"
-                  disabled={!montageDatum}
+                  disabled={!statusDateValue}
                   onClick={async () => {
-                    if (!montageFormId || !montageDatum) return;
+                    if (!statusDateFormId || !statusDateValue || !pendingStatus) return;
                     try {
-                      // Update form with status and planned date
-                      await updateForm(montageFormId, {
-                        status: 'montage_geplant',
-                        montageDatum: montageDatum
-                      });
+                      // Update form with status and date
+                      const updateData: { status: string; statusDate?: string; montageDatum?: string } = {
+                        status: pendingStatus,
+                        statusDate: statusDateValue
+                      };
+                      // Also update montageDatum for montage_geplant status
+                      if (pendingStatus === 'montage_geplant') {
+                        updateData.montageDatum = statusDateValue;
+                      }
+                      await updateForm(statusDateFormId, updateData);
                       setForms(forms.map(f =>
-                        f.id === montageFormId
-                          ? { ...f, status: 'montage_geplant', montageDatum: montageDatum }
+                        f.id === statusDateFormId
+                          ? {
+                              ...f,
+                              status: pendingStatus,
+                              statusDate: statusDateValue,
+                              ...(pendingStatus === 'montage_geplant' ? { montageDatum: statusDateValue } : {})
+                            }
                           : f
                       ));
-                      setMontageModalOpen(false);
-                      setMontageFormId(null);
-                      setMontageDatum('');
+                      setStatusDateModalOpen(false);
+                      setStatusDateFormId(null);
+                      setStatusDateValue('');
+                      setPendingStatus('');
                       refreshStats();
                     } catch (err) {
                       console.error('Error updating status:', err);
-                      alert('Fehler beim Speichern des Montage-Termins');
+                      alert('Fehler beim Speichern des Status');
                     }
                   }}
                 >
@@ -928,7 +1066,17 @@ Aylux Team`;
           <motion.div className="modal-overlay-modern" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setAbnahmeModalOpen(false)}>
             <motion.div className="modal-modern modal-large abnahme-modal" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={(e) => e.stopPropagation()}>
               <h3>Abnahme-Protokoll</h3>
-              <div className="abnahme-form">
+              {/* Locked Banner */}
+              {isAbnahmeLocked && (
+                <div className="abnahme-locked-banner">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0110 0v4" />
+                  </svg>
+                  <span>Diese Abnahme wurde bereits abgeschlossen und kann nicht mehr bearbeitet werden.</span>
+                </div>
+              )}
+              <div className={`abnahme-form ${isAbnahmeLocked ? 'locked' : ''}`}>
                 {/* Status Selection - Mutually Exclusive */}
                 <div className="abnahme-status-selection">
                   <label className="abnahme-status-label">Status der Arbeit</label>
@@ -938,6 +1086,7 @@ Aylux Team`;
                         type="radio"
                         name="abnahmeStatus"
                         checked={abnahmeData.istFertig === true && abnahmeData.hatProbleme === false}
+                        disabled={isAbnahmeLocked}
                         onChange={() => setAbnahmeData({
                           ...abnahmeData,
                           istFertig: true,
@@ -955,6 +1104,7 @@ Aylux Team`;
                         type="radio"
                         name="abnahmeStatus"
                         checked={abnahmeData.hatProbleme === true}
+                        disabled={isAbnahmeLocked}
                         onChange={() => setAbnahmeData({
                           ...abnahmeData,
                           istFertig: false,
@@ -1061,7 +1211,14 @@ Aylux Team`;
 
                     {/* Mängel Fotos Section */}
                     <div className="abnahme-row">
-                      <label className="abnahme-field-label">Mängel Fotos</label>
+                      <label className="abnahme-field-label">
+                        Mängel Fotos <span className="required" style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      {maengelPhotosRequired && (
+                        <div className="maengel-fotos-required">
+                          Mindestens ein Foto ist erforderlich
+                        </div>
+                      )}
                       <div className="maengel-fotos-section">
                         {/* Existing images from DB */}
                         {maengelImages.length > 0 && (
@@ -1170,14 +1327,71 @@ Aylux Team`;
               </div>
 
               <div className="modal-actions-modern">
-                <button className="modal-btn secondary" onClick={() => setAbnahmeModalOpen(false)}>Abbrechen</button>
-                <button
-                  className="modal-btn primary"
-                  onClick={handleSaveAbnahme}
-                  disabled={abnahmeSaving}
-                >
-                  {abnahmeSaving ? 'Speichern...' : 'Abnahme speichern'}
+                <button className="modal-btn secondary" onClick={() => setAbnahmeModalOpen(false)}>
+                  {isAbnahmeLocked ? 'Schließen' : 'Abbrechen'}
                 </button>
+                {!isAbnahmeLocked && (
+                  <button
+                    className="modal-btn primary"
+                    onClick={handleSaveAbnahme}
+                    disabled={abnahmeSaving || maengelPhotosRequired}
+                    title={maengelPhotosRequired ? 'Mängel Fotos sind erforderlich' : ''}
+                  >
+                    {abnahmeSaving ? 'Speichern...' : 'Abnahme speichern'}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hidden file input for document/video upload */}
+      <input
+        type="file"
+        ref={docInputRef}
+        style={{ display: 'none' }}
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.mp4,.mov,.avi,.webm,.jpg,.jpeg,.png,.gif"
+        onChange={handleDocumentUpload}
+      />
+
+      {/* PDF Preview Modal */}
+      <AnimatePresence>
+        {pdfPreviewOpen && pdfPreviewUrl && (
+          <motion.div
+            className="modal-overlay-modern pdf-preview-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closePdfPreview}
+          >
+            <motion.div
+              className="pdf-preview-modal"
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="pdf-preview-header">
+                <h3>{pdfPreviewFileName}</h3>
+                <div className="pdf-preview-actions">
+                  <button className="pdf-action-btn download" onClick={handleDownloadFromPreview}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Herunterladen
+                  </button>
+                  <button className="pdf-action-btn close" onClick={closePdfPreview}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className="pdf-preview-content">
+                <iframe src={pdfPreviewUrl} title="PDF Preview" />
               </div>
             </motion.div>
           </motion.div>
@@ -1188,7 +1402,8 @@ Aylux Team`;
       <footer className="powered-by-footer">
         <span>Powered by</span>
         <a href="https://conais.com" target="_blank" rel="noopener noreferrer">
-          <img src="https://conais.in/dev/wp-content/uploads/2020/10/logo2.png" alt="Conais" className="conais-logo" />
+          <img src="https://conais.in/dev/wp-content/uploads/2020/10/logo2.png" alt="Conais" className="conais-logo conais-logo-dark" />
+          <img src="https://conais.com/wp-content/uploads/2025/10/Conais-new-Logo.png" alt="Conais" className="conais-logo conais-logo-light" />
         </a>
       </footer>
     </>

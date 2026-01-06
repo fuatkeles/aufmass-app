@@ -21,14 +21,13 @@ export interface MarkiseData {
 
 export interface MarkiseStepData {
   markisen: MarkiseData[];
-  bemerkungen: string;
 }
 
 interface MarkiseStepProps {
   markiseData: MarkiseData | MarkiseData[] | null;
   updateMarkiseData: (data: MarkiseData | MarkiseData[]) => void;
-  markiseBemerkungen?: string;
-  updateMarkiseBemerkungen?: (bemerkungen: string) => void;
+  bemerkungen?: string;
+  updateBemerkungen?: (value: string) => void;
 }
 
 const markiseTypes = [
@@ -95,7 +94,7 @@ const emptyMarkise: MarkiseData = {
   position: ''
 };
 
-const MarkiseStep = ({ markiseData, updateMarkiseData, markiseBemerkungen = '', updateMarkiseBemerkungen }: MarkiseStepProps) => {
+const MarkiseStep = ({ markiseData, updateMarkiseData, bemerkungen = '', updateBemerkungen }: MarkiseStepProps) => {
   // Convert old single object format to array format
   const initialMarkisen = (): MarkiseData[] => {
     if (!markiseData) return [{ ...emptyMarkise }];
@@ -105,7 +104,6 @@ const MarkiseStep = ({ markiseData, updateMarkiseData, markiseBemerkungen = '', 
   };
 
   const [markisen, setMarkisen] = useState<MarkiseData[]>(initialMarkisen);
-  const [bemerkungen, setBemerkungen] = useState(markiseBemerkungen);
   const [expandedIndex, setExpandedIndex] = useState<number>(0);
 
   useEffect(() => {
@@ -117,10 +115,6 @@ const MarkiseStep = ({ markiseData, updateMarkiseData, markiseBemerkungen = '', 
       }
     }
   }, [markiseData]);
-
-  useEffect(() => {
-    setBemerkungen(markiseBemerkungen);
-  }, [markiseBemerkungen]);
 
   const handleChange = (index: number, field: keyof MarkiseData, value: string | number) => {
     const newMarkisen = [...markisen];
@@ -159,13 +153,6 @@ const MarkiseStep = ({ markiseData, updateMarkiseData, markiseBemerkungen = '', 
     updateMarkiseData(newMarkisen);
     if (expandedIndex >= newMarkisen.length) {
       setExpandedIndex(newMarkisen.length - 1);
-    }
-  };
-
-  const handleBemerkungenChange = (value: string) => {
-    setBemerkungen(value);
-    if (updateMarkiseBemerkungen) {
-      updateMarkiseBemerkungen(value);
     }
   };
 
@@ -595,24 +582,25 @@ const MarkiseStep = ({ markiseData, updateMarkiseData, markiseBemerkungen = '', 
         Weitere Markise hinzufügen
       </motion.button>
 
-      {/* Bemerkungen */}
+      {/* Global Bemerkungen Section */}
       <motion.div
-        className="markise-bemerkungen"
+        className="global-bemerkungen-section"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.3 }}
       >
-        <label htmlFor="markiseBemerkungen">
-          Bemerkungen zur Markise
+        <label htmlFor="globalBemerkungen">
+          Bemerkungen
         </label>
         <textarea
-          id="markiseBemerkungen"
+          id="globalBemerkungen"
           value={bemerkungen}
-          onChange={(e) => handleBemerkungenChange(e.target.value)}
-          placeholder="Zusätzliche Anmerkungen zur Markise..."
-          rows={3}
+          onChange={(e) => updateBemerkungen?.(e.target.value)}
+          placeholder="Zusätzliche Anmerkungen oder Bemerkungen..."
+          rows={4}
         />
       </motion.div>
+
     </div>
   );
 };

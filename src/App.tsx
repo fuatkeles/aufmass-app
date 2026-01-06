@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
 import GrunddatenSection from './components/GrunddatenSection';
@@ -13,18 +13,26 @@ import StepIcon from './components/StepIcon';
 import { FormData, ServerImage, WeiteresProdukt } from './types';
 import { generatePDF } from './utils/pdfGenerator';
 import productConfigData from './config/productConfig.json';
-import { getStoredUser } from './services/api';
+import { getStoredUser, getPdfBlob, getPdfStatus } from './services/api';
 
 // Status options for breadcrumb - matches Dashboard STATUS_OPTIONS
 const STATUS_STEPS = [
   { value: 'neu', label: 'Aufmaß Genommen', color: '#8b5cf6' },
+  { value: 'angebot_versendet', label: 'Angebot Versendet', color: '#a78bfa' },
   { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
+  { value: 'auftrag_abgelehnt', label: 'Auftrag Abgelehnt', color: '#6b7280' },
   { value: 'anzahlung', label: 'Anzahlung Erhalten', color: '#06b6d4' },
   { value: 'bestellt', label: 'Bestellt', color: '#f59e0b' },
   { value: 'montage_geplant', label: 'Montage Geplant', color: '#a855f7' },
   { value: 'montage_gestartet', label: 'Montage Gestartet', color: '#ec4899' },
   { value: 'abnahme', label: 'Abnahme', color: '#10b981' },
-  { value: 'reklamation', label: 'Reklamation', color: '#ef4444' },
+  { value: 'reklamation_eingegangen', label: 'Reklamation Eingegangen', color: '#ef4444' },
+  { value: 'reklamation_anerkannt', label: 'Reklamation Anerkannt', color: '#dc2626' },
+  { value: 'reklamation_abgelehnt', label: 'Reklamation Abgelehnt', color: '#b91c1c' },
+  { value: 'reklamation_in_bearbeitung', label: 'Reklamation in Bearbeitung', color: '#f97316' },
+  { value: 'reklamation_in_planung', label: 'Reklamation in Planung', color: '#fb923c' },
+  { value: 'reklamation_behoben', label: 'Reklamation Behoben', color: '#22c55e' },
+  { value: 'reklamation_geschlossen', label: 'Reklamation Geschlossen', color: '#16a34a' },
 ];
 
 const isAdmin = () => {
@@ -34,7 +42,7 @@ const isAdmin = () => {
 
 interface AufmassFormProps {
   initialData?: FormData | null;
-  onSave?: (data: FormData) => void;
+  onSave?: (data: FormData) => Promise<number | void> | void;
   onCancel?: () => void;
   formStatus?: string;
   onStatusChange?: (status: string) => void;
@@ -63,9 +71,30 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
   const [currentStep, setCurrentStep] = useState(0);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
 
-  // Montage geplant modal state
-  const [montageModalOpen, setMontageModalOpen] = useState(false);
-  const [montageDatum, setMontageDatum] = useState<string>('');
+  // Status date modal state (for all status changes)
+  const [statusDateModalOpen, setStatusDateModalOpen] = useState(false);
+  const [statusDateValue, setStatusDateValue] = useState<string>('');
+  const [pendingStatusValue, setPendingStatusValue] = useState<string>('');
+
+  // Theme state
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('aylux_theme');
+    return savedTheme !== 'light';
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.remove('light-theme');
+      localStorage.setItem('aylux_theme', 'dark');
+    } else {
+      document.documentElement.classList.add('light-theme');
+      localStorage.setItem('aylux_theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
+  };
 
   // Check if Markise is active
   const hasMarkise = formData.specifications?.markiseActive === true;
@@ -307,17 +336,6 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     }));
   };
 
-  // Update markise bemerkungen
-  const updateMarkiseBemerkungen = (value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      specifications: {
-        ...prev.specifications,
-        markiseBemerkungen: value
-      }
-    }));
-  };
-
   // Update unterbauelemente data
   const updateUnterbauelemente = (data: UnterbauelementData[]) => {
     setFormData(prev => ({
@@ -325,17 +343,6 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       specifications: {
         ...prev.specifications,
         unterbauelementeData: JSON.stringify(data)
-      }
-    }));
-  };
-
-  // Update unterbauelemente bemerkungen
-  const updateUnterbauelementeBemerkungen = (value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      specifications: {
-        ...prev.specifications,
-        unterbauelementeBemerkungen: value
       }
     }));
   };
@@ -367,7 +374,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
         icon: '1',
         canProceed: () => {
           return !!(formData.datum && formData.aufmasser &&
-                 formData.kundeVorname && formData.kundeNachname && formData.kundenlokation);
+                 formData.kundeVorname && formData.kundeNachname && formData.kundeEmail && formData.kundenlokation);
         }
       },
       {
@@ -535,14 +542,43 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     }
   };
 
-  // Sadece PDF indir, kaydetme
+  // PDF indir - önce stored PDF'i dene, yoksa generate et
   const handleExport = async () => {
+    const formId = formData.id ? parseInt(formData.id) : null;
+
+    // Eğer form ID varsa, önce stored PDF'i dene
+    if (formId) {
+      try {
+        const pdfStatus = await getPdfStatus(formId);
+        if (pdfStatus.hasPdf && !pdfStatus.isOutdated) {
+          // Stored PDF var, indir
+          const pdfBlob = await getPdfBlob(formId);
+          const fileName = `Aufmass_${formData.kundeNachname}_${formData.kundeVorname}.pdf`;
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(pdfBlob);
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+          return;
+        }
+      } catch (err) {
+        console.log('Stored PDF not available, generating fresh:', err);
+      }
+    }
+
+    // Stored PDF yoksa veya güncel değilse, generate et
     await generatePDF(formData);
   };
 
   const handleSaveOnly = async () => {
     if (onSave) {
-      onSave(formData);
+      const savedFormId = await onSave(formData);
+      // Update formData with the returned form ID (for new forms)
+      if (savedFormId && !formData.id) {
+        setFormData(prev => ({ ...prev, id: String(savedFormId) }));
+      }
     }
   };
 
@@ -605,6 +641,8 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             updateWeitereProdukte={updateWeitereProdukte}
             showValidationErrors={showValidationErrors}
             missingFields={getMissingFields()}
+            bemerkungen={formData.bemerkungen}
+            updateBemerkungen={updateBemerkungen}
           />
         );
       case 'unterbauelemente':
@@ -617,17 +655,16 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             unterbauelementeData = [];
           }
         }
-        const unterbauelementeBemerkungen = (formData.specifications?.unterbauelementeBemerkungen as string) || '';
         return (
           <UnterbauelementeStep
             unterbauelemente={unterbauelementeData}
             updateUnterbauelemente={updateUnterbauelemente}
-            bemerkungen={unterbauelementeBemerkungen}
-            updateBemerkungen={updateUnterbauelementeBemerkungen}
             initialProduktTyp={formData.productSelection.productType}
             initialModell={Array.isArray(formData.productSelection.model) ? formData.productSelection.model[0] : formData.productSelection.model}
             weitereProdukte={formData.weitereProdukte || []}
             updateWeitereProdukte={updateWeitereProdukte}
+            bemerkungen={formData.bemerkungen}
+            updateBemerkungen={updateBemerkungen}
           />
         );
       case 'markise':
@@ -640,13 +677,12 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             markiseData = null;
           }
         }
-        const markiseBemerkungen = (formData.specifications?.markiseBemerkungen as string) || '';
         return (
           <MarkiseStep
             markiseData={markiseData}
             updateMarkiseData={updateMarkiseData}
-            markiseBemerkungen={markiseBemerkungen}
-            updateMarkiseBemerkungen={updateMarkiseBemerkungen}
+            bemerkungen={formData.bemerkungen}
+            updateBemerkungen={updateBemerkungen}
           />
         );
       case 'abschluss':
@@ -683,13 +719,38 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
               <span className="logo-subtitle">SONNENSCHUTZSYSTEME</span>
             </motion.div>
           </div>
-          <motion.h1
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            AUFMASS - DATENBLATT
-          </motion.h1>
+          <div className="header-actions">
+            <button
+              className="theme-toggle-form"
+              onClick={toggleTheme}
+              title={isDarkMode ? 'Light Mode aktivieren' : 'Dark Mode aktivieren'}
+            >
+              {isDarkMode ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="5" />
+                  <line x1="12" y1="1" x2="12" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="23" />
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                  <line x1="1" y1="12" x2="3" y2="12" />
+                  <line x1="21" y1="12" x2="23" y2="12" />
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                </svg>
+              )}
+            </button>
+            <motion.h1
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              AUFMASS - DATENBLATT
+            </motion.h1>
+          </div>
         </div>
       </header>
 
@@ -752,12 +813,9 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
                       className={`breadcrumb-step-inner ${isActive ? 'active' : ''} ${isPast ? 'past' : ''}`}
                       style={{ '--step-color': step.color } as React.CSSProperties}
                       onClick={() => {
-                        if (step.value === 'montage_geplant') {
-                          setMontageDatum(new Date().toISOString().split('T')[0]);
-                          setMontageModalOpen(true);
-                        } else {
-                          onStatusChange(step.value);
-                        }
+                        setPendingStatusValue(step.value);
+                        setStatusDateValue(new Date().toISOString().split('T')[0]);
+                        setStatusDateModalOpen(true);
                       }}
                     >
                       <span
@@ -779,7 +837,8 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             <div className="powered-by-form">
               <span>Powered by</span>
               <a href="https://conais.com" target="_blank" rel="noopener noreferrer">
-                <img src="https://conais.in/dev/wp-content/uploads/2020/10/logo2.png" alt="Conais" className="conais-logo" />
+                <img src="https://conais.in/dev/wp-content/uploads/2020/10/logo2.png" alt="Conais" className="conais-logo conais-logo-dark" />
+                <img src="https://conais.com/wp-content/uploads/2025/10/Conais-new-Logo.png" alt="Conais" className="conais-logo conais-logo-light" />
               </a>
             </div>
           </motion.div>
@@ -823,15 +882,15 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
         </div>
       </main>
 
-      {/* Montage Geplant Modal */}
+      {/* Status Date Modal - for all status changes */}
       <AnimatePresence>
-        {montageModalOpen && (
+        {statusDateModalOpen && (
           <motion.div
             className="modal-overlay-modern"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => setMontageModalOpen(false)}
+            onClick={() => setStatusDateModalOpen(false)}
           >
             <motion.div
               className="modal-modern montage-modal"
@@ -840,30 +899,31 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
               exit={{ scale: 0.9 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3>Montage Termin</h3>
-              <p className="montage-modal-description">Wann ist die Montage geplant?</p>
+              <h3>{STATUS_STEPS.find(s => s.value === pendingStatusValue)?.label || 'Status ändern'}</h3>
+              <p className="montage-modal-description">Datum für diese Statusänderung</p>
               <div className="montage-date-input">
                 <input
                   type="date"
-                  value={montageDatum}
-                  onChange={(e) => setMontageDatum(e.target.value)}
+                  value={statusDateValue}
+                  onChange={(e) => setStatusDateValue(e.target.value)}
                 />
               </div>
               <div className="modal-actions-modern">
                 <button
                   className="modal-btn secondary"
-                  onClick={() => setMontageModalOpen(false)}
+                  onClick={() => setStatusDateModalOpen(false)}
                 >
                   Abbrechen
                 </button>
                 <button
                   className="modal-btn primary"
-                  disabled={!montageDatum}
+                  disabled={!statusDateValue}
                   onClick={() => {
-                    if (onStatusChange && montageDatum) {
-                      onStatusChange(`montage_geplant:${montageDatum}`);
-                      setMontageModalOpen(false);
-                      setMontageDatum('');
+                    if (onStatusChange && statusDateValue && pendingStatusValue) {
+                      onStatusChange(`${pendingStatusValue}:${statusDateValue}`);
+                      setStatusDateModalOpen(false);
+                      setStatusDateValue('');
+                      setPendingStatusValue('');
                     }
                   }}
                 >

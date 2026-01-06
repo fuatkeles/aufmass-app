@@ -110,7 +110,7 @@ const GrunddatenSection = ({ formData, updateField }: GrunddatenSectionProps) =>
           transition={{ duration: 0.3, delay: 0.45 }}
         >
           <label htmlFor="kundeEmail">
-            Kunde E-Mail
+            Kunde E-Mail <span className="required">*</span>
           </label>
           <input
             type="email"
@@ -118,6 +118,7 @@ const GrunddatenSection = ({ formData, updateField }: GrunddatenSectionProps) =>
             value={formData.kundeEmail || ''}
             onChange={(e) => updateField('kundeEmail', e.target.value)}
             placeholder="kunde@beispiel.de"
+            required
           />
         </motion.div>
 

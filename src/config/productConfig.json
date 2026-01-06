@@ -154,13 +154,6 @@
           "required": false
         },
         {
-          "name": "seitenmarkise",
-          "label": "Seitenmarkise",
-          "type": "seitenmarkise",
-          "positions": ["Rechts", "Links", "Vorne", "Hinten"],
-          "required": false
-        },
-        {
           "name": "glasMarkiseType",
           "label": "Aufglas / Unterglas Markise",
           "type": "select",
@@ -350,13 +343,6 @@
           "label": "Montageteam",
           "type": "select",
           "options": ["SENOL", "APO", "IZAR"],
-          "required": false
-        },
-        {
-          "name": "seitenmarkise",
-          "label": "Seitenmarkise",
-          "type": "seitenmarkise",
-          "positions": ["Rechts", "Links", "Vorne", "Hinten"],
           "required": false
         },
         {
@@ -555,13 +541,6 @@
           "required": false
         },
         {
-          "name": "seitenmarkise",
-          "label": "Seitenmarkise",
-          "type": "seitenmarkise",
-          "positions": ["Rechts", "Links", "Vorne", "Hinten"],
-          "required": false
-        },
-        {
           "name": "glasMarkiseType",
           "label": "Aufglas / Unterglas Markise",
           "type": "select",
@@ -754,13 +733,6 @@
           "label": "Montageteam",
           "type": "select",
           "options": ["SENOL", "APO", "IZAR"],
-          "required": false
-        },
-        {
-          "name": "seitenmarkise",
-          "label": "Seitenmarkise",
-          "type": "seitenmarkise",
-          "positions": ["Rechts", "Links", "Vorne", "Hinten"],
           "required": false
         },
         {
@@ -983,59 +955,67 @@
           "required": true
         },
         {
-          "name": "gestellfarbe",
-          "label": "Gestellfarbe",
-          "type": "modelColorSelect",
-          "required": true,
-          "hasCustomOption": true
-        },
-        {
           "name": "markisenbreite",
-          "label": "Markisenbreite",
+          "label": "Breite",
           "type": "number",
           "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "markisenlaenge",
-          "label": "Markisenlänge",
-          "type": "number",
-          "unit": "mm",
-          "required": true
+          "required": true,
+          "gridGroup": "dimensions"
         },
         {
           "name": "markisenhoehe",
-          "label": "Markisenhöhe",
+          "label": "Höhe",
           "type": "number",
           "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "stoffNummer",
-          "label": "Stoff Nummer",
-          "type": "text",
-          "required": true
+          "required": true,
+          "gridGroup": "dimensions"
         },
         {
           "name": "zip",
           "label": "ZIP",
           "type": "select",
           "options": ["JA", "NEIN"],
-          "required": true
+          "required": true,
+          "gridGroup": "dimensions"
         },
         {
           "name": "antrieb",
           "label": "Antrieb",
           "type": "select",
           "options": ["Funk Motor", "E-Motor (Schalter)"],
-          "required": true
+          "required": true,
+          "gridGroup": "antrieb"
         },
         {
           "name": "antriebsseite",
           "label": "Antriebsseite",
           "type": "select",
           "options": ["Links", "Rechts"],
-          "required": true
+          "required": true,
+          "gridGroup": "antrieb"
+        },
+        {
+          "name": "anschlussseite",
+          "label": "Anschlussseite",
+          "type": "select",
+          "options": ["Links", "Rechts"],
+          "required": true,
+          "gridGroup": "antrieb"
+        },
+        {
+          "name": "gestellfarbe",
+          "label": "Gestellfarbe",
+          "type": "modelColorSelect",
+          "required": true,
+          "hasCustomOption": true,
+          "gridGroup": "farbe"
+        },
+        {
+          "name": "stoffNummer",
+          "label": "Stoff Nummer",
+          "type": "text",
+          "required": true,
+          "gridGroup": "farbe"
         },
         {
           "name": "montageteam",

@@ -52,6 +52,7 @@ export interface FormData {
   weitereProdukte?: WeiteresProdukt[];
   bemerkungen: string;
   status?: string;
+  statusDate?: string;
   montageDatum?: string;
   created_at?: string;
   updated_at?: string;
@@ -75,6 +76,7 @@ export interface ApiForm {
   markise_data: string | null;
   bemerkungen: string;
   status: string;
+  status_date?: string;
   montage_datum?: string;
   created_at: string;
   updated_at: string;
@@ -307,6 +309,7 @@ function transformApiToFrontend(apiForm: ApiForm): FormData {
     weitereProdukte: apiForm.weitereProdukte || [],
     bemerkungen: apiForm.bemerkungen || '',
     status: apiForm.status,
+    statusDate: apiForm.status_date?.split('T')[0] || '',
     montageDatum: apiForm.montage_datum?.split('T')[0] || '',
     created_at: apiForm.created_at,
     updated_at: apiForm.updated_at,
@@ -382,6 +385,7 @@ export interface StatusHistoryEntry {
   changed_by: number | null;
   changed_by_name: string | null;
   changed_at: string;
+  status_date: string | null;
   notes: string | null;
 }
 
@@ -592,5 +596,52 @@ export async function deleteMontageteam(id: number): Promise<{ message: string }
     method: 'DELETE'
   });
   if (!response.ok) throw new Error('Failed to delete montageteam');
+  return response.json();
+}
+
+// ============ PDF STORAGE ============
+
+export interface PdfStatus {
+  hasPdf: boolean;
+  pdfGeneratedAt: string | null;
+  isOutdated: boolean;
+  needsRegeneration: boolean;
+}
+
+// Save generated PDF for a form
+export async function savePdf(formId: number, pdfBlob: Blob): Promise<{ message: string }> {
+  const formData = new window.FormData();
+  formData.append('pdf', pdfBlob, `aufmass_${formId}.pdf`);
+
+  const token = getStoredToken();
+  const response = await fetch(`${API_BASE_URL}/forms/${formId}/pdf`, {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData
+  });
+  if (!response.ok) throw new Error('Failed to save PDF');
+  return response.json();
+}
+
+// Get PDF URL for a form (for iframe/embed)
+export function getPdfUrl(formId: number): string {
+  const token = getStoredToken();
+  return `${API_BASE_URL}/forms/${formId}/pdf?token=${token}`;
+}
+
+// Get PDF blob for a form
+export async function getPdfBlob(formId: number): Promise<Blob> {
+  const response = await authFetch(`${API_BASE_URL}/forms/${formId}/pdf`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to get PDF' }));
+    throw new Error(error.error || 'Failed to get PDF');
+  }
+  return response.blob();
+}
+
+// Check PDF status for a form
+export async function getPdfStatus(formId: number): Promise<PdfStatus> {
+  const response = await authFetch(`${API_BASE_URL}/forms/${formId}/pdf/status`);
+  if (!response.ok) throw new Error('Failed to check PDF status');
   return response.json();
 }

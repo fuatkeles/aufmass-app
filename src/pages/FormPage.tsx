@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { AufmassForm } from '../App';
 import { FormData } from '../types';
 import { DynamicFormData } from '../types/productConfig';
-import { getForm, createForm, updateForm, uploadImages, FormData as ApiFormData } from '../services/api';
+import { getForm, createForm, updateForm, uploadImages, savePdf, FormData as ApiFormData } from '../services/api';
+import { generatePDF } from '../utils/pdfGenerator';
 
 const FormPage = () => {
   const navigate = useNavigate();
@@ -16,10 +17,18 @@ const FormPage = () => {
   const handleStatusChange = async (newStatus: string) => {
     if (!id || id === 'new') return;
     try {
-      // Check if status includes montage date (format: montage_geplant:2025-12-15)
-      if (newStatus.startsWith('montage_geplant:')) {
+      // Check if status includes date (format: status_value:2025-12-15)
+      if (newStatus.includes(':')) {
         const [status, datum] = newStatus.split(':');
-        await updateForm(parseInt(id), { status, montageDatum: datum });
+        const updateData: { status: string; statusDate: string; montageDatum?: string } = {
+          status,
+          statusDate: datum
+        };
+        // Also update montageDatum for montage_geplant
+        if (status === 'montage_geplant') {
+          updateData.montageDatum = datum;
+        }
+        await updateForm(parseInt(id), updateData);
         setFormStatus(status);
       } else {
         await updateForm(parseInt(id), { status: newStatus });
@@ -77,7 +86,7 @@ const FormPage = () => {
     loadForm();
   }, [id]);
 
-  const handleSave = async (data: FormData) => {
+  const handleSave = async (data: FormData): Promise<number | void> => {
     try {
       // Transform local FormData to API format
       const apiData: Omit<ApiFormData, 'id'> = {
@@ -117,7 +126,21 @@ const FormPage = () => {
         await uploadImages(formId, newImages);
       }
 
-      // Navigate etme - kullanıcı FinalSection'daki butonlarla yönlendirilecek
+      // Generate and save PDF - use data with updated id
+      try {
+        const dataWithId = { ...data, id: String(formId) };
+        const pdfResult = await generatePDF(dataWithId, { returnBlob: true });
+        if (pdfResult?.blob) {
+          await savePdf(formId, pdfResult.blob);
+          console.log('PDF generated and saved successfully');
+        }
+      } catch (pdfError) {
+        console.error('Error generating/saving PDF:', pdfError);
+        // Don't block form save if PDF generation fails
+      }
+
+      // Return formId for new forms so App.tsx can update state
+      return formId;
     } catch (err) {
       console.error('Error saving form:', err);
       alert('Fehler beim Speichern. Bitte versuchen Sie es erneut.');
