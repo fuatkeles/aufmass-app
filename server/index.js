@@ -684,9 +684,13 @@ app.get('/api/health', (req, res) => {
 // Get all forms
 app.get('/api/forms', authenticateToken, async (req, res) => {
   try {
+    // Explicitly select columns EXCLUDING generated_pdf (VARBINARY) to avoid loading huge binary data
     const result = await pool.request().query(`
       SELECT
-        f.*,
+        f.id, f.datum, f.aufmasser, f.kunde_vorname, f.kunde_nachname, f.kunde_email,
+        f.kundenlokation, f.category, f.product_type, f.model, f.specifications,
+        f.markise_data, f.bemerkungen, f.status, f.created_by, f.created_at, f.updated_at,
+        f.montage_datum, f.status_date, f.pdf_generated_at,
         (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND file_type LIKE 'image/%') as image_count,
         (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND (file_type = 'application/pdf' OR file_name LIKE '%.pdf')) as pdf_count
       FROM aufmass_forms f
@@ -719,9 +723,16 @@ app.get('/api/forms', authenticateToken, async (req, res) => {
 app.get('/api/forms/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    // Exclude generated_pdf from single form query too
     const result = await pool.request()
       .input('id', sql.Int, id)
-      .query('SELECT * FROM aufmass_forms WHERE id = @id');
+      .query(`
+        SELECT id, datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email,
+        kundenlokation, category, product_type, model, specifications,
+        markise_data, bemerkungen, status, created_by, created_at, updated_at,
+        montage_datum, status_date, pdf_generated_at
+        FROM aufmass_forms WHERE id = @id
+      `);
 
     if (result.recordset.length === 0) {
       return res.status(404).json({ error: 'Form not found' });
