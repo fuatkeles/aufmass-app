@@ -126,16 +126,32 @@ const FormPage = () => {
         await uploadImages(formId, newImages);
       }
 
-      // Generate and save PDF in background - don't block the save
-      const dataWithId = { ...data, id: String(formId) };
-      generatePDF(dataWithId, { returnBlob: true })
-        .then(pdfResult => {
-          if (pdfResult?.blob) {
-            return savePdf(formId, pdfResult.blob);
-          }
-        })
-        .then(() => console.log('PDF generated and saved in background'))
-        .catch(err => console.error('Background PDF generation failed:', err));
+      // Generate and save PDF in background - fetch fresh data from server first
+      getForm(formId).then(async (freshData) => {
+        const pdfData = {
+          id: String(freshData.id),
+          datum: freshData.datum || '',
+          aufmasser: freshData.aufmasser || '',
+          kundeVorname: freshData.kundeVorname || '',
+          kundeNachname: freshData.kundeNachname || '',
+          kundenlokation: freshData.kundenlokation || '',
+          productSelection: {
+            category: freshData.category || '',
+            productType: freshData.productType || '',
+            model: freshData.model || ''
+          },
+          specifications: (freshData.specifications || {}) as Record<string, string | number | boolean | string[]>,
+          weitereProdukte: freshData.weitereProdukte || [],
+          bilder: freshData.bilder || [],
+          bemerkungen: freshData.bemerkungen || '',
+          status: (freshData.status as 'draft' | 'completed' | 'archived') || 'draft'
+        };
+        const pdfResult = await generatePDF(pdfData, { returnBlob: true });
+        if (pdfResult?.blob) {
+          await savePdf(formId, pdfResult.blob);
+          console.log('PDF generated and saved successfully');
+        }
+      }).catch(err => console.error('Background PDF generation failed:', err));
 
       // Return formId immediately - don't wait for PDF
       return formId;
