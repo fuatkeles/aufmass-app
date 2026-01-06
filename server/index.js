@@ -791,9 +791,7 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       weitereProdukte
     } = req.body;
 
-    // Auto-set status_date to today when form is created
-    const today = new Date().toISOString().split('T')[0];
-
+    // Auto-set status_date to form datum (Aufmaß date) when form is created
     const result = await pool.request()
       .input('datum', sql.Date, datum)
       .input('aufmasser', sql.NVarChar, aufmasser)
@@ -808,7 +806,7 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       .input('markise_data', sql.NVarChar, JSON.stringify(markiseData || null))
       .input('bemerkungen', sql.NVarChar, bemerkungen || '')
       .input('status', sql.NVarChar, status || 'neu')
-      .input('status_date', sql.Date, today)
+      .input('status_date', sql.Date, datum)
       .input('created_by', sql.Int, req.user.id)
       .query(`
         INSERT INTO aufmass_forms
