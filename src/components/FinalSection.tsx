@@ -331,9 +331,14 @@ const FinalSection = ({
                   whileHover={isValid && !isSaving ? { scale: 1.02 } : {}}
                   whileTap={isValid && !isSaving ? { scale: 0.98 } : {}}
                 >
-                  <span className="button-text">
-                    {isSaving ? 'Wird gesendet...' : 'Absenden'}
-                  </span>
+                  {isSaving ? (
+                    <span className="button-content-loading">
+                      <span className="button-spinner"></span>
+                      <span className="button-text">Wird gespeichert...</span>
+                    </span>
+                  ) : (
+                    <span className="button-text">Absenden</span>
+                  )}
                 </motion.button>
               </div>
             </>

@@ -126,20 +126,18 @@ const FormPage = () => {
         await uploadImages(formId, newImages);
       }
 
-      // Generate and save PDF - use data with updated id
-      try {
-        const dataWithId = { ...data, id: String(formId) };
-        const pdfResult = await generatePDF(dataWithId, { returnBlob: true });
-        if (pdfResult?.blob) {
-          await savePdf(formId, pdfResult.blob);
-          console.log('PDF generated and saved successfully');
-        }
-      } catch (pdfError) {
-        console.error('Error generating/saving PDF:', pdfError);
-        // Don't block form save if PDF generation fails
-      }
+      // Generate and save PDF in background - don't block the save
+      const dataWithId = { ...data, id: String(formId) };
+      generatePDF(dataWithId, { returnBlob: true })
+        .then(pdfResult => {
+          if (pdfResult?.blob) {
+            return savePdf(formId, pdfResult.blob);
+          }
+        })
+        .then(() => console.log('PDF generated and saved in background'))
+        .catch(err => console.error('Background PDF generation failed:', err));
 
-      // Return formId for new forms so App.tsx can update state
+      // Return formId immediately - don't wait for PDF
       return formId;
     } catch (err) {
       console.error('Error saving form:', err);

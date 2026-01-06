@@ -31,7 +31,8 @@
       "Bash(taskkill:*)",
       "Bash(timeout:*)",
       "Bash(cmd //c \"taskkill /F /PID 29412\")",
-      "Bash(ping:*)"
+      "Bash(ping:*)",
+      "Bash(scp:*)"
     ],
     "deny": [],
     "ask": []
