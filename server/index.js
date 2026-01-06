@@ -306,8 +306,9 @@ async function initializeTables() {
 
 // ============ AUTH MIDDLEWARE ============
 const authenticateToken = (req, res, next) => {
+  // Check Authorization header first, then query param (for direct PDF links)
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const token = (authHeader && authHeader.split(' ')[1]) || req.query.token;
 
   if (!token) {
     return res.status(401).json({ error: 'Access token required' });

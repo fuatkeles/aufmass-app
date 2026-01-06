@@ -452,6 +452,12 @@ export function getImageUrl(imageId: number): string {
   return `${API_BASE_URL}/images/${imageId}`;
 }
 
+// Get stored PDF URL (for direct browser opening with token)
+export function getPdfUrl(formId: number): string {
+  const token = getStoredToken();
+  return `${API_BASE_URL}/forms/${formId}/pdf${token ? `?token=${token}` : ''}`;
+}
+
 // Upload temporary file (returns URL for PDF linking)
 export async function uploadTempFile(file: File): Promise<{ id: number; url: string; fileName: string }> {
   const formData = new window.FormData();
@@ -621,12 +627,6 @@ export async function savePdf(formId: number, pdfBlob: Blob): Promise<{ message:
   });
   if (!response.ok) throw new Error('Failed to save PDF');
   return response.json();
-}
-
-// Get PDF URL for a form (for iframe/embed)
-export function getPdfUrl(formId: number): string {
-  const token = getStoredToken();
-  return `${API_BASE_URL}/forms/${formId}/pdf?token=${token}`;
 }
 
 // Get PDF blob for a form

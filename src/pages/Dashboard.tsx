@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage, uploadImages, getPdfBlob, getPdfStatus } from '../services/api';
+import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage, uploadImages, getPdfUrl } from '../services/api';
 import type { AbnahmeImage } from '../services/api';
 import type { FormData, MontageteamStats, Montageteam, StatusHistoryEntry, AbnahmeData } from '../services/api';
 import { useStats } from '../AppWrapper';
-import { generatePDF } from '../utils/pdfGenerator';
 import './Dashboard.css';
 
 // Check if current user is admin
@@ -84,10 +83,6 @@ const Dashboard = () => {
   const [uploadingDocFormId, setUploadingDocFormId] = useState<number | null>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
-  // PDF Preview state
-  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const [pdfPreviewFileName, setPdfPreviewFileName] = useState<string>('');
 
   useEffect(() => {
     loadData();
@@ -410,126 +405,9 @@ Aylux Team`;
     return `mailto:${form.kundeEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
-  const handleDownloadPDF = async (formId: number, forPreview: boolean = true) => {
-    try {
-      // First try to get stored PDF from server (much faster)
-      try {
-        const pdfStatus = await getPdfStatus(formId);
-        if (pdfStatus.hasPdf) {
-          // Stored PDF exists, fetch it
-          const pdfBlob = await getPdfBlob(formId);
-          const form = forms.find(f => f.id === formId);
-          const fileName = `Aufmass_${form?.kundeNachname || 'Kunde'}_${form?.kundeVorname || ''}.pdf`;
-
-          if (forPreview) {
-            // Clean up previous blob URL if exists
-            if (pdfPreviewUrl) {
-              URL.revokeObjectURL(pdfPreviewUrl);
-            }
-            const blobUrl = URL.createObjectURL(pdfBlob);
-            setPdfPreviewUrl(blobUrl);
-            setPdfPreviewFileName(fileName);
-            setPdfPreviewOpen(true);
-          } else {
-            // Direct download
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(pdfBlob);
-            link.download = fileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          }
-          return;
-        }
-      } catch {
-        // No stored PDF, fall back to generating
-        console.log('No stored PDF found, generating on-the-fly');
-      }
-
-      // Fallback: Generate PDF on-the-fly (slower)
-      // Get full form data with images
-      const fullFormData = await getForm(formId);
-
-      // Get abnahme data and mängel images if exists
-      let abnahmeData = null;
-      let maengelBilder: AbnahmeImage[] = [];
-      try {
-        const [abnahme, images] = await Promise.all([
-          getAbnahme(formId),
-          getAbnahmeImages(formId)
-        ]);
-        abnahmeData = abnahme;
-        maengelBilder = images || [];
-      } catch {
-        // No abnahme data, that's fine
-      }
-
-      // Transform to the format expected by generatePDF
-      const pdfData = {
-        id: String(fullFormData.id),
-        datum: fullFormData.datum || '',
-        aufmasser: fullFormData.aufmasser || '',
-        kundeVorname: fullFormData.kundeVorname || '',
-        kundeNachname: fullFormData.kundeNachname || '',
-        kundenlokation: fullFormData.kundenlokation || '',
-        productSelection: {
-          category: fullFormData.category || '',
-          productType: fullFormData.productType || '',
-          model: fullFormData.model || ''
-        },
-        specifications: fullFormData.specifications as Record<string, string | number | boolean | string[]> || {},
-        weitereProdukte: fullFormData.weitereProdukte || [],
-        bilder: fullFormData.bilder || [],
-        bemerkungen: fullFormData.bemerkungen || '',
-        status: (fullFormData.status as 'draft' | 'completed' | 'archived') || 'draft',
-        createdAt: fullFormData.created_at,
-        updatedAt: fullFormData.updated_at,
-        abnahme: abnahmeData ? { ...abnahmeData, maengelBilder } : undefined
-      };
-
-      if (forPreview) {
-        // Generate PDF blob for preview
-        const result = await generatePDF(pdfData, { returnBlob: true });
-        if (result) {
-          // Clean up previous blob URL if exists
-          if (pdfPreviewUrl) {
-            URL.revokeObjectURL(pdfPreviewUrl);
-          }
-          const blobUrl = URL.createObjectURL(result.blob);
-          setPdfPreviewUrl(blobUrl);
-          setPdfPreviewFileName(result.fileName);
-          setPdfPreviewOpen(true);
-        }
-      } else {
-        // Direct download
-        await generatePDF(pdfData);
-      }
-    } catch (err) {
-      console.error('Error generating PDF:', err);
-      alert(`Fehler beim Erstellen der PDF: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`);
-    }
-  };
-
-  // Download PDF from preview
-  const handleDownloadFromPreview = () => {
-    if (pdfPreviewUrl && pdfPreviewFileName) {
-      const link = document.createElement('a');
-      link.href = pdfPreviewUrl;
-      link.download = pdfPreviewFileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
-  // Close PDF preview and clean up
-  const closePdfPreview = () => {
-    if (pdfPreviewUrl) {
-      URL.revokeObjectURL(pdfPreviewUrl);
-    }
-    setPdfPreviewUrl(null);
-    setPdfPreviewFileName('');
-    setPdfPreviewOpen(false);
+  // Open stored PDF in new tab (fast - no generation needed)
+  const handleOpenPDF = (formId: number) => {
+    window.open(getPdfUrl(formId), '_blank');
   };
 
   const confirmDelete = async () => {
@@ -867,7 +745,7 @@ Aylux Team`;
                             <button
                               className="attachment-option generate-pdf"
                               onClick={() => {
-                                handleDownloadPDF(form.id!, true);
+                                handleOpenPDF(form.id!);
                                 setAttachmentDropdownOpen(null);
                               }}
                             >
@@ -1354,49 +1232,6 @@ Aylux Team`;
         accept=".pdf,.doc,.docx,.xls,.xlsx,.mp4,.mov,.avi,.webm,.jpg,.jpeg,.png,.gif"
         onChange={handleDocumentUpload}
       />
-
-      {/* PDF Preview Modal */}
-      <AnimatePresence>
-        {pdfPreviewOpen && pdfPreviewUrl && (
-          <motion.div
-            className="modal-overlay-modern pdf-preview-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={closePdfPreview}
-          >
-            <motion.div
-              className="pdf-preview-modal"
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="pdf-preview-header">
-                <h3>{pdfPreviewFileName}</h3>
-                <div className="pdf-preview-actions">
-                  <button className="pdf-action-btn download" onClick={handleDownloadFromPreview}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                    Herunterladen
-                  </button>
-                  <button className="pdf-action-btn close" onClick={closePdfPreview}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div className="pdf-preview-content">
-                <iframe src={pdfPreviewUrl} title="PDF Preview" />
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Powered by Conais Footer */}
       <footer className="powered-by-footer">
