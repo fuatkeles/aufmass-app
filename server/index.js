@@ -791,6 +791,9 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       weitereProdukte
     } = req.body;
 
+    // Auto-set status_date to today when form is created
+    const today = new Date().toISOString().split('T')[0];
+
     const result = await pool.request()
       .input('datum', sql.Date, datum)
       .input('aufmasser', sql.NVarChar, aufmasser)
@@ -805,12 +808,13 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       .input('markise_data', sql.NVarChar, JSON.stringify(markiseData || null))
       .input('bemerkungen', sql.NVarChar, bemerkungen || '')
       .input('status', sql.NVarChar, status || 'neu')
+      .input('status_date', sql.Date, today)
       .input('created_by', sql.Int, req.user.id)
       .query(`
         INSERT INTO aufmass_forms
-        (datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email, kundenlokation, category, product_type, model, specifications, markise_data, bemerkungen, status, created_by)
+        (datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email, kundenlokation, category, product_type, model, specifications, markise_data, bemerkungen, status, status_date, created_by)
         OUTPUT INSERTED.id
-        VALUES (@datum, @aufmasser, @kunde_vorname, @kunde_nachname, @kunde_email, @kundenlokation, @category, @product_type, @model, @specifications, @markise_data, @bemerkungen, @status, @created_by)
+        VALUES (@datum, @aufmasser, @kunde_vorname, @kunde_nachname, @kunde_email, @kundenlokation, @category, @product_type, @model, @specifications, @markise_data, @bemerkungen, @status, @status_date, @created_by)
       `);
 
     const newId = result.recordset[0].id;
