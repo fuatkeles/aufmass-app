@@ -568,12 +568,18 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
 
 // ============ USER MANAGEMENT (Admin only) ============
 
-// Get all users
+// Get all users (branch filtered)
 app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const result = await pool.request().query(`
-      SELECT id, email, name, role, is_active, last_login, created_at
+    const branchFilter = req.branchId ? 'WHERE branch_id = @branch_id' : '';
+    const request = pool.request();
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+    const result = await request.query(`
+      SELECT id, email, name, role, is_active, last_login, created_at, branch_id
       FROM aufmass_users
+      ${branchFilter}
       ORDER BY created_at DESC
     `);
     res.json(result.recordset);
@@ -583,7 +589,7 @@ app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// Create invitation
+// Create invitation (with branch_id)
 app.post('/api/invitations', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { email, role } = req.body;
@@ -592,19 +598,26 @@ app.post('/api/invitations', authenticateToken, requireAdmin, async (req, res) =
       return res.status(400).json({ error: 'Email required' });
     }
 
-    // Check if user already exists
-    const existingUser = await pool.request()
-      .input('email', sql.NVarChar, email.toLowerCase())
-      .query('SELECT id FROM aufmass_users WHERE email = @email');
-
-    if (existingUser.recordset.length > 0) {
-      return res.status(400).json({ error: 'User with this email already exists' });
+    // Branch subdomain required for creating invitations
+    if (!req.branchId) {
+      return res.status(400).json({ error: 'Invitations can only be created from branch subdomains' });
     }
 
-    // Check for existing valid invitation
+    // Check if user already exists in this branch
+    const existingUser = await pool.request()
+      .input('email', sql.NVarChar, email.toLowerCase())
+      .input('branch_id', sql.NVarChar, req.branchId)
+      .query('SELECT id FROM aufmass_users WHERE email = @email AND branch_id = @branch_id');
+
+    if (existingUser.recordset.length > 0) {
+      return res.status(400).json({ error: 'User with this email already exists in this branch' });
+    }
+
+    // Check for existing valid invitation in this branch
     const existingInvite = await pool.request()
       .input('email', sql.NVarChar, email.toLowerCase())
-      .query('SELECT id FROM aufmass_invitations WHERE email = @email AND used_at IS NULL AND expires_at > GETDATE()');
+      .input('branch_id', sql.NVarChar, req.branchId)
+      .query('SELECT id FROM aufmass_invitations WHERE email = @email AND branch_id = @branch_id AND used_at IS NULL AND expires_at > GETDATE()');
 
     if (existingInvite.recordset.length > 0) {
       return res.status(400).json({ error: 'Valid invitation already exists for this email' });
@@ -620,9 +633,10 @@ app.post('/api/invitations', authenticateToken, requireAdmin, async (req, res) =
       .input('role', sql.NVarChar, role || 'user')
       .input('invited_by', sql.Int, req.user.id)
       .input('expires_at', sql.DateTime, expiresAt)
+      .input('branch_id', sql.NVarChar, req.branchId)
       .query(`
-        INSERT INTO aufmass_invitations (token, email, role, invited_by, expires_at)
-        VALUES (@token, @email, @role, @invited_by, @expires_at)
+        INSERT INTO aufmass_invitations (token, email, role, invited_by, expires_at, branch_id)
+        VALUES (@token, @email, @role, @invited_by, @expires_at, @branch_id)
       `);
 
     res.json({
@@ -637,13 +651,19 @@ app.post('/api/invitations', authenticateToken, requireAdmin, async (req, res) =
   }
 });
 
-// Get all invitations
+// Get all invitations (branch filtered)
 app.get('/api/invitations', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const result = await pool.request().query(`
+    const branchFilter = req.branchId ? 'WHERE i.branch_id = @branch_id' : '';
+    const request = pool.request();
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+    const result = await request.query(`
       SELECT i.*, u.name as invited_by_name
       FROM aufmass_invitations i
       LEFT JOIN aufmass_users u ON i.invited_by = u.id
+      ${branchFilter}
       ORDER BY i.created_at DESC
     `);
     res.json(result.recordset);
@@ -653,12 +673,15 @@ app.get('/api/invitations', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-// Delete invitation
+// Delete invitation (branch filtered)
 app.delete('/api/invitations/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    await pool.request()
-      .input('id', sql.Int, req.params.id)
-      .query('DELETE FROM aufmass_invitations WHERE id = @id');
+    const branchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
+    const request = pool.request().input('id', sql.Int, req.params.id);
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+    await request.query(`DELETE FROM aufmass_invitations WHERE id = @id ${branchFilter}`);
     res.json({ message: 'Invitation deleted' });
   } catch (err) {
     console.error('Delete invitation error:', err);
@@ -693,17 +716,18 @@ app.post('/api/auth/register', async (req, res) => {
 
     const invite = invitation.recordset[0];
 
-    // Create user
+    // Create user with branch_id from invitation
     const hashedPassword = await bcrypt.hash(password, 12);
     const result = await pool.request()
       .input('email', sql.NVarChar, invite.email)
       .input('password_hash', sql.NVarChar, hashedPassword)
       .input('name', sql.NVarChar, name)
       .input('role', sql.NVarChar, invite.role)
+      .input('branch_id', sql.NVarChar, invite.branch_id || null)
       .query(`
-        INSERT INTO aufmass_users (email, password_hash, name, role)
+        INSERT INTO aufmass_users (email, password_hash, name, role, branch_id)
         OUTPUT INSERTED.id
-        VALUES (@email, @password_hash, @name, @role)
+        VALUES (@email, @password_hash, @name, @role, @branch_id)
       `);
 
     // Mark invitation as used
@@ -755,30 +779,36 @@ app.get('/api/auth/verify-invite/:token', async (req, res) => {
   }
 });
 
-// Update user (Admin only)
+// Update user (Admin only, branch filtered)
 app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { name, role, is_active } = req.body;
     const userId = parseInt(req.params.id);
+    const branchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
 
     // Prevent admin from deactivating themselves
     if (userId === req.user.id && is_active === false) {
       return res.status(400).json({ error: 'Cannot deactivate your own account' });
     }
 
-    await pool.request()
+    const request = pool.request()
       .input('id', sql.Int, userId)
       .input('name', sql.NVarChar, name)
       .input('role', sql.NVarChar, role)
-      .input('is_active', sql.Bit, is_active)
-      .query(`
-        UPDATE aufmass_users SET
-          name = @name,
-          role = @role,
-          is_active = @is_active,
-          updated_at = GETDATE()
-        WHERE id = @id
-      `);
+      .input('is_active', sql.Bit, is_active);
+
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+
+    await request.query(`
+      UPDATE aufmass_users SET
+        name = @name,
+        role = @role,
+        is_active = @is_active,
+        updated_at = GETDATE()
+      WHERE id = @id ${branchFilter}
+    `);
 
     res.json({ message: 'User updated successfully' });
   } catch (err) {
@@ -787,19 +817,22 @@ app.put('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// Delete user (Admin only)
+// Delete user (Admin only, branch filtered)
 app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
+    const branchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
 
     // Prevent admin from deleting themselves
     if (userId === req.user.id) {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
-    await pool.request()
-      .input('id', sql.Int, userId)
-      .query('DELETE FROM aufmass_users WHERE id = @id');
+    const request = pool.request().input('id', sql.Int, userId);
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+    await request.query(`DELETE FROM aufmass_users WHERE id = @id ${branchFilter}`);
 
     res.json({ message: 'User deleted successfully' });
   } catch (err) {
@@ -894,20 +927,23 @@ app.get('/api/forms', authenticateToken, async (req, res) => {
   }
 });
 
-// Get single form by ID
+// Get single form by ID (branch filtered)
 app.get('/api/forms/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    // Exclude generated_pdf from single form query too
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      .query(`
-        SELECT id, datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email,
-        kundenlokation, category, product_type, model, specifications,
-        markise_data, bemerkungen, status, created_by, created_at, updated_at,
-        montage_datum, status_date, pdf_generated_at
-        FROM aufmass_forms WHERE id = @id
-      `);
+    // Branch filter for isolation
+    const branchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
+    const request = pool.request().input('id', sql.Int, id);
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+    const result = await request.query(`
+      SELECT id, datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email,
+      kundenlokation, category, product_type, model, specifications,
+      markise_data, bemerkungen, status, created_by, created_at, updated_at,
+      montage_datum, status_date, pdf_generated_at
+      FROM aufmass_forms WHERE id = @id ${branchFilter}
+    `);
 
     if (result.recordset.length === 0) {
       return res.status(404).json({ error: 'Form not found' });
@@ -1016,11 +1052,14 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
   }
 });
 
-// Update form (supports partial updates)
+// Update form (supports partial updates, branch filtered)
 app.put('/api/forms/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+
+    // Branch filter for isolation
+    const branchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
 
     // Build dynamic update query based on provided fields
     const fieldMappings = {
@@ -1043,6 +1082,9 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
 
     const setClauses = [];
     const request = pool.request().input('id', sql.Int, id);
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
 
     for (const [key, mapping] of Object.entries(fieldMappings)) {
       if (updates[key] !== undefined) {
@@ -1084,7 +1126,7 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
     if (setClauses.length > 0) {
       setClauses.push('updated_at = GETDATE()');
       await request.query(`
-        UPDATE aufmass_forms SET ${setClauses.join(', ')} WHERE id = @id
+        UPDATE aufmass_forms SET ${setClauses.join(', ')} WHERE id = @id ${branchFilter}
       `);
 
       // If status was changed, add to status history
@@ -1109,13 +1151,16 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete form
+// Delete form (branch filtered)
 app.delete('/api/forms/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.request()
-      .input('id', sql.Int, id)
-      .query('DELETE FROM aufmass_forms WHERE id = @id');
+    const branchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
+    const request = pool.request().input('id', sql.Int, id);
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+    await request.query(`DELETE FROM aufmass_forms WHERE id = @id ${branchFilter}`);
 
     res.json({ message: 'Form deleted successfully' });
   } catch (err) {
@@ -1688,22 +1733,28 @@ app.post('/api/montageteams', authenticateToken, async (req, res) => {
   }
 });
 
-// Update montageteam
+// Update montageteam (branch filtered)
 app.put('/api/montageteams/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, is_active } = req.body;
+    const branchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
 
-    await pool.request()
+    const request = pool.request()
       .input('id', sql.Int, id)
       .input('name', sql.NVarChar, name)
-      .input('is_active', sql.Bit, is_active !== undefined ? is_active : true)
-      .query(`
-        UPDATE aufmass_montageteams SET
-          name = @name,
-          is_active = @is_active
-        WHERE id = @id
-      `);
+      .input('is_active', sql.Bit, is_active !== undefined ? is_active : true);
+
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+
+    await request.query(`
+      UPDATE aufmass_montageteams SET
+        name = @name,
+        is_active = @is_active
+      WHERE id = @id ${branchFilter}
+    `);
 
     res.json({ message: 'Montageteam updated' });
   } catch (err) {
@@ -1715,13 +1766,16 @@ app.put('/api/montageteams/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete montageteam
+// Delete montageteam (branch filtered)
 app.delete('/api/montageteams/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    await pool.request()
-      .input('id', sql.Int, id)
-      .query('DELETE FROM aufmass_montageteams WHERE id = @id');
+    const branchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
+    const request = pool.request().input('id', sql.Int, id);
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+    await request.query(`DELETE FROM aufmass_montageteams WHERE id = @id ${branchFilter}`);
 
     res.json({ message: 'Montageteam deleted' });
   } catch (err) {
