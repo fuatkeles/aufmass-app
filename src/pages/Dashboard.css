@@ -209,6 +209,45 @@
   border-top: 1px solid var(--border-color);
 }
 
+.powered-by-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.powered-by-sidebar a {
+  display: flex;
+  align-items: center;
+}
+
+.powered-by-sidebar .conais-logo {
+  height: 18px;
+  width: auto;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.powered-by-sidebar .conais-logo:hover {
+  opacity: 1;
+}
+
+.powered-by-sidebar .conais-logo-light {
+  display: none;
+}
+
+.light-theme .powered-by-sidebar .conais-logo-dark {
+  display: none;
+}
+
+.light-theme .powered-by-sidebar .conais-logo-light {
+  display: block;
+}
+
 .sidebar-user {
   display: flex;
   align-items: center;

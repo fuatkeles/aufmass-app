@@ -148,6 +148,13 @@ const Layout = ({ children, stats, onOpenAdminPanel }: LayoutProps) => {
         </nav>
 
         <div className="sidebar-footer">
+          <div className="powered-by-sidebar">
+            <span>Powered by</span>
+            <a href="https://conais.com" target="_blank" rel="noopener noreferrer">
+              <img src="https://conais.in/dev/wp-content/uploads/2020/10/logo2.png" alt="Conais" className="conais-logo conais-logo-dark" />
+              <img src="https://conais.com/wp-content/uploads/2025/10/Conais-new-Logo.png" alt="Conais" className="conais-logo conais-logo-light" />
+            </a>
+          </div>
           <div className="sidebar-user">
             <div className="user-avatar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

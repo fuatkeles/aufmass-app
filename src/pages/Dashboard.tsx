@@ -1233,14 +1233,6 @@ Aylux Team`;
         onChange={handleDocumentUpload}
       />
 
-      {/* Powered by Conais Footer */}
-      <footer className="powered-by-footer">
-        <span>Powered by</span>
-        <a href="https://conais.com" target="_blank" rel="noopener noreferrer">
-          <img src="https://conais.in/dev/wp-content/uploads/2020/10/logo2.png" alt="Conais" className="conais-logo conais-logo-dark" />
-          <img src="https://conais.com/wp-content/uploads/2025/10/Conais-new-Logo.png" alt="Conais" className="conais-logo conais-logo-light" />
-        </a>
-      </footer>
     </>
   );
 };

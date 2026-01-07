@@ -465,9 +465,16 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
-    const result = await pool.request()
-      .input('email', sql.NVarChar, email.toLowerCase())
-      .query('SELECT * FROM aufmass_users WHERE email = @email AND is_active = 1');
+    // Branch-specific login: only allow users from the same branch
+    const branchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
+    const request = pool.request()
+      .input('email', sql.NVarChar, email.toLowerCase());
+
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+
+    const result = await request.query(`SELECT * FROM aufmass_users WHERE email = @email AND is_active = 1 ${branchFilter}`);
 
     if (result.recordset.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
