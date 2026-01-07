@@ -16,7 +16,28 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: ['https://aufmass-app.vercel.app', 'http://localhost:5173', 'http://localhost:5174'],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      'https://aufmass-app.vercel.app',
+      'https://aufmass-api.conais.com',
+      'http://localhost:5173',
+      'http://localhost:5174'
+    ];
+
+    // Allow *.cnsform.com domains (branch subdomains)
+    if (origin.match(/^https?:\/\/[a-z0-9-]+\.cnsform\.com$/i)) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
@@ -279,6 +300,72 @@ async function initializeTables() {
       )
     `);
 
+    // ============ MULTI-TENANCY TABLES ============
+
+    // Branches table (for multi-tenant support)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_branches' AND xtype='U')
+      CREATE TABLE aufmass_branches (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        slug NVARCHAR(50) NOT NULL UNIQUE,
+        name NVARCHAR(100) NOT NULL,
+        is_active BIT DEFAULT 1,
+        created_at DATETIME DEFAULT GETDATE()
+      )
+    `);
+
+    // Add branch_id to aufmass_forms
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_forms') AND name = 'branch_id')
+      BEGIN
+        ALTER TABLE aufmass_forms ADD branch_id NVARCHAR(50)
+      END
+    `);
+
+    // Add branch_id to aufmass_users
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_users') AND name = 'branch_id')
+      BEGIN
+        ALTER TABLE aufmass_users ADD branch_id NVARCHAR(50)
+      END
+    `);
+
+    // Add branch_id to aufmass_montageteams
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_montageteams') AND name = 'branch_id')
+      BEGIN
+        ALTER TABLE aufmass_montageteams ADD branch_id NVARCHAR(50)
+      END
+    `);
+
+    // Add branch_id to aufmass_invitations
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_invitations') AND name = 'branch_id')
+      BEGIN
+        ALTER TABLE aufmass_invitations ADD branch_id NVARCHAR(50)
+      END
+    `);
+
+    // Create indexes for branch_id (for performance)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_aufmass_forms_branch_id')
+      CREATE INDEX IX_aufmass_forms_branch_id ON aufmass_forms(branch_id)
+    `);
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_aufmass_users_branch_id')
+      CREATE INDEX IX_aufmass_users_branch_id ON aufmass_users(branch_id)
+    `);
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_aufmass_montageteams_branch_id')
+      CREATE INDEX IX_aufmass_montageteams_branch_id ON aufmass_montageteams(branch_id)
+    `);
+
+    // Insert default branch (koblenz) if not exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM aufmass_branches WHERE slug = 'koblenz')
+      INSERT INTO aufmass_branches (slug, name) VALUES ('koblenz', 'Aylux Koblenz')
+    `);
+
     // Check if admin exists, create default admin if not
     const adminCheck = await pool.request().query(
       "SELECT COUNT(*) as count FROM aufmass_users WHERE role = 'admin'"
@@ -329,6 +416,38 @@ const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+// ============ BRANCH DETECTION MIDDLEWARE ============
+// Detects branch from subdomain (e.g., koblenz.cnsform.com -> branchId = 'koblenz')
+// Dev domains (aufmass-api.conais.com, localhost) -> branchId = null (sees all data)
+const detectBranch = (req, res, next) => {
+  const host = req.headers.host || '';
+  const origin = req.headers.origin || '';
+
+  // Check both host and origin for branch detection
+  const hostToCheck = origin ? new URL(origin).hostname : host.split(':')[0];
+
+  // Dev/admin domains - no branch filter (sees all)
+  const devDomains = ['localhost', 'aufmass-api.conais.com', 'aufmass-app.vercel.app'];
+  if (devDomains.some(d => hostToCheck.includes(d))) {
+    req.branchId = null;
+    return next();
+  }
+
+  // Branch domains: {branch}.cnsform.com
+  const cnsformMatch = hostToCheck.match(/^([a-z0-9-]+)\.cnsform\.com$/i);
+  if (cnsformMatch) {
+    req.branchId = cnsformMatch[1].toLowerCase();
+    return next();
+  }
+
+  // Default: no branch filter
+  req.branchId = null;
+  next();
+};
+
+// Apply branch detection to all API routes
+app.use('/api', detectBranch);
 
 // ============ AUTH ROUTES ============
 
@@ -684,19 +803,60 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
 });
 
+// Get current branch info (from subdomain)
+app.get('/api/branch', async (req, res) => {
+  try {
+    if (!req.branchId) {
+      return res.json({ branch: null, name: 'Development', isDevMode: true });
+    }
+
+    const result = await pool.request()
+      .input('slug', sql.NVarChar, req.branchId)
+      .query('SELECT * FROM aufmass_branches WHERE slug = @slug AND is_active = 1');
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ error: 'Branch not found' });
+    }
+
+    res.json({ branch: result.recordset[0], isDevMode: false });
+  } catch (err) {
+    console.error('Error fetching branch:', err);
+    res.status(500).json({ error: 'Failed to fetch branch info' });
+  }
+});
+
+// Get all branches (admin only)
+app.get('/api/branches', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.request().query('SELECT * FROM aufmass_branches ORDER BY name');
+    res.json(result.recordset);
+  } catch (err) {
+    console.error('Error fetching branches:', err);
+    res.status(500).json({ error: 'Failed to fetch branches' });
+  }
+});
+
 // Get all forms
 app.get('/api/forms', authenticateToken, async (req, res) => {
   try {
+    // Build query with optional branch filter
+    const branchFilter = req.branchId ? 'WHERE f.branch_id = @branch_id' : '';
+    const request = pool.request();
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+
     // Explicitly select columns EXCLUDING generated_pdf (VARBINARY) to avoid loading huge binary data
-    const result = await pool.request().query(`
+    const result = await request.query(`
       SELECT
         f.id, f.datum, f.aufmasser, f.kunde_vorname, f.kunde_nachname, f.kunde_email,
         f.kundenlokation, f.category, f.product_type, f.model, f.specifications,
         f.markise_data, f.bemerkungen, f.status, f.created_by, f.created_at, f.updated_at,
-        f.montage_datum, f.status_date, f.pdf_generated_at,
+        f.montage_datum, f.status_date, f.pdf_generated_at, f.branch_id,
         (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND file_type LIKE 'image/%') as image_count,
         (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND (file_type = 'application/pdf' OR file_name LIKE '%.pdf')) as pdf_count
       FROM aufmass_forms f
+      ${branchFilter}
       ORDER BY f.created_at DESC
     `);
 
@@ -792,6 +952,7 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
     } = req.body;
 
     // Auto-set status_date to form datum (Aufmaß date) when form is created
+    // Set branch_id from subdomain detection
     const result = await pool.request()
       .input('datum', sql.Date, datum)
       .input('aufmasser', sql.NVarChar, aufmasser)
@@ -807,12 +968,13 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       .input('bemerkungen', sql.NVarChar, bemerkungen || '')
       .input('status', sql.NVarChar, status || 'neu')
       .input('status_date', sql.Date, datum)
+      .input('branch_id', sql.NVarChar, req.branchId || null)
       .input('created_by', sql.Int, req.user.id)
       .query(`
         INSERT INTO aufmass_forms
-        (datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email, kundenlokation, category, product_type, model, specifications, markise_data, bemerkungen, status, status_date, created_by)
+        (datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email, kundenlokation, category, product_type, model, specifications, markise_data, bemerkungen, status, status_date, branch_id, created_by)
         OUTPUT INSERTED.id
-        VALUES (@datum, @aufmasser, @kunde_vorname, @kunde_nachname, @kunde_email, @kundenlokation, @category, @product_type, @model, @specifications, @markise_data, @bemerkungen, @status, @status_date, @created_by)
+        VALUES (@datum, @aufmasser, @kunde_vorname, @kunde_nachname, @kunde_email, @kundenlokation, @category, @product_type, @model, @specifications, @markise_data, @bemerkungen, @status, @status_date, @branch_id, @created_by)
       `);
 
     const newId = result.recordset[0].id;
@@ -1399,11 +1561,23 @@ app.delete('/api/images/:id', authenticateToken, async (req, res) => {
 // Get dashboard stats
 app.get('/api/stats', authenticateToken, async (req, res) => {
   try {
-    const total = await pool.request().query('SELECT COUNT(*) as count FROM aufmass_forms');
-    // completed = abnahme (finished/accepted)
-    const completed = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'abnahme'");
-    // draft = neu, angebot_versendet (still in progress, not yet ordered)
-    const draft = await pool.request().query("SELECT COUNT(*) as count FROM aufmass_forms WHERE status IN ('neu', 'angebot_versendet')");
+    // Build branch filter
+    const branchFilter = req.branchId ? 'WHERE branch_id = @branch_id' : '';
+    const branchFilterAnd = req.branchId ? 'AND branch_id = @branch_id' : '';
+
+    const totalReq = pool.request();
+    const completedReq = pool.request();
+    const draftReq = pool.request();
+
+    if (req.branchId) {
+      totalReq.input('branch_id', sql.NVarChar, req.branchId);
+      completedReq.input('branch_id', sql.NVarChar, req.branchId);
+      draftReq.input('branch_id', sql.NVarChar, req.branchId);
+    }
+
+    const total = await totalReq.query(`SELECT COUNT(*) as count FROM aufmass_forms ${branchFilter}`);
+    const completed = await completedReq.query(`SELECT COUNT(*) as count FROM aufmass_forms WHERE status = 'abnahme' ${branchFilterAnd}`);
+    const draft = await draftReq.query(`SELECT COUNT(*) as count FROM aufmass_forms WHERE status IN ('neu', 'angebot_versendet') ${branchFilterAnd}`);
 
     res.json({
       total: total.recordset[0].count,
@@ -1457,8 +1631,15 @@ app.get('/api/stats/montageteam', authenticateToken, async (req, res) => {
 // Get all montageteams
 app.get('/api/montageteams', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.request().query(`
-      SELECT * FROM aufmass_montageteams ORDER BY name ASC
+    // Filter by branch if set
+    const branchFilter = req.branchId ? 'WHERE branch_id = @branch_id OR branch_id IS NULL' : '';
+    const request = pool.request();
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+
+    const result = await request.query(`
+      SELECT * FROM aufmass_montageteams ${branchFilter} ORDER BY name ASC
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -1478,10 +1659,11 @@ app.post('/api/montageteams', authenticateToken, async (req, res) => {
 
     const result = await pool.request()
       .input('name', sql.NVarChar, name.trim())
+      .input('branch_id', sql.NVarChar, req.branchId || null)
       .query(`
-        INSERT INTO aufmass_montageteams (name)
+        INSERT INTO aufmass_montageteams (name, branch_id)
         OUTPUT INSERTED.*
-        VALUES (@name)
+        VALUES (@name, @branch_id)
       `);
 
     res.status(201).json(result.recordset[0]);
