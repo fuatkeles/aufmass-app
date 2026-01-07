@@ -366,6 +366,11 @@ async function initializeTables() {
       INSERT INTO aufmass_branches (slug, name) VALUES ('koblenz', 'Aylux Koblenz')
     `);
 
+    // Migrate existing montageteams with NULL branch_id to 'koblenz' (one-time migration)
+    await pool.request().query(`
+      UPDATE aufmass_montageteams SET branch_id = 'koblenz' WHERE branch_id IS NULL
+    `);
+
     // Check if admin exists, create default admin if not
     const adminCheck = await pool.request().query(
       "SELECT COUNT(*) as count FROM aufmass_users WHERE role = 'admin'"
