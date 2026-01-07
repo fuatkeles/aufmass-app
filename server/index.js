@@ -1631,8 +1631,8 @@ app.get('/api/stats/montageteam', authenticateToken, async (req, res) => {
 // Get all montageteams
 app.get('/api/montageteams', authenticateToken, async (req, res) => {
   try {
-    // Filter by branch if set
-    const branchFilter = req.branchId ? 'WHERE branch_id = @branch_id OR branch_id IS NULL' : '';
+    // Filter by branch if set - strict isolation (no NULL fallback)
+    const branchFilter = req.branchId ? 'WHERE branch_id = @branch_id' : '';
     const request = pool.request();
     if (req.branchId) {
       request.input('branch_id', sql.NVarChar, req.branchId);
