@@ -258,10 +258,22 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     // Excluded fields - only these are NOT required
     const excludedFields = ['montageteam', 'bemerkungen'];
 
+    // Type for product config fields
+    interface ProductField {
+      name: string;
+      label?: string;
+      type: string;
+      required?: boolean;
+      allowZero?: boolean;
+      showWhen?: { field: string; value?: string; notEquals?: string };
+      conditionalField?: { trigger: string; field: string; label?: string };
+      options?: string[];
+    }
+
     // Process ALL fields (not just required ones)
-    for (const field of productTypeConfig.fields) {
+    for (const field of productTypeConfig.fields as ProductField[]) {
       const value = formData.specifications[field.name];
-      const fieldLabel = (field as { label?: string }).label || field.name;
+      const fieldLabel = field.label || field.name;
 
       // Skip excluded fields
       if (excludedFields.includes(field.name)) continue;
@@ -387,8 +399,12 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       let senkrechtData: Array<Record<string, unknown>> = [];
       try {
         const rawData = formData.specifications['senkrechtMarkiseData'];
-        if (typeof rawData === 'string') senkrechtData = JSON.parse(rawData);
-        else if (Array.isArray(rawData)) senkrechtData = rawData;
+        if (typeof rawData === 'string') {
+          const parsed = JSON.parse(rawData);
+          if (Array.isArray(parsed)) senkrechtData = parsed as Array<Record<string, unknown>>;
+        } else if (Array.isArray(rawData)) {
+          senkrechtData = rawData as Array<Record<string, unknown>>;
+        }
       } catch { senkrechtData = []; }
 
       if (senkrechtData.length === 0) {
@@ -429,7 +445,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
         }
 
         if (wpConfig?.fields) {
-          for (const field of wpConfig.fields) {
+          for (const field of wpConfig.fields as ProductField[]) {
             // Skip excluded fields
             if (excludedFields.includes(field.name)) continue;
             if (field.type === 'markise_trigger' || field.type === 'senkrecht_section') continue;
