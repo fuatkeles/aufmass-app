@@ -245,6 +245,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
   }, [formData.productSelection, formData.specifications, formData.weitereProdukte, productConfig]);
 
   // Get list of missing required fields with their labels
+  // ALL fields are required EXCEPT: montageteam, bemerkungen
   const getMissingFields = useCallback((): { name: string; label: string }[] => {
     const { category, productType } = formData.productSelection;
     if (!category || !productType) return [];
@@ -253,16 +254,29 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     if (!productTypeConfig?.fields) return [];
 
     const missingFields: { name: string; label: string }[] = [];
-    const requiredFields = productTypeConfig.fields.filter((f: { required: boolean }) => f.required);
 
-    for (const field of requiredFields) {
+    // Excluded fields - only these are NOT required
+    const excludedFields = ['montageteam', 'bemerkungen'];
+
+    // Process ALL fields (not just required ones)
+    for (const field of productTypeConfig.fields) {
       const value = formData.specifications[field.name];
       const fieldLabel = (field as { label?: string }).label || field.name;
 
-      // Skip markise_trigger field
-      if (field.type === 'markise_trigger') continue;
+      // Skip excluded fields
+      if (excludedFields.includes(field.name)) continue;
 
-      // Handle conditional fields
+      // Skip markise_trigger and senkrecht_section (handled separately)
+      if (field.type === 'markise_trigger' || field.type === 'senkrecht_section') continue;
+
+      // Handle showWhen conditions - skip if condition not met
+      if (field.showWhen) {
+        const dependentValue = formData.specifications[field.showWhen.field];
+        if (field.showWhen.value !== undefined && dependentValue !== field.showWhen.value) continue;
+        if (field.showWhen.notEquals !== undefined && dependentValue === field.showWhen.notEquals) continue;
+      }
+
+      // Handle conditional fields (ja/nein with value)
       if (field.type === 'conditional') {
         const activeValue = formData.specifications[`${field.name}Active`];
         if (activeValue === undefined) {
@@ -326,6 +340,14 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
         continue;
       }
 
+      // Handle select with conditionalField (like hoeheStuetzen with Sondermass)
+      if (field.conditionalField && value === field.conditionalField.trigger) {
+        const customValue = formData.specifications[field.conditionalField.field];
+        if (!customValue || (typeof customValue === 'number' && customValue <= 0)) {
+          missingFields.push({ name: field.conditionalField.field, label: field.conditionalField.label || `${fieldLabel} (Sondermass)` });
+        }
+      }
+
       // Check if value exists and is not empty
       if (value === undefined || value === null || value === '') {
         missingFields.push({ name: field.name, label: fieldLabel });
@@ -338,11 +360,13 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       }
     }
 
-    // Validate glasMarkise fields when glasMarkiseType is selected (not "Keine")
+    // ============ VALIDATE GLASMARKISE FIELDS ============
+    // When glasMarkiseType is not "Keine", all related fields are required
     const glasMarkiseType = formData.specifications['glasMarkiseType'];
     if (glasMarkiseType && glasMarkiseType !== 'Keine') {
       const glasMarkiseRequiredFields = [
         { name: 'glasMarkiseAufteilung', label: 'Aufteilung' },
+        { name: 'glasMarkiseStoffNummer', label: 'Stoff Nummer (Markise)' },
         { name: 'glasMarkiseZip', label: 'ZIP' },
         { name: 'glasMarkiseAntrieb', label: 'Antrieb' },
         { name: 'glasMarkiseAntriebseite', label: 'Antriebseite' }
@@ -356,8 +380,127 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       }
     }
 
+    // ============ VALIDATE SENKRECHT MARKISE FIELDS ============
+    // When senkrechtMarkiseActive is "Ja", all senkrecht fields are required
+    const senkrechtActive = formData.specifications['senkrechtMarkiseActive'] === 'Ja';
+    if (senkrechtActive) {
+      let senkrechtData: Array<Record<string, unknown>> = [];
+      try {
+        const rawData = formData.specifications['senkrechtMarkiseData'];
+        if (typeof rawData === 'string') senkrechtData = JSON.parse(rawData);
+        else if (Array.isArray(rawData)) senkrechtData = rawData;
+      } catch { senkrechtData = []; }
+
+      if (senkrechtData.length === 0) {
+        missingFields.push({ name: 'senkrechtMarkise', label: 'Senkrecht Markise (mindestens eine)' });
+      } else {
+        senkrechtData.forEach((senkrecht, idx) => {
+          const prefix = `Senkrecht ${idx + 1}`;
+          if (!senkrecht.position) missingFields.push({ name: `senkrecht_${idx}_position`, label: `${prefix} Position` });
+          if (!senkrecht.modell) missingFields.push({ name: `senkrecht_${idx}_modell`, label: `${prefix} Modell` });
+          if (!senkrecht.befestigungsart) missingFields.push({ name: `senkrecht_${idx}_befestigungsart`, label: `${prefix} Befestigungsart` });
+          if (!senkrecht.breite || Number(senkrecht.breite) <= 0) missingFields.push({ name: `senkrecht_${idx}_breite`, label: `${prefix} Breite` });
+          if (!senkrecht.hoehe || Number(senkrecht.hoehe) <= 0) missingFields.push({ name: `senkrecht_${idx}_hoehe`, label: `${prefix} Höhe` });
+          if (!senkrecht.zip) missingFields.push({ name: `senkrecht_${idx}_zip`, label: `${prefix} ZIP` });
+          if (!senkrecht.antrieb) missingFields.push({ name: `senkrecht_${idx}_antrieb`, label: `${prefix} Antrieb` });
+          if (!senkrecht.antriebseite) missingFields.push({ name: `senkrecht_${idx}_antriebseite`, label: `${prefix} Antriebseite` });
+          if (!senkrecht.anschlussseite) missingFields.push({ name: `senkrecht_${idx}_anschlussseite`, label: `${prefix} Anschlussseite` });
+          if (!senkrecht.gestellfarbe) missingFields.push({ name: `senkrecht_${idx}_gestellfarbe`, label: `${prefix} Gestellfarbe` });
+          if (!senkrecht.stoffNummer) missingFields.push({ name: `senkrecht_${idx}_stoffNummer`, label: `${prefix} Stoff Nummer` });
+        });
+      }
+    }
+
+    // ============ VALIDATE WEITERE PRODUKTE ============
+    // All fields in weitere produkte are required (except montageteam, bemerkungen)
+    if (formData.weitereProdukte && formData.weitereProdukte.length > 0) {
+      formData.weitereProdukte.forEach((wp, wpIdx) => {
+        const wpPrefix = `Weiteres Produkt ${wpIdx + 1}`;
+        const wpConfig = productConfig[wp.category]?.[wp.productType];
+
+        if (!wp.category) {
+          missingFields.push({ name: `wp_${wpIdx}_category`, label: `${wpPrefix} Kategorie` });
+        }
+        if (!wp.productType) {
+          missingFields.push({ name: `wp_${wpIdx}_productType`, label: `${wpPrefix} Produkt Typ` });
+        }
+        if (!wp.model) {
+          missingFields.push({ name: `wp_${wpIdx}_model`, label: `${wpPrefix} Modell` });
+        }
+
+        if (wpConfig?.fields) {
+          for (const field of wpConfig.fields) {
+            // Skip excluded fields
+            if (excludedFields.includes(field.name)) continue;
+            if (field.type === 'markise_trigger' || field.type === 'senkrecht_section') continue;
+
+            // Handle showWhen conditions
+            if (field.showWhen) {
+              const dependentValue = wp.specifications[field.showWhen.field];
+              if (field.showWhen.value !== undefined && dependentValue !== field.showWhen.value) continue;
+              if (field.showWhen.notEquals !== undefined && dependentValue === field.showWhen.notEquals) continue;
+            }
+
+            const wpValue = wp.specifications[field.name];
+            const wpFieldLabel = field.label || field.name;
+
+            // Handle conditional fields
+            if (field.type === 'conditional') {
+              const activeValue = wp.specifications[`${field.name}Active`];
+              if (activeValue === undefined) {
+                missingFields.push({ name: `wp_${wpIdx}_${field.name}`, label: `${wpPrefix} ${wpFieldLabel}` });
+                continue;
+              }
+              if (activeValue === true) {
+                if (!wpValue || (typeof wpValue === 'number' && wpValue <= 0)) {
+                  missingFields.push({ name: `wp_${wpIdx}_${field.name}`, label: `${wpPrefix} ${wpFieldLabel} (Wert)` });
+                }
+              }
+              continue;
+            }
+
+            // Handle bauform
+            if (field.type === 'bauform') {
+              const bauformType = wp.specifications['bauformType'];
+              if (!bauformType) {
+                missingFields.push({ name: `wp_${wpIdx}_${field.name}`, label: `${wpPrefix} ${wpFieldLabel}` });
+              }
+              continue;
+            }
+
+            // Handle fundament
+            if (field.type === 'fundament') {
+              if (!wpValue) {
+                missingFields.push({ name: `wp_${wpIdx}_${field.name}`, label: `${wpPrefix} ${wpFieldLabel}` });
+              }
+              continue;
+            }
+
+            // Handle multiselect
+            if (field.type === 'multiselect') {
+              if (!Array.isArray(wpValue) || wpValue.length === 0) {
+                missingFields.push({ name: `wp_${wpIdx}_${field.name}`, label: `${wpPrefix} ${wpFieldLabel}` });
+              }
+              continue;
+            }
+
+            // Check value exists
+            if (wpValue === undefined || wpValue === null || wpValue === '') {
+              missingFields.push({ name: `wp_${wpIdx}_${field.name}`, label: `${wpPrefix} ${wpFieldLabel}` });
+              continue;
+            }
+
+            // Number validation
+            if (field.type === 'number' && (typeof wpValue !== 'number' || wpValue <= 0)) {
+              missingFields.push({ name: `wp_${wpIdx}_${field.name}`, label: `${wpPrefix} ${wpFieldLabel}` });
+            }
+          }
+        }
+      });
+    }
+
     return missingFields;
-  }, [formData.productSelection, formData.specifications, productConfig]);
+  }, [formData.productSelection, formData.specifications, formData.weitereProdukte, productConfig]);
 
   // Update grunddaten fields
   const updateGrunddatenField = (field: string, value: string) => {
