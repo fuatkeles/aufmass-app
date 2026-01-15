@@ -72,7 +72,7 @@ const isStatusBackward = (currentStatus: string, newStatus: string): boolean => 
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { stats, refreshStats } = useStats();
+  const { refreshStats } = useStats();
   const [forms, setForms] = useState<FormData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -460,7 +460,7 @@ Aylux Team`;
   };
 
   // Open stored PDF in new tab - regenerate if outdated
-  const [pdfGenerating, setPdfGenerating] = useState<number | null>(null);
+  const [, setPdfGenerating] = useState<number | null>(null);
 
   const handleOpenPDF = async (formId: number) => {
     try {
@@ -484,6 +484,7 @@ Aylux Team`;
             productType: formData.productType,
             model: formData.model ? formData.model.split(',') : []
           },
+          specifications: formData.specifications as Record<string, string | number | boolean | string[]>,
           bilder: formData.bilder || [],
           abnahme: abnahmeData ? {
             ...abnahmeData,
