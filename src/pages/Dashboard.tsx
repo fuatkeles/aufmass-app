@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage, uploadImages, getPdfUrl } from '../services/api';
+import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage, uploadImages, getPdfUrl, getPdfStatus, getForm, savePdf } from '../services/api';
+import { generatePDF } from '../utils/pdfGenerator';
 import type { AbnahmeImage } from '../services/api';
 import type { FormData, MontageteamStats, Montageteam, StatusHistoryEntry, AbnahmeData } from '../services/api';
 import { useStats } from '../AppWrapper';
@@ -32,7 +33,42 @@ const STATUS_OPTIONS = [
   { value: 'reklamation_in_planung', label: 'Reklamation in Planung', color: '#fb923c' },
   { value: 'reklamation_behoben', label: 'Reklamation Behoben', color: '#22c55e' },
   { value: 'reklamation_geschlossen', label: 'Reklamation Geschlossen', color: '#16a34a' },
+  { value: 'papierkorb', label: 'Papierkorb', color: '#71717a' },
 ];
+
+// Status order for edit lock check (after auftrag_erteilt, editing is locked for non-admins)
+const STATUS_ORDER = [
+  'auftrag_abgelehnt',
+  'neu',
+  'angebot_versendet',
+  'auftrag_erteilt',  // Index 3 - lock starts AFTER this
+  'anzahlung',
+  'bestellt',
+  'montage_geplant',
+  'montage_gestartet',
+  'abnahme',
+  'reklamation_eingegangen',
+  'reklamation_anerkannt',
+  'reklamation_abgelehnt',
+  'reklamation_in_bearbeitung',
+  'reklamation_in_planung',
+  'reklamation_behoben',
+  'reklamation_geschlossen',
+];
+
+// Check if form editing is locked (status is after auftrag_erteilt)
+const isFormLocked = (status: string): boolean => {
+  const statusIndex = STATUS_ORDER.indexOf(status);
+  const lockThreshold = STATUS_ORDER.indexOf('auftrag_erteilt');
+  return statusIndex > lockThreshold;
+};
+
+// Check if status change is going backward
+const isStatusBackward = (currentStatus: string, newStatus: string): boolean => {
+  const currentIndex = STATUS_ORDER.indexOf(currentStatus);
+  const newIndex = STATUS_ORDER.indexOf(newStatus);
+  return newIndex < currentIndex;
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -112,6 +148,12 @@ const Dashboard = () => {
   const handleNewForm = () => navigate('/form/new');
   const handleEditForm = (id: number) => navigate(`/form/${id}`);
 
+  // Open attachment upload for locked forms (non-admin users)
+  const handleOpenAttachmentUpload = (id: number) => {
+    setUploadingDocFormId(id);
+    docInputRef.current?.click();
+  };
+
   const handleDeleteForm = (id: number) => {
     setFormToDelete(id);
     setDeleteModalOpen(true);
@@ -167,6 +209,17 @@ const Dashboard = () => {
   };
 
   const handleStatusChange = async (formId: number, newStatus: string) => {
+    // Get current form status
+    const form = forms.find(f => f.id === formId);
+    const currentStatus = form ? getFormStatus(form) : 'neu';
+
+    // Prevent non-admin users from going backward in status
+    if (!isAdmin() && isStatusBackward(currentStatus, newStatus)) {
+      alert('Status kann nur von einem Admin zurückgesetzt werden.');
+      setStatusDropdownOpen(null);
+      return;
+    }
+
     // If selecting abnahme status, open abnahme modal first
     if (newStatus === 'abnahme') {
       setAbnahmeFormId(formId);
@@ -239,8 +292,9 @@ const Dashboard = () => {
   // Check if abnahme is locked (already completed with customer signature)
   const isAbnahmeLocked = !!(abnahmeData.kundeUnterschrift && abnahmeData.abnahmeDatum);
 
-  // Check if Mängel photos are required but missing
-  const maengelPhotosRequired = abnahmeData.hatProbleme && (maengelImages.length + maengelImageFiles.length === 0);
+  // Check if Abnahme photos are required but missing (min 2 photos for both cases)
+  const totalPhotos = maengelImages.length + maengelImageFiles.length;
+  const abnahmePhotosRequired = (abnahmeData.istFertig || abnahmeData.hatProbleme) && totalPhotos < 2;
 
   // Save abnahme and update status
   const handleSaveAbnahme = async () => {
@@ -405,22 +459,90 @@ Aylux Team`;
     return `mailto:${form.kundeEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
-  // Open stored PDF in new tab (fast - no generation needed)
-  const handleOpenPDF = (formId: number) => {
-    window.open(getPdfUrl(formId), '_blank');
+  // Open stored PDF in new tab - regenerate if outdated
+  const [pdfGenerating, setPdfGenerating] = useState<number | null>(null);
+
+  const handleOpenPDF = async (formId: number) => {
+    try {
+      // Check if PDF needs regeneration
+      const status = await getPdfStatus(formId);
+
+      if (status.needsRegeneration) {
+        setPdfGenerating(formId);
+        // Get fresh form data including abnahme
+        const [formData, abnahmeData, abnahmeImages] = await Promise.all([
+          getForm(formId),
+          getAbnahme(formId),
+          getAbnahmeImages(formId)
+        ]);
+
+        const result = await generatePDF({
+          ...formData,
+          id: String(formData.id),
+          productSelection: {
+            category: formData.category,
+            productType: formData.productType,
+            model: formData.model ? formData.model.split(',') : []
+          },
+          bilder: formData.bilder || [],
+          abnahme: abnahmeData ? {
+            ...abnahmeData,
+            maengelBilder: abnahmeImages || []
+          } : undefined
+        }, { returnBlob: true });
+
+        if (result && result.blob) {
+          await savePdf(formId, result.blob);
+        }
+        setPdfGenerating(null);
+      }
+
+      // Open PDF in new tab
+      window.open(getPdfUrl(formId), '_blank');
+    } catch (err) {
+      console.error('Error opening PDF:', err);
+      setPdfGenerating(null);
+      // Fallback - just try to open it
+      window.open(getPdfUrl(formId), '_blank');
+    }
   };
 
   const confirmDelete = async () => {
     if (formToDelete) {
       try {
-        await deleteForm(formToDelete);
-        setForms(forms.filter(f => f.id !== formToDelete));
+        const form = forms.find(f => f.id === formToDelete);
+        const isInTrash = form?.status === 'papierkorb';
+
+        if (isInTrash) {
+          // Permanently delete if already in trash
+          await deleteForm(formToDelete);
+          setForms(forms.filter(f => f.id !== formToDelete));
+        } else {
+          // Move to trash (papierkorb)
+          await updateForm(formToDelete, { status: 'papierkorb' });
+          setForms(forms.map(f =>
+            f.id === formToDelete ? { ...f, status: 'papierkorb' } : f
+          ));
+        }
         refreshStats();
         setDeleteModalOpen(false);
         setFormToDelete(null);
       } catch (err) {
         alert('Fehler beim Löschen');
       }
+    }
+  };
+
+  // Restore form from trash
+  const handleRestore = async (formId: number) => {
+    try {
+      await updateForm(formId, { status: 'neu' });
+      setForms(forms.map(f =>
+        f.id === formId ? { ...f, status: 'neu' } : f
+      ));
+      refreshStats();
+    } catch (err) {
+      alert('Fehler beim Wiederherstellen');
     }
   };
 
@@ -431,7 +553,10 @@ Aylux Team`;
       form.kundenlokation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       form.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       form.productType?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'alle' || form.status === filterStatus;
+    // "Alle" excludes Papierkorb, must explicitly select Papierkorb to see trash
+    const matchesFilter = filterStatus === 'alle'
+      ? form.status !== 'papierkorb'
+      : form.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
 
@@ -514,7 +639,7 @@ Aylux Team`;
                 <span className="tab-label">{option.label}</span>
                 <span className="tab-count">
                   {option.value === 'alle'
-                    ? stats.total
+                    ? forms.filter(f => f.status !== 'papierkorb').length
                     : forms.filter(f => f.status === option.value).length}
                 </span>
               </button>
@@ -529,7 +654,7 @@ Aylux Team`;
             >
               <span className="status-dot" style={{ backgroundColor: getStatusColor(filterStatus) }} />
               <span>{getStatusLabel(filterStatus)}</span>
-              <span className="dropdown-count">{filterStatus === 'alle' ? stats.total : filteredForms.length}</span>
+              <span className="dropdown-count">{filterStatus === 'alle' ? forms.filter(f => f.status !== 'papierkorb').length : filteredForms.length}</span>
               <svg className={`chevron ${filterDropdownOpen ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
             </button>
             <AnimatePresence>
@@ -553,7 +678,7 @@ Aylux Team`;
                       <span>{option.label}</span>
                       <span className="option-count">
                         {option.value === 'alle'
-                          ? stats.total
+                          ? forms.filter(f => f.status !== 'papierkorb').length
                           : forms.filter(f => f.status === option.value).length}
                       </span>
                     </button>
@@ -627,10 +752,17 @@ Aylux Team`;
                             )}
                           </AnimatePresence>
                           {/* Status date under status dropdown - show for all statuses */}
-                          {(form.statusDate || (getFormStatus(form) === 'montage_geplant' && form.montageDatum)) && (
+                          {(form.statusDate || (getFormStatus(form) === 'montage_geplant' && form.montageDatum)) && getFormStatus(form) !== 'papierkorb' && (
                             <div className="montage-date-badge" style={{ '--badge-color': getStatusColor(getFormStatus(form)) } as React.CSSProperties}>
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
                               <span>{new Date(form.statusDate || form.montageDatum!).toLocaleDateString('de-DE')}</span>
+                            </div>
+                          )}
+                          {/* Papierkorb deletion warning */}
+                          {getFormStatus(form) === 'papierkorb' && form.papierkorbDate && (
+                            <div className="montage-date-badge deletion-warning" style={{ '--badge-color': '#ef4444' } as React.CSSProperties}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                              <span>Löschung: {(() => { const d = new Date(form.papierkorbDate); d.setDate(d.getDate() + 30); return d.toLocaleDateString('de-DE'); })()}</span>
                             </div>
                           )}
                         </div>
@@ -648,10 +780,17 @@ Aylux Team`;
                             {getStatusLabel(getFormStatus(form)).split('/')[0]}
                           </div>
                           {/* Status date under status for non-admin - show for all statuses */}
-                          {(form.statusDate || (getFormStatus(form) === 'montage_geplant' && form.montageDatum)) && (
+                          {(form.statusDate || (getFormStatus(form) === 'montage_geplant' && form.montageDatum)) && getFormStatus(form) !== 'papierkorb' && (
                             <div className="montage-date-badge" style={{ '--badge-color': getStatusColor(getFormStatus(form)) } as React.CSSProperties}>
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
                               <span>{new Date(form.statusDate || form.montageDatum!).toLocaleDateString('de-DE')}</span>
+                            </div>
+                          )}
+                          {/* Papierkorb deletion warning */}
+                          {getFormStatus(form) === 'papierkorb' && form.papierkorbDate && (
+                            <div className="montage-date-badge deletion-warning" style={{ '--badge-color': '#ef4444' } as React.CSSProperties}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                              <span>Löschung: {(() => { const d = new Date(form.papierkorbDate); d.setDate(d.getDate() + 30); return d.toLocaleDateString('de-DE'); })()}</span>
                             </div>
                           )}
                         </div>
@@ -781,6 +920,28 @@ Aylux Team`;
                                 ))}
                               </>
                             )}
+                            {form.media_files && form.media_files.length > 0 && (
+                              <>
+                                <div className="attachment-divider">Fotos & Videos</div>
+                                {form.media_files.map((media) => (
+                                  <a
+                                    key={media.id}
+                                    href={getImageUrl(media.id)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`attachment-option media-file ${media.file_type.startsWith('video/') ? 'video' : 'image'}`}
+                                    onClick={() => setAttachmentDropdownOpen(null)}
+                                  >
+                                    {media.file_type.startsWith('video/') ? (
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
+                                    ) : (
+                                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                                    )}
+                                    <span className="media-filename">{media.file_name}</span>
+                                  </a>
+                                ))}
+                              </>
+                            )}
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -795,10 +956,24 @@ Aylux Team`;
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
                       </a>
                     )}
-                    <button className="action-btn edit" onClick={() => handleEditForm(form.id!)}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                      <span>Bearbeiten</span>
-                    </button>
+                    {/* BEARBEITEN - only for admin or unlocked forms */}
+                    {(isAdmin() || !isFormLocked(getFormStatus(form))) ? (
+                      <button className="action-btn edit" onClick={() => handleEditForm(form.id!)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        <span>Bearbeiten</span>
+                      </button>
+                    ) : (
+                      <button className="action-btn attachment" onClick={() => handleOpenAttachmentUpload(form.id!)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" /></svg>
+                        <span>Anhang</span>
+                      </button>
+                    )}
+                    {/* Restore button - only for forms in Papierkorb */}
+                    {getFormStatus(form) === 'papierkorb' && (
+                      <button className="action-btn restore" onClick={() => handleRestore(form.id!)} title="Wiederherstellen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
+                      </button>
+                    )}
                     <button className="action-btn delete" onClick={() => handleDeleteForm(form.id!)}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
@@ -812,18 +987,44 @@ Aylux Team`;
 
       {/* Delete Modal */}
       <AnimatePresence>
-        {deleteModalOpen && (
-          <motion.div className="modal-overlay-modern" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDeleteModalOpen(false)}>
-            <motion.div className="modal-modern" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={(e) => e.stopPropagation()}>
-              <h3>Aufmaß löschen?</h3>
-              <p>Diese Aktion kann nicht rückgängig gemacht werden.</p>
-              <div className="modal-actions-modern">
-                <button className="modal-btn secondary" onClick={() => setDeleteModalOpen(false)}>Abbrechen</button>
-                <button className="modal-btn danger" onClick={confirmDelete}>Löschen</button>
-              </div>
+        {deleteModalOpen && (() => {
+          const formToDeleteData = forms.find(f => f.id === formToDelete);
+          const isInTrash = formToDeleteData?.status === 'papierkorb';
+          // Calculate deletion date (30 days from now for new trash, or from papierkorbDate if exists)
+          const deletionDate = new Date();
+          deletionDate.setDate(deletionDate.getDate() + 30);
+          const deletionDateStr = deletionDate.toLocaleDateString('de-DE');
+          return (
+            <motion.div className="modal-overlay-modern" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDeleteModalOpen(false)}>
+              <motion.div className="modal-modern" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={(e) => e.stopPropagation()}>
+                <h3>{isInTrash ? 'Endgültig löschen?' : 'In Papierkorb verschieben?'}</h3>
+                {isInTrash ? (
+                  <p>Diese Aktion kann nicht rückgängig gemacht werden. Das Aufmaß wird endgültig gelöscht.</p>
+                ) : (
+                  <>
+                    <p>Das Aufmaß wird in den Papierkorb verschoben.</p>
+                    <div className="delete-warning-box">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                      <div className="delete-warning-text">
+                        <strong>Achtung:</strong> Das Aufmaß wird automatisch am <strong>{deletionDateStr}</strong> endgültig gelöscht, falls nicht wiederhergestellt.
+                      </div>
+                    </div>
+                  </>
+                )}
+                <div className="modal-actions-modern">
+                  <button className="modal-btn secondary" onClick={() => setDeleteModalOpen(false)}>Abbrechen</button>
+                  <button className="modal-btn danger" onClick={confirmDelete}>
+                    {isInTrash ? 'Endgültig löschen' : 'In Papierkorb'}
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
+          );
+        })()}
       </AnimatePresence>
 
       {/* Status History Modal */}
@@ -969,9 +1170,7 @@ Aylux Team`;
                           ...abnahmeData,
                           istFertig: true,
                           hatProbleme: false,
-                          maengelListe: [''],
-                          baustelleSauber: null,
-                          monteurNote: null
+                          maengelListe: ['']
                         })}
                       />
                       <span className="radio-icon"></span>
@@ -995,10 +1194,10 @@ Aylux Team`;
                   </div>
                 </div>
 
-                {/* ES GIBT MÄNGEL - Additional Fields */}
-                {abnahmeData.hatProbleme && (
+                {/* Common Fields - shown for both ARBEIT IST FERTIG and ES GIBT MÄNGEL */}
+                {(abnahmeData.istFertig || abnahmeData.hatProbleme) && (
                   <motion.div
-                    className="abnahme-maengel-section"
+                    className="abnahme-common-section"
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
@@ -1040,7 +1239,17 @@ Aylux Team`;
                         ))}
                       </div>
                     </div>
+                  </motion.div>
+                )}
 
+                {/* ES GIBT MÄNGEL - Mängelliste only */}
+                {abnahmeData.hatProbleme && (
+                  <motion.div
+                    className="abnahme-maengel-section"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
                     {/* Numbered Defects List */}
                     <div className="abnahme-row">
                       <label className="abnahme-field-label">Mängelliste</label>
@@ -1086,15 +1295,24 @@ Aylux Team`;
                         </button>
                       </div>
                     </div>
+                  </motion.div>
+                )}
 
-                    {/* Mängel Fotos Section */}
+                {/* Abnahme Fotos Section - shown for both ARBEIT IST FERTIG and ES GIBT MÄNGEL */}
+                {(abnahmeData.istFertig || abnahmeData.hatProbleme) && (
+                  <motion.div
+                    className="abnahme-fotos-common-section"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
                     <div className="abnahme-row">
                       <label className="abnahme-field-label">
-                        Mängel Fotos <span className="required" style={{ color: '#ef4444' }}>*</span>
+                        Abnahme Fotos <span className="required" style={{ color: '#ef4444' }}>* (min. 2)</span>
                       </label>
-                      {maengelPhotosRequired && (
+                      {abnahmePhotosRequired && (
                         <div className="maengel-fotos-required">
-                          Mindestens ein Foto ist erforderlich
+                          Mindestens 2 Fotos sind erforderlich
                         </div>
                       )}
                       <div className="maengel-fotos-section">
@@ -1212,8 +1430,8 @@ Aylux Team`;
                   <button
                     className="modal-btn primary"
                     onClick={handleSaveAbnahme}
-                    disabled={abnahmeSaving || maengelPhotosRequired}
-                    title={maengelPhotosRequired ? 'Mängel Fotos sind erforderlich' : ''}
+                    disabled={abnahmeSaving || abnahmePhotosRequired}
+                    title={abnahmePhotosRequired ? 'Mindestens 2 Fotos sind erforderlich' : ''}
                   >
                     {abnahmeSaving ? 'Speichern...' : 'Abnahme speichern'}
                   </button>

@@ -996,11 +996,20 @@
   margin-top: -0.25rem;
 }
 
-.pdf-filename {
+.pdf-filename,
+.media-filename {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 160px;
+}
+
+.attachment-option.media-file.image svg {
+  color: #10b981;
+}
+
+.attachment-option.media-file.video svg {
+  color: #8b5cf6;
 }
 
 .card-actions-modern {
@@ -1072,6 +1081,25 @@
   color: var(--bg-primary);
 }
 
+.action-btn.attachment {
+  color: #06b6d4;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.action-btn.attachment span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-btn.attachment:hover {
+  background: #06b6d4;
+  border-color: #06b6d4;
+  color: white;
+}
+
 .action-btn.email {
   color: #3b82f6;
   text-decoration: none;
@@ -1080,6 +1108,16 @@
 .action-btn.email:hover {
   background: #3b82f6;
   border-color: #3b82f6;
+  color: white;
+}
+
+.action-btn.restore {
+  color: #10b981;
+}
+
+.action-btn.restore:hover {
+  background: #10b981;
+  border-color: #10b981;
   color: white;
 }
 
@@ -1187,10 +1225,36 @@
 }
 
 .modal-modern p {
-  margin: 0 0 2rem 0;
+  margin: 0 0 1rem 0;
   font-size: 0.9rem;
   color: var(--text-secondary);
   line-height: 1.6;
+}
+
+.delete-warning-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+}
+
+.delete-warning-box svg {
+  flex-shrink: 0;
+  color: #d97706;
+}
+
+.delete-warning-text {
+  font-size: 0.875rem;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.delete-warning-text strong {
+  color: #78350f;
 }
 
 .modal-actions-modern {

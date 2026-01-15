@@ -54,11 +54,13 @@ export interface FormData {
   status?: string;
   statusDate?: string;
   montageDatum?: string;
+  papierkorbDate?: string;
   created_at?: string;
   updated_at?: string;
   image_count?: number;
   pdf_count?: number;
   pdf_files?: { id: number; file_name: string; file_type: string }[];
+  media_files?: { id: number; file_name: string; file_type: string }[];
 }
 
 export interface ApiForm {
@@ -78,6 +80,7 @@ export interface ApiForm {
   status: string;
   status_date?: string;
   montage_datum?: string;
+  papierkorb_date?: string;
   created_at: string;
   updated_at: string;
   bilder?: { id: number; file_name: string; file_type: string }[];
@@ -85,6 +88,7 @@ export interface ApiForm {
   image_count?: number;
   pdf_count?: number;
   pdf_files?: { id: number; file_name: string; file_type: string }[];
+  media_files?: { id: number; file_name: string; file_type: string }[];
 }
 
 export interface Stats {
@@ -311,11 +315,13 @@ function transformApiToFrontend(apiForm: ApiForm): FormData {
     status: apiForm.status,
     statusDate: apiForm.status_date?.split('T')[0] || '',
     montageDatum: apiForm.montage_datum?.split('T')[0] || '',
+    papierkorbDate: apiForm.papierkorb_date?.split('T')[0] || '',
     created_at: apiForm.created_at,
     updated_at: apiForm.updated_at,
     image_count: apiForm.image_count,
     pdf_count: apiForm.pdf_count,
-    pdf_files: apiForm.pdf_files
+    pdf_files: apiForm.pdf_files,
+    media_files: apiForm.media_files
   };
 }
 
@@ -518,7 +524,8 @@ export async function getAbnahmeImages(formId: number): Promise<AbnahmeImage[]> 
 
 // Get Abnahme image URL
 export function getAbnahmeImageUrl(imageId: number): string {
-  return `${API_BASE_URL}/abnahme-images/${imageId}`;
+  const token = getStoredToken();
+  return `${API_BASE_URL}/abnahme-images/${imageId}${token ? `?token=${token}` : ''}`;
 }
 
 // Delete Abnahme image

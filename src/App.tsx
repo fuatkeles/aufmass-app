@@ -13,7 +13,7 @@ import StepIcon from './components/StepIcon';
 import { FormData, ServerImage, WeiteresProdukt } from './types';
 import { generatePDF } from './utils/pdfGenerator';
 import productConfigData from './config/productConfig.json';
-import { getStoredUser, getPdfBlob, getPdfStatus } from './services/api';
+import { getStoredUser, getPdfBlob, getPdfStatus, getAbnahme, getAbnahmeImages } from './services/api';
 
 // Status options for breadcrumb - matches Dashboard STATUS_OPTIONS
 const STATUS_STEPS = [
@@ -196,8 +196,53 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       }
     }
 
+    // Validate Weitere Produkte - specifically for MARKISE category (AUFGLAS, UNTERGLAS, SENKRECHT)
+    const weitereProdukte = formData.weitereProdukte || [];
+    for (const produkt of weitereProdukte) {
+      // Only validate MARKISE category products
+      if (produkt.category === 'MARKISE') {
+        const productTypes = produkt.productType ? produkt.productType.split(', ').filter(t => t) : [];
+        const requiresValidation = productTypes.some(t =>
+          ['AUFGLAS', 'UNTERGLAS', 'SENKRECHT'].includes(t)
+        );
+
+        if (requiresValidation) {
+          // Must have model selected
+          if (!produkt.model) return false;
+
+          // Check required fields based on product type
+          const produktConfig = productConfig['MARKISE']?.[productTypes[0]];
+          if (produktConfig?.fields) {
+            const requiredFields = produktConfig.fields.filter((f: { required: boolean }) => f.required);
+            for (const field of requiredFields) {
+              // Skip montageteam - it's optional
+              if (field.name === 'montageteam') continue;
+
+              const value = produkt.specifications[field.name];
+
+              // Handle modelColorSelect - needs model first
+              if (field.type === 'modelColorSelect') {
+                if (!value) return false;
+                continue;
+              }
+
+              // Check if value exists
+              if (value === undefined || value === null || value === '') {
+                return false;
+              }
+
+              // For number fields, check if > 0
+              if (field.type === 'number' && (typeof value !== 'number' || value <= 0)) {
+                return false;
+              }
+            }
+          }
+        }
+      }
+    }
+
     return true;
-  }, [formData.productSelection, formData.specifications, productConfig]);
+  }, [formData.productSelection, formData.specifications, formData.weitereProdukte, productConfig]);
 
   // Get list of missing required fields with their labels
   const getMissingFields = useCallback((): { name: string; label: string }[] => {
@@ -569,7 +614,27 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     }
 
     // Stored PDF yoksa veya güncel değilse, generate et
-    await generatePDF(formData);
+    // Abnahme verilerini de çek
+    let abnahmeData = null;
+    let abnahmeImages: { id: number; file_name: string; file_type: string }[] = [];
+    if (formId) {
+      try {
+        [abnahmeData, abnahmeImages] = await Promise.all([
+          getAbnahme(formId),
+          getAbnahmeImages(formId)
+        ]);
+      } catch (err) {
+        console.log('Could not fetch abnahme data:', err);
+      }
+    }
+
+    await generatePDF({
+      ...formData,
+      abnahme: abnahmeData ? {
+        ...abnahmeData,
+        maengelBilder: abnahmeImages || []
+      } : undefined
+    });
   };
 
   const handleSaveOnly = async () => {

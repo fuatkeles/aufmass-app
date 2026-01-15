@@ -89,7 +89,7 @@ const FormPage = () => {
   const handleSave = async (data: FormData): Promise<number | void> => {
     try {
       // Transform local FormData to API format
-      const apiData: Omit<ApiFormData, 'id'> = {
+      const apiData: Omit<ApiFormData, 'id'> & { status?: string } = {
         datum: data.datum,
         aufmasser: data.aufmasser,
         kundeVorname: data.kundeVorname,
@@ -104,9 +104,13 @@ const FormPage = () => {
         specifications: data.specifications || {},
         markiseData: (data.specifications as Record<string, unknown>)?.markiseData,
         weitereProdukte: data.weitereProdukte || [],
-        bemerkungen: data.bemerkungen || '',
-        status: 'neu'
+        bemerkungen: data.bemerkungen || ''
       };
+
+      // Only set status to 'neu' for new forms, preserve existing status for updates
+      if (id === 'new') {
+        apiData.status = 'neu';
+      }
 
       let formId: number;
 

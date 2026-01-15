@@ -299,8 +299,8 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     pdf.text(abnahme.hatProbleme ? checkMark : crossMark, margin + 52, yPos);
     yPos += 6;
 
-    // If ES GIBT MÄNGEL, show additional fields
-    if (abnahme.hatProbleme) {
+    // Common fields for both ARBEIT IST FERTIG and ES GIBT MÄNGEL
+    if (abnahme.istFertig || abnahme.hatProbleme) {
       // Baustelle sauber
       if (abnahme.baustelleSauber) {
         pdf.setFont('helvetica', 'bold');
@@ -318,7 +318,10 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
         pdf.text(String(abnahme.monteurNote), margin + 52, yPos);
         yPos += 6;
       }
+    }
 
+    // Mängel Liste only for ES GIBT MÄNGEL
+    if (abnahme.hatProbleme) {
       // Mängel Liste (numbered defects)
       if (abnahme.maengelListe && Array.isArray(abnahme.maengelListe) && abnahme.maengelListe.some((m: string) => m.trim())) {
         pdf.setFont('helvetica', 'bold');
@@ -338,67 +341,6 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
         yPos += 2;
       }
 
-      // Mängel Fotos (if any)
-      if (abnahme.maengelBilder && Array.isArray(abnahme.maengelBilder) && abnahme.maengelBilder.length > 0) {
-        pdf.setFont('helvetica', 'bold');
-        pdf.text('Maengel Fotos:', margin + 2, yPos);
-        yPos += 8;
-
-        const imgWidth = 50;
-        const imgHeight = 50;
-        const imagesPerRow = 3;
-        const imgGap = 5;
-
-        for (let i = 0; i < abnahme.maengelBilder.length; i++) {
-          const img = abnahme.maengelBilder[i];
-          const col = i % imagesPerRow;
-          const xPos = margin + col * (imgWidth + imgGap);
-
-          // Check if we need a new page
-          if (yPos + imgHeight > pageHeight - margin) {
-            pdf.addPage();
-            yPos = margin;
-          }
-
-          try {
-            // Fetch image from server
-            const token = getStoredToken();
-            const imgUrl = getAbnahmeImageUrl(img.id);
-            const response = await fetch(imgUrl, {
-              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-            });
-
-            if (response.ok) {
-              const blob = await response.blob();
-              const base64 = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(blob);
-              });
-
-              // Get image format
-              const format = img.file_type?.includes('png') ? 'PNG' : 'JPEG';
-              pdf.addImage(base64, format, xPos, yPos, imgWidth, imgHeight);
-            }
-          } catch (err) {
-            // Skip image if fetch fails
-            console.error('Error loading mängel image:', err);
-          }
-
-          // Move to next row after every 3 images
-          if (col === imagesPerRow - 1) {
-            yPos += imgHeight + imgGap;
-          }
-        }
-
-        // If last row was not complete, still move down
-        if (abnahme.maengelBilder.length % imagesPerRow !== 0) {
-          yPos += imgHeight + imgGap;
-        }
-
-        yPos += 5;
-      }
-
       // Legacy problem description (for backward compatibility)
       if (abnahme.problemBeschreibung) {
         pdf.setFont('helvetica', 'bold');
@@ -414,17 +356,81 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
       }
     }
 
-    // Notes (if any)
+    // Abnahme Fotos - shown for both ARBEIT IST FERTIG and ES GIBT MÄNGEL
+    if ((abnahme.istFertig || abnahme.hatProbleme) && abnahme.maengelBilder && Array.isArray(abnahme.maengelBilder) && abnahme.maengelBilder.length > 0) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Abnahme Fotos:', margin + 2, yPos);
+      yPos += 8;
+
+      const imgWidth = 50;
+      const imgHeight = 50;
+      const imagesPerRow = 3;
+      const imgGap = 5;
+
+      for (let i = 0; i < abnahme.maengelBilder.length; i++) {
+        const img = abnahme.maengelBilder[i];
+        const col = i % imagesPerRow;
+        const xPos = margin + col * (imgWidth + imgGap);
+
+        // Check if we need a new page
+        if (yPos + imgHeight > pageHeight - margin) {
+          pdf.addPage();
+          yPos = margin;
+        }
+
+        try {
+          // Fetch image from server
+          const token = getStoredToken();
+          const imgUrl = getAbnahmeImageUrl(img.id);
+          const response = await fetch(imgUrl, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          });
+
+          if (response.ok) {
+            const blob = await response.blob();
+            const base64 = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(blob);
+            });
+
+            // Get image format
+            const format = img.file_type?.includes('png') ? 'PNG' : 'JPEG';
+            pdf.addImage(base64, format, xPos, yPos, imgWidth, imgHeight);
+          }
+        } catch (err) {
+          // Skip image if fetch fails
+          console.error('Error loading abnahme image:', err);
+        }
+
+        // Move to next row after every 3 images
+        if (col === imagesPerRow - 1) {
+          yPos += imgHeight + imgGap;
+        }
+      }
+
+      // If last row was not complete, still move down
+      if (abnahme.maengelBilder.length % imagesPerRow !== 0) {
+        yPos += imgHeight + imgGap;
+      }
+
+      yPos += 5;
+    }
+
+    // Notes (if any) - RED + UPPERCASE + BOLD
     if (abnahme.bemerkungen) {
       pdf.setFont('helvetica', 'bold');
       pdf.text('Bemerkungen:', margin + 2, yPos);
       yPos += 5;
-      pdf.setFont('helvetica', 'normal');
-      const notesLines = pdf.splitTextToSize(abnahme.bemerkungen, pageWidth - 2 * margin - 10);
+      pdf.setTextColor(220, 38, 38); // Red color
+      pdf.setFont('helvetica', 'bold');
+      const notesText = abnahme.bemerkungen.toUpperCase();
+      const notesLines = pdf.splitTextToSize(notesText, pageWidth - 2 * margin - 10);
       notesLines.forEach((line: string) => {
         pdf.text(line, margin + 8, yPos);
         yPos += 5;
       });
+      pdf.setTextColor(0, 0, 0); // Reset color
       yPos += 2;
     }
 
@@ -648,23 +654,28 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
           pdf.text(`${field.label}:`, margin + 2, yPos);
           pdf.setFont('helvetica', 'normal');
 
-          // Set red color for conditional/bauform fields with "Ja" values
+          // Set red color + bold + uppercase for conditional/bauform fields with "Ja" values
           // For conditional fields, check the ${field.name}Active flag
           const isConditionalActive = field.type === 'conditional' &&
             formData.specifications[`${field.name}Active`] === true;
           const isBauformActive = field.type === 'bauform' &&
             (displayValue.includes('EINGERÜCKT') || displayValue.includes('EINGERUCKT'));
           const isConditionalWithValue = isConditionalActive || isBauformActive;
+
+          let finalDisplayValue = displayValue;
           if (isConditionalWithValue) {
             pdf.setTextColor(220, 38, 38); // Red color
+            pdf.setFont('helvetica', 'bold');
+            finalDisplayValue = displayValue.toUpperCase();
           }
 
-          const lines = pdf.splitTextToSize(displayValue, pageWidth - margin - 60);
+          const lines = pdf.splitTextToSize(finalDisplayValue, pageWidth - margin - 60);
           pdf.text(lines, margin + 52, yPos);
 
-          // Reset text color
+          // Reset text color and font
           if (isConditionalWithValue) {
             pdf.setTextColor(0, 0, 0); // Back to black
+            pdf.setFont('helvetica', 'normal');
           }
           yPos += 6 * lines.length;
         }
@@ -746,20 +757,23 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
               yPos += 5; // Space between markisen
             });
 
-            // Add Markise bemerkungen if exists
+            // Add Markise bemerkungen if exists - RED + UPPERCASE + BOLD
             const markiseBemerkungen = formData.specifications.markiseBemerkungen as string;
             if (markiseBemerkungen && markiseBemerkungen.trim()) {
               checkNewPage(15);
               pdf.setFont('helvetica', 'bold');
               pdf.text('Markise Bemerkungen:', margin + 5, yPos);
               yPos += 6;
-              pdf.setFont('helvetica', 'normal');
-              const bemerkungenLines = pdf.splitTextToSize(markiseBemerkungen, pageWidth - margin - 30);
+              pdf.setTextColor(220, 38, 38); // Red color
+              pdf.setFont('helvetica', 'bold');
+              const markiseBemerkungenText = markiseBemerkungen.toUpperCase();
+              const bemerkungenLines = pdf.splitTextToSize(markiseBemerkungenText, pageWidth - margin - 30);
               bemerkungenLines.forEach((line: string) => {
                 checkNewPage();
                 pdf.text(line, margin + 10, yPos);
                 yPos += 5;
               });
+              pdf.setTextColor(0, 0, 0); // Reset color
             }
           }
         } catch (e) {
@@ -985,7 +999,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
           yPos = boxStartY + 68; // Move past the box
         });
 
-        // Add Unterbauelemente bemerkungen if exists
+        // Add Unterbauelemente bemerkungen if exists - RED + UPPERCASE + BOLD
         const unterbauelementeBemerkungen = formData.specifications.unterbauelementeBemerkungen as string;
         if (unterbauelementeBemerkungen && unterbauelementeBemerkungen.trim()) {
           checkNewPage(20);
@@ -994,13 +1008,16 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
           pdf.setFont('helvetica', 'bold');
           pdf.text('Bemerkungen:', margin + 2, yPos);
           yPos += 6;
-          pdf.setFont('helvetica', 'normal');
-          const bemerkungenLines = pdf.splitTextToSize(unterbauelementeBemerkungen, pageWidth - margin - 20);
+          pdf.setTextColor(220, 38, 38); // Red color
+          pdf.setFont('helvetica', 'bold');
+          const unterbauBemerkungenText = unterbauelementeBemerkungen.toUpperCase();
+          const bemerkungenLines = pdf.splitTextToSize(unterbauBemerkungenText, pageWidth - margin - 20);
           bemerkungenLines.forEach((line: string) => {
             checkNewPage();
             pdf.text(line, margin + 8, yPos);
             yPos += 5;
           });
+          pdf.setTextColor(0, 0, 0); // Reset color
         }
 
         yPos += 10;
@@ -1137,17 +1154,21 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
         pdf.text(item.label, margin + 8, yPos);
         pdf.setFont('helvetica', 'normal');
 
-        // Set red color for conditional/bauform fields with "Ja" values
+        // Set red color + bold + uppercase for conditional/bauform fields with "Ja" values
+        let displayValue = item.value;
         if (item.isConditional) {
           pdf.setTextColor(220, 38, 38); // Red color
+          pdf.setFont('helvetica', 'bold');
+          displayValue = item.value.toUpperCase();
         }
 
-        const lines = pdf.splitTextToSize(item.value, pageWidth - margin - 70);
+        const lines = pdf.splitTextToSize(displayValue, pageWidth - margin - 70);
         pdf.text(lines, margin + 52, yPos);
 
-        // Reset text color
+        // Reset text color and font
         if (item.isConditional) {
           pdf.setTextColor(0, 0, 0);
+          pdf.setFont('helvetica', 'normal');
         }
         yPos += 6 * lines.length;
       });
@@ -1171,12 +1192,14 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     pdf.text('BEMERKUNGEN', margin + 2, yPos);
     yPos += 10;
 
-    // Use blue color for Bemerkungen text
-    pdf.setTextColor(37, 99, 235); // Blue color for Bemerkungen
+    // Use RED color and UPPERCASE for Bemerkungen text
+    pdf.setTextColor(220, 38, 38); // Red color for Bemerkungen
     pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
+    pdf.setFont('helvetica', 'bold');
 
-    const lines = pdf.splitTextToSize(formData.bemerkungen, pageWidth - 2 * margin - 4);
+    // Convert to uppercase
+    const bemerkText = formData.bemerkungen.toUpperCase();
+    const lines = pdf.splitTextToSize(bemerkText, pageWidth - 2 * margin - 4);
 
     lines.forEach((line: string) => {
       checkNewPage();

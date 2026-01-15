@@ -123,6 +123,21 @@ async function initializeTables() {
       END
     `);
 
+    // Add papierkorb_date column for trash auto-delete after 30 days
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_forms') AND name = 'papierkorb_date')
+      BEGIN
+        ALTER TABLE aufmass_forms ADD papierkorb_date DATE
+      END
+    `);
+
+    // Set papierkorb_date for existing papierkorb items that don't have it
+    await pool.request().query(`
+      UPDATE aufmass_forms
+      SET papierkorb_date = CAST(GETDATE() AS DATE)
+      WHERE status = 'papierkorb' AND papierkorb_date IS NULL
+    `);
+
     // Add generated_pdf column to store pre-generated PDF
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_forms') AND name = 'generated_pdf')
@@ -884,6 +899,14 @@ app.get('/api/branches', authenticateToken, requireAdmin, async (req, res) => {
 // Get all forms
 app.get('/api/forms', authenticateToken, async (req, res) => {
   try {
+    // Auto-delete forms in Papierkorb older than 30 days
+    await pool.request().query(`
+      DELETE FROM aufmass_forms
+      WHERE status = 'papierkorb'
+      AND papierkorb_date IS NOT NULL
+      AND DATEDIFF(day, papierkorb_date, GETDATE()) > 30
+    `);
+
     // Build query with optional branch filter
     const branchFilter = req.branchId ? 'WHERE f.branch_id = @branch_id' : '';
     const request = pool.request();
@@ -897,7 +920,7 @@ app.get('/api/forms', authenticateToken, async (req, res) => {
         f.id, f.datum, f.aufmasser, f.kunde_vorname, f.kunde_nachname, f.kunde_email,
         f.kundenlokation, f.category, f.product_type, f.model, f.specifications,
         f.markise_data, f.bemerkungen, f.status, f.created_by, f.created_at, f.updated_at,
-        f.montage_datum, f.status_date, f.pdf_generated_at, f.branch_id,
+        f.montage_datum, f.status_date, f.pdf_generated_at, f.branch_id, f.papierkorb_date,
         (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND file_type LIKE 'image/%') as image_count,
         (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND (file_type = 'application/pdf' OR file_name LIKE '%.pdf')) as pdf_count
       FROM aufmass_forms f
@@ -905,8 +928,11 @@ app.get('/api/forms', authenticateToken, async (req, res) => {
       ORDER BY f.created_at DESC
     `);
 
-    // Get PDF files for each form
-    const formsWithPdfs = await Promise.all(result.recordset.map(async (form) => {
+    // Get PDF files and media files for each form
+    const formsWithFiles = await Promise.all(result.recordset.map(async (form) => {
+      const formData = { ...form, pdf_files: [], media_files: [] };
+
+      // Get PDF files
       if (form.pdf_count > 0) {
         const pdfs = await pool.request()
           .input('form_id', sql.Int, form.id)
@@ -915,12 +941,37 @@ app.get('/api/forms', authenticateToken, async (req, res) => {
             FROM aufmass_bilder
             WHERE form_id = @form_id AND (file_type = 'application/pdf' OR file_name LIKE '%.pdf')
           `);
-        return { ...form, pdf_files: pdfs.recordset };
+        formData.pdf_files = pdfs.recordset;
       }
-      return { ...form, pdf_files: [] };
+
+      // Get media files (images and videos)
+      if (form.image_count > 0) {
+        const media = await pool.request()
+          .input('form_id', sql.Int, form.id)
+          .query(`
+            SELECT id, file_name, file_type
+            FROM aufmass_bilder
+            WHERE form_id = @form_id AND file_type LIKE 'image/%'
+          `);
+        formData.media_files = media.recordset;
+      }
+
+      // Also get video files
+      const videos = await pool.request()
+        .input('form_id', sql.Int, form.id)
+        .query(`
+          SELECT id, file_name, file_type
+          FROM aufmass_bilder
+          WHERE form_id = @form_id AND file_type LIKE 'video/%'
+        `);
+      if (videos.recordset.length > 0) {
+        formData.media_files = [...formData.media_files, ...videos.recordset];
+      }
+
+      return formData;
     }));
 
-    res.json(formsWithPdfs);
+    res.json(formsWithFiles);
   } catch (err) {
     console.error('Error fetching forms:', err);
     res.status(500).json({ error: 'Failed to fetch forms' });
@@ -1077,8 +1128,16 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
       bemerkungen: { column: 'bemerkungen', type: sql.NVarChar },
       status: { column: 'status', type: sql.NVarChar },
       montageDatum: { column: 'montage_datum', type: sql.Date },
-      statusDate: { column: 'status_date', type: sql.Date }
+      statusDate: { column: 'status_date', type: sql.Date },
+      papierkorbDate: { column: 'papierkorb_date', type: sql.Date }
     };
+
+    // Auto-set papierkorb_date when moving to trash, clear when restoring
+    if (updates.status === 'papierkorb') {
+      updates.papierkorbDate = new Date().toISOString().split('T')[0];
+    } else if (updates.status && updates.status !== 'papierkorb') {
+      updates.papierkorbDate = null;
+    }
 
     const setClauses = [];
     const request = pool.request().input('id', sql.Int, id);
@@ -1142,6 +1201,12 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
             VALUES (@form_id, @status, @changed_by, @status_date, @notes)
           `);
       }
+    }
+
+    // Delete stored PDF so next preview generates fresh one
+    const pdfPath = path.join(PDF_DIR, `${id}.pdf`);
+    if (fs.existsSync(pdfPath)) {
+      fs.unlinkSync(pdfPath);
     }
 
     res.json({ message: 'Form updated successfully' });
@@ -1396,6 +1461,12 @@ app.post('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
           INSERT INTO aufmass_abnahme (form_id, ist_fertig, hat_probleme, problem_beschreibung, maengel_liste, baustelle_sauber, monteur_note, kunde_name, kunde_unterschrift, abnahme_datum, bemerkungen)
           VALUES (@form_id, @ist_fertig, @hat_probleme, @problem_beschreibung, @maengel_liste, @baustelle_sauber, @monteur_note, @kunde_name, @kunde_unterschrift, @abnahme_datum, @bemerkungen)
         `);
+    }
+
+    // Delete stored PDF so next preview generates fresh one with abnahme data
+    const pdfPath = path.join(PDF_DIR, `${id}.pdf`);
+    if (fs.existsSync(pdfPath)) {
+      fs.unlinkSync(pdfPath);
     }
 
     res.json({ message: 'Abnahme saved successfully' });
