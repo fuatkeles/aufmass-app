@@ -476,7 +476,7 @@ Aylux Team`;
           getAbnahmeImages(formId)
         ]);
 
-        const result = await generatePDF({
+        const pdfFormData = {
           ...formData,
           id: String(formData.id),
           productSelection: {
@@ -490,7 +490,9 @@ Aylux Team`;
             ...abnahmeData,
             maengelBilder: abnahmeImages || []
           } : undefined
-        }, { returnBlob: true });
+        };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result = await generatePDF(pdfFormData as any, { returnBlob: true });
 
         if (result && result.blob) {
           await savePdf(formId, result.blob);
