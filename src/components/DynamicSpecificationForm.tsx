@@ -112,6 +112,13 @@ const DynamicSpecificationForm = ({
     setShowMissingDropdown(false);
   };
 
+  // Helper: Check if field should show required indicator
+  // ALL fields are required EXCEPT: montageteam, bemerkungen
+  const isFieldRequired = (fieldName: string): boolean => {
+    const excludedFields = ['montageteam', 'bemerkungen'];
+    return !excludedFields.includes(fieldName);
+  };
+
   // Fetch Montageteams from database on mount
   useEffect(() => {
     const fetchTeams = async () => {
@@ -176,7 +183,7 @@ const DynamicSpecificationForm = ({
           >
             <label htmlFor={field.name}>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <input
               type="text"
@@ -201,7 +208,7 @@ const DynamicSpecificationForm = ({
             <label htmlFor={field.name}>
               {field.label}
               {field.unit && <span className="unit-label">({field.unit})</span>}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <div className="number-input-wrapper">
               <input
@@ -235,7 +242,7 @@ const DynamicSpecificationForm = ({
           >
             <label htmlFor={field.name}>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <select
               id={field.name}
@@ -296,7 +303,7 @@ const DynamicSpecificationForm = ({
           >
             <label htmlFor={field.name}>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             {colors.length > 0 ? (
               <>
@@ -370,7 +377,7 @@ const DynamicSpecificationForm = ({
           >
             <label>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <div className="multiselect-options">
               {field.options?.map((option) => {
@@ -615,7 +622,7 @@ const DynamicSpecificationForm = ({
             >
               <label>
                 {field.label}
-                {field.required && <span className="required">*</span>}
+                {isFieldRequired(field.name) && <span className="required">*</span>}
               </label>
               <div className="ja-nein-buttons">
                 <button
@@ -685,7 +692,7 @@ const DynamicSpecificationForm = ({
           >
             <label>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <div className="bauform-button-group">
               <button
@@ -804,7 +811,7 @@ const DynamicSpecificationForm = ({
           >
             <label htmlFor={field.name}>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <select
               id={field.name}
@@ -858,7 +865,7 @@ const DynamicSpecificationForm = ({
           >
             <label>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <div className="ja-nein-buttons">
               <button
@@ -999,7 +1006,7 @@ const DynamicSpecificationForm = ({
                       <div className="senkrecht-fields-grid">
                         {/* Row 1: Position, Modell, Befestigungsart */}
                         <div className="form-field">
-                          <label>Position</label>
+                          <label>Position <span className="required">*</span></label>
                           <select
                             value={senkrecht.position || ''}
                             onChange={(e) => updateSenkrechtField(idx, 'position', e.target.value)}
@@ -1015,7 +1022,7 @@ const DynamicSpecificationForm = ({
                           </select>
                         </div>
                         <div className="form-field">
-                          <label>Modell</label>
+                          <label>Modell <span className="required">*</span></label>
                           <select
                             value={senkrecht.modell || ''}
                             onChange={(e) => updateSenkrechtField(idx, 'modell', e.target.value)}
@@ -1026,7 +1033,7 @@ const DynamicSpecificationForm = ({
                           </select>
                         </div>
                         <div className="form-field">
-                          <label>Befestigungsart</label>
+                          <label>Befestigungsart <span className="required">*</span></label>
                           <select
                             value={senkrecht.befestigungsart || ''}
                             onChange={(e) => updateSenkrechtField(idx, 'befestigungsart', e.target.value)}
@@ -1038,7 +1045,7 @@ const DynamicSpecificationForm = ({
                         </div>
                         {/* Row 2: Breite, Höhe, ZIP */}
                         <div className="form-field">
-                          <label>Breite <span className="unit-label">(mm)</span></label>
+                          <label>Breite <span className="unit-label">(mm)</span> <span className="required">*</span></label>
                           <input
                             type="number"
                             value={senkrecht.breite || ''}
@@ -1048,7 +1055,7 @@ const DynamicSpecificationForm = ({
                           />
                         </div>
                         <div className="form-field">
-                          <label>Höhe <span className="unit-label">(mm)</span></label>
+                          <label>Höhe <span className="unit-label">(mm)</span> <span className="required">*</span></label>
                           <input
                             type="number"
                             value={senkrecht.hoehe || ''}
@@ -1058,7 +1065,7 @@ const DynamicSpecificationForm = ({
                           />
                         </div>
                         <div className="form-field">
-                          <label>ZIP</label>
+                          <label>ZIP <span className="required">*</span></label>
                           <select
                             value={senkrecht.zip || ''}
                             onChange={(e) => updateSenkrechtField(idx, 'zip', e.target.value)}
@@ -1070,7 +1077,7 @@ const DynamicSpecificationForm = ({
                         </div>
                         {/* Row 3: Antrieb, Antriebseite, Anschlussseite */}
                         <div className="form-field">
-                          <label>Antrieb</label>
+                          <label>Antrieb <span className="required">*</span></label>
                           <select
                             value={senkrecht.antrieb || ''}
                             onChange={(e) => updateSenkrechtField(idx, 'antrieb', e.target.value)}
@@ -1081,7 +1088,7 @@ const DynamicSpecificationForm = ({
                           </select>
                         </div>
                         <div className="form-field">
-                          <label>Antriebseite</label>
+                          <label>Antriebseite <span className="required">*</span></label>
                           <select
                             value={senkrecht.antriebseite || ''}
                             onChange={(e) => updateSenkrechtField(idx, 'antriebseite', e.target.value)}
@@ -1092,7 +1099,7 @@ const DynamicSpecificationForm = ({
                           </select>
                         </div>
                         <div className="form-field">
-                          <label>Anschlussseite</label>
+                          <label>Anschlussseite <span className="required">*</span></label>
                           <select
                             value={senkrecht.anschlussseite || ''}
                             onChange={(e) => updateSenkrechtField(idx, 'anschlussseite', e.target.value)}
@@ -1105,7 +1112,7 @@ const DynamicSpecificationForm = ({
                         {/* Row 4: Gestellfarbe, Stoff Nummer */}
                         <div className="senkrecht-bottom-row">
                           <div className="form-field">
-                            <label>Gestellfarbe</label>
+                            <label>Gestellfarbe <span className="required">*</span></label>
                             <input
                               type="text"
                               value={senkrecht.gestellfarbe || ''}
@@ -1114,7 +1121,7 @@ const DynamicSpecificationForm = ({
                             />
                           </div>
                           <div className="form-field">
-                            <label>Stoff Nummer</label>
+                            <label>Stoff Nummer <span className="required">*</span></label>
                             <input
                               type="text"
                               value={senkrecht.stoffNummer || ''}
@@ -1150,7 +1157,7 @@ const DynamicSpecificationForm = ({
           >
             <label htmlFor={field.name}>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <textarea
               id={field.name}
@@ -1311,7 +1318,7 @@ const DynamicSpecificationForm = ({
             <label>
               {field.label}
               {field.unit && <span className="unit-label">({field.unit})</span>}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <div className="number-input-wrapper">
               <input
@@ -1331,7 +1338,7 @@ const DynamicSpecificationForm = ({
           <div key={field.name} className="form-field">
             <label>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <select
               value={value as string || ''}
@@ -1351,7 +1358,7 @@ const DynamicSpecificationForm = ({
           <div key={field.name} className="form-field">
             <label>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <select
               value={value as string || ''}
@@ -1373,7 +1380,7 @@ const DynamicSpecificationForm = ({
           <div key={field.name} className="form-field conditional-field">
             <label>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <div className="button-group">
               <button
@@ -1410,7 +1417,7 @@ const DynamicSpecificationForm = ({
           <div key={field.name} className="form-field">
             <label>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <select
               value={value as string || ''}
@@ -1441,7 +1448,7 @@ const DynamicSpecificationForm = ({
           <div key={field.name} className="form-field bauform-field">
             <label>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <div className="button-group">
               <button
@@ -1522,7 +1529,7 @@ const DynamicSpecificationForm = ({
           <div key={field.name} className="form-field full-width multiselect-field">
             <label>
               {field.label}
-              {field.required && <span className="required">*</span>}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
             </label>
             <div className="multiselect-options">
               {field.options?.map(option => {
