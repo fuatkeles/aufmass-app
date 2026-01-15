@@ -403,7 +403,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
           const parsed = JSON.parse(rawData);
           if (Array.isArray(parsed)) senkrechtData = parsed as Array<Record<string, unknown>>;
         } else if (Array.isArray(rawData)) {
-          senkrechtData = rawData as Array<Record<string, unknown>>;
+          senkrechtData = rawData as unknown as Array<Record<string, unknown>>;
         }
       } catch { senkrechtData = []; }
 
