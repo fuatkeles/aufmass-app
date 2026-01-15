@@ -134,9 +134,50 @@ const DynamicSpecificationForm = ({
 
   // Get fields and model colors for selected product
   const productTypeConfig = productConfig[category]?.[productType];
-  // Get total required fields count
-  const totalRequiredFields = productTypeConfig?.fields?.filter((f: FieldConfig) => f.required).length || 0;
-  const filledRequiredFields = totalRequiredFields - missingFields.length;
+
+  // Calculate total required fields - ALL fields except montageteam and bemerkungen
+  const excludedFields = ['montageteam', 'bemerkungen'];
+  const countTotalRequiredFields = () => {
+    if (!productTypeConfig?.fields) return 0;
+    let count = 0;
+    for (const field of productTypeConfig.fields as FieldConfig[]) {
+      // Skip excluded fields
+      if (excludedFields.includes(field.name)) continue;
+      // Skip special types
+      if (field.type === 'markise_trigger' || field.type === 'senkrecht_section') continue;
+      // Handle showWhen conditions
+      if (field.showWhen) {
+        const dependentValue = formData[field.showWhen.field];
+        if (field.showWhen.value !== undefined && dependentValue !== field.showWhen.value) continue;
+        if (field.showWhen.notEquals !== undefined && (dependentValue === field.showWhen.notEquals || !dependentValue)) continue;
+      }
+      count++;
+    }
+    // Add glasMarkise fields if type is not "Keine"
+    const glasMarkiseType = formData['glasMarkiseType'];
+    if (glasMarkiseType && glasMarkiseType !== 'Keine') {
+      count += 5; // Aufteilung, Stoff Nummer, ZIP, Antrieb, Antriebseite
+    }
+    // Add senkrecht fields if active
+    if (formData['senkrechtMarkiseActive'] === 'Ja') {
+      let senkrechtData: Array<Record<string, unknown>> = [];
+      try {
+        const rawData = formData['senkrechtMarkiseData'];
+        if (typeof rawData === 'string') {
+          const parsed = JSON.parse(rawData);
+          if (Array.isArray(parsed)) senkrechtData = parsed as Array<Record<string, unknown>>;
+        } else if (Array.isArray(rawData)) {
+          senkrechtData = rawData as unknown as Array<Record<string, unknown>>;
+        }
+      } catch { senkrechtData = []; }
+      // 11 fields per senkrecht entry (or 1 if no entries yet)
+      count += senkrechtData.length > 0 ? senkrechtData.length * 11 : 11;
+    }
+    return count;
+  };
+
+  const totalRequiredFields = countTotalRequiredFields();
+  const filledRequiredFields = Math.max(0, totalRequiredFields - missingFields.length);
   const fields = productTypeConfig?.fields || [];
   // For model colors, use first selected model if array
   const firstModel = Array.isArray(model) ? model[0] : model;

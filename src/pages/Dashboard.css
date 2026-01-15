@@ -1085,7 +1085,7 @@
   color: #06b6d4;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .action-btn.attachment span {
