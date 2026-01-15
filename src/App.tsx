@@ -338,6 +338,24 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       }
     }
 
+    // Validate glasMarkise fields when glasMarkiseType is selected (not "Keine")
+    const glasMarkiseType = formData.specifications['glasMarkiseType'];
+    if (glasMarkiseType && glasMarkiseType !== 'Keine') {
+      const glasMarkiseRequiredFields = [
+        { name: 'glasMarkiseAufteilung', label: 'Aufteilung' },
+        { name: 'glasMarkiseZip', label: 'ZIP' },
+        { name: 'glasMarkiseAntrieb', label: 'Antrieb' },
+        { name: 'glasMarkiseAntriebseite', label: 'Antriebseite' }
+      ];
+
+      for (const field of glasMarkiseRequiredFields) {
+        const value = formData.specifications[field.name];
+        if (!value || value === '') {
+          missingFields.push({ name: field.name, label: field.label });
+        }
+      }
+    }
+
     return missingFields;
   }, [formData.productSelection, formData.specifications, productConfig]);
 
