@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ServerImage } from '../types';
+import { deleteImage } from '../services/api';
 import './FinalSection.css';
 import './SectionStyles.css';
 
@@ -109,7 +110,21 @@ const FinalSection = ({
     e.target.value = '';
   };
 
-  const removeImage = (index: number) => {
+  const removeImage = async (index: number) => {
+    const fileToRemove = bilder[index];
+
+    // If it's a server image, delete from database
+    if (isServerFile(fileToRemove)) {
+      try {
+        await deleteImage(fileToRemove.id);
+      } catch (err) {
+        console.error('Error deleting image from server:', err);
+        alert('Fehler beim Löschen des Bildes');
+        return; // Don't remove from UI if server delete failed
+      }
+    }
+
+    // Remove from local state
     const newFiles = bilder.filter((_, i) => i !== index);
     updateBilder(newFiles);
   };
