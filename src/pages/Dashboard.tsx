@@ -296,13 +296,33 @@ const Dashboard = () => {
   const totalPhotos = maengelImages.length + maengelImageFiles.length;
   const abnahmePhotosRequired = (abnahmeData.istFertig || abnahmeData.hatProbleme) && totalPhotos < 2;
 
+  // Comprehensive Abnahme validation - ALL fields required
+  const abnahmeValidation = {
+    statusSelected: abnahmeData.istFertig === true || abnahmeData.hatProbleme === true,
+    baustelleSauber: !!abnahmeData.baustelleSauber,
+    monteurNote: !!abnahmeData.monteurNote && abnahmeData.monteurNote >= 1 && abnahmeData.monteurNote <= 6,
+    photosOk: totalPhotos >= 2,
+    kundeName: !!(abnahmeData.kundeName && abnahmeData.kundeName.trim()),
+    kundeUnterschrift: !!abnahmeData.kundeUnterschrift
+  };
+  const abnahmeIsValid = Object.values(abnahmeValidation).every(v => v);
+
+  // Get missing fields for tooltip
+  const abnahmeMissingFields: string[] = [];
+  if (!abnahmeValidation.statusSelected) abnahmeMissingFields.push('Status wählen');
+  if (!abnahmeValidation.baustelleSauber) abnahmeMissingFields.push('Baustelle sauber');
+  if (!abnahmeValidation.monteurNote) abnahmeMissingFields.push('Monteur Note');
+  if (!abnahmeValidation.photosOk) abnahmeMissingFields.push('Min. 2 Fotos');
+  if (!abnahmeValidation.kundeName) abnahmeMissingFields.push('Kundenname');
+  if (!abnahmeValidation.kundeUnterschrift) abnahmeMissingFields.push('Kundenbestätigung');
+
   // Save abnahme and update status
   const handleSaveAbnahme = async () => {
     if (!abnahmeFormId) return;
 
-    // Validate: If ES GIBT MÄNGEL, photos are required
-    if (abnahmeData.hatProbleme && (maengelImages.length + maengelImageFiles.length === 0)) {
-      alert('Bitte fügen Sie mindestens ein Foto der Mängel hinzu.');
+    // Validate all required fields
+    if (!abnahmeIsValid) {
+      alert('Bitte füllen Sie alle erforderlichen Felder aus:\n' + abnahmeMissingFields.join('\n'));
       return;
     }
 
@@ -1161,7 +1181,7 @@ Aylux Team`;
               <div className={`abnahme-form ${isAbnahmeLocked ? 'locked' : ''}`}>
                 {/* Status Selection - Mutually Exclusive */}
                 <div className="abnahme-status-selection">
-                  <label className="abnahme-status-label">Status der Arbeit</label>
+                  <label className="abnahme-status-label">Status der Arbeit <span style={{ color: '#ef4444' }}>*</span></label>
                   <div className="abnahme-radio-group">
                     <label className={`abnahme-radio-option ${abnahmeData.istFertig && !abnahmeData.hatProbleme ? 'selected' : ''}`}>
                       <input
@@ -1207,7 +1227,7 @@ Aylux Team`;
                   >
                     {/* Baustelle Sauber */}
                     <div className="abnahme-row">
-                      <label className="abnahme-field-label">Baustelle wurde sauber und aufgeräumt gelassen</label>
+                      <label className="abnahme-field-label">Baustelle wurde sauber und aufgeräumt gelassen <span style={{ color: '#ef4444' }}>*</span></label>
                       <div className="abnahme-ja-nein-buttons">
                         <button
                           type="button"
@@ -1228,7 +1248,7 @@ Aylux Team`;
 
                     {/* Monteur Note */}
                     <div className="abnahme-row">
-                      <label className="abnahme-field-label">Bitte bewerten Sie Monteure Arbeit mit Schulnoten (1-6)</label>
+                      <label className="abnahme-field-label">Bitte bewerten Sie Monteure Arbeit mit Schulnoten (1-6) <span style={{ color: '#ef4444' }}>*</span></label>
                       <div className="abnahme-note-buttons">
                         {[1, 2, 3, 4, 5, 6].map(note => (
                           <button
@@ -1404,7 +1424,7 @@ Aylux Team`;
                 <div className="abnahme-divider">Kundenbestätigung</div>
 
                 <div className="abnahme-row">
-                  <label>Name des Kunden</label>
+                  <label>Name des Kunden <span style={{ color: '#ef4444' }}>*</span></label>
                   <input
                     type="text"
                     value={abnahmeData.kundeName || ''}
@@ -1420,7 +1440,7 @@ Aylux Team`;
                       checked={abnahmeData.kundeUnterschrift || false}
                       onChange={(e) => setAbnahmeData({ ...abnahmeData, kundeUnterschrift: e.target.checked })}
                     />
-                    <span>Kunde hat die Abnahme bestätigt</span>
+                    <span>Kunde hat die Abnahme bestätigt <span style={{ color: '#ef4444' }}>*</span></span>
                   </label>
                 </div>
               </div>
@@ -1431,10 +1451,10 @@ Aylux Team`;
                 </button>
                 {!isAbnahmeLocked && (
                   <button
-                    className="modal-btn primary"
+                    className={`modal-btn primary ${!abnahmeIsValid ? 'disabled' : ''}`}
                     onClick={handleSaveAbnahme}
-                    disabled={abnahmeSaving || abnahmePhotosRequired}
-                    title={abnahmePhotosRequired ? 'Mindestens 2 Fotos sind erforderlich' : ''}
+                    disabled={abnahmeSaving || !abnahmeIsValid}
+                    title={!abnahmeIsValid ? `Fehlend: ${abnahmeMissingFields.join(', ')}` : ''}
                   >
                     {abnahmeSaving ? 'Speichern...' : 'Abnahme speichern'}
                   </button>
