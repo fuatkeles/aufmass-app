@@ -685,6 +685,16 @@ const detectBranch = (req, res, next) => {
 // Apply branch detection to all API routes
 app.use('/api', detectBranch);
 
+// Helper: verify a form belongs to the requesting branch (returns form or null)
+async function verifyFormBranch(formId, branchId) {
+  if (!branchId) return true; // admin/dev sees all
+  const result = await pool.request()
+    .input('id', sql.Int, formId)
+    .input('branch_id', sql.NVarChar, branchId)
+    .query('SELECT id FROM aufmass_forms WHERE id = @id AND (branch_id = @branch_id OR branch_id IS NULL)');
+  return result.recordset.length > 0;
+}
+
 // ============ AUTH ROUTES ============
 
 // Login
@@ -1524,6 +1534,12 @@ app.get('/api/forms/:id/pdf', authenticateToken, async (req, res) => {
 app.get('/api/forms/:id/pdf/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Branch isolation: verify form belongs to this branch
+    if (!await verifyFormBranch(id, req.branchId)) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
+
     const pdfPath = path.join(PDF_DIR, `${id}.pdf`);
 
     // Check filesystem for PDF
@@ -1564,6 +1580,12 @@ app.get('/api/forms/:id/pdf/status', authenticateToken, async (req, res) => {
 app.get('/api/forms/:id/status-history', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Branch isolation: verify form belongs to this branch
+    if (!await verifyFormBranch(id, req.branchId)) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
+
     const result = await pool.request()
       .input('form_id', sql.Int, id)
       .query(`
@@ -1586,6 +1608,12 @@ app.get('/api/forms/:id/status-history', authenticateToken, async (req, res) => 
 app.get('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Branch isolation: verify form belongs to this branch
+    if (!await verifyFormBranch(id, req.branchId)) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
+
     const result = await pool.request()
       .input('form_id', sql.Int, id)
       .query('SELECT * FROM aufmass_abnahme WHERE form_id = @form_id');
@@ -1726,6 +1754,12 @@ app.post('/api/forms/:id/images', authenticateToken, upload.array('images', 10),
 app.post('/api/forms/:id/abnahme-images', authenticateToken, upload.array('images', 10), async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Branch isolation: verify form belongs to this branch
+    if (!await verifyFormBranch(id, req.branchId)) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
+
     const files = req.files;
 
     if (!files || files.length === 0) {
@@ -1755,6 +1789,12 @@ app.post('/api/forms/:id/abnahme-images', authenticateToken, upload.array('image
 app.get('/api/forms/:id/abnahme-images', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Branch isolation: verify form belongs to this branch
+    if (!await verifyFormBranch(id, req.branchId)) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
+
     const result = await pool.request()
       .input('form_id', sql.Int, id)
       .query('SELECT id, file_name, file_type, created_at FROM aufmass_abnahme_bilder WHERE form_id = @form_id ORDER BY created_at');
@@ -1770,9 +1810,15 @@ app.get('/api/forms/:id/abnahme-images', authenticateToken, async (req, res) => 
 app.get('/api/abnahme-images/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      .query('SELECT file_data, file_type, file_name FROM aufmass_abnahme_bilder WHERE id = @id');
+    const branchFilter = req.branchId ? 'AND (f.branch_id = @branch_id OR f.branch_id IS NULL)' : '';
+    const request = pool.request().input('id', sql.Int, id);
+    if (req.branchId) request.input('branch_id', sql.NVarChar, req.branchId);
+    const result = await request.query(`
+      SELECT ab.file_data, ab.file_type, ab.file_name
+      FROM aufmass_abnahme_bilder ab
+      INNER JOIN aufmass_forms f ON ab.form_id = f.id
+      WHERE ab.id = @id ${branchFilter}
+    `);
 
     if (result.recordset.length === 0) {
       return res.status(404).json({ error: 'Image not found' });
@@ -1792,6 +1838,20 @@ app.get('/api/abnahme-images/:id', authenticateToken, async (req, res) => {
 app.delete('/api/abnahme-images/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Branch isolation: verify image belongs to a form in this branch
+    const branchFilter = req.branchId ? 'AND (f.branch_id = @branch_id OR f.branch_id IS NULL)' : '';
+    const verifyReq = pool.request().input('id', sql.Int, id);
+    if (req.branchId) verifyReq.input('branch_id', sql.NVarChar, req.branchId);
+    const verify = await verifyReq.query(`
+      SELECT ab.id FROM aufmass_abnahme_bilder ab
+      INNER JOIN aufmass_forms f ON ab.form_id = f.id
+      WHERE ab.id = @id ${branchFilter}
+    `);
+    if (verify.recordset.length === 0) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
     await pool.request()
       .input('id', sql.Int, id)
       .query('DELETE FROM aufmass_abnahme_bilder WHERE id = @id');
@@ -1809,6 +1869,11 @@ app.delete('/api/abnahme-images/:id', authenticateToken, async (req, res) => {
 app.get('/api/forms/:id/angebot', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Branch isolation: verify form belongs to this branch
+    if (!await verifyFormBranch(id, req.branchId)) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
 
     // Get angebot summary
     const summaryResult = await pool.request()
@@ -1834,6 +1899,12 @@ app.get('/api/forms/:id/angebot', authenticateToken, async (req, res) => {
 app.post('/api/forms/:id/angebot', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Branch isolation: verify form belongs to this branch
+    if (!await verifyFormBranch(id, req.branchId)) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
+
     const { items, angebot_datum, bemerkungen, mwst_satz = 19 } = req.body;
 
     if (!items || items.length === 0) {
@@ -1998,13 +2069,19 @@ app.get('/api/files/:id', async (req, res) => {
   }
 });
 
-// Get image by ID (public - for displaying images)
-app.get('/api/images/:id', async (req, res) => {
+// Get image by ID (with branch isolation)
+app.get('/api/images/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.request()
-      .input('id', sql.Int, id)
-      .query('SELECT file_data, file_type, file_name FROM aufmass_bilder WHERE id = @id');
+    const branchFilter = req.branchId ? 'AND (f.branch_id = @branch_id OR f.branch_id IS NULL)' : '';
+    const request = pool.request().input('id', sql.Int, id);
+    if (req.branchId) request.input('branch_id', sql.NVarChar, req.branchId);
+    const result = await request.query(`
+      SELECT b.file_data, b.file_type, b.file_name
+      FROM aufmass_bilder b
+      INNER JOIN aufmass_forms f ON b.form_id = f.id
+      WHERE b.id = @id ${branchFilter}
+    `);
 
     if (result.recordset.length === 0) {
       return res.status(404).json({ error: 'Image not found' });
@@ -2024,6 +2101,20 @@ app.get('/api/images/:id', async (req, res) => {
 app.delete('/api/images/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Branch isolation: verify image belongs to a form in this branch
+    const branchFilter = req.branchId ? 'AND (f.branch_id = @branch_id OR f.branch_id IS NULL)' : '';
+    const verifyReq = pool.request().input('id', sql.Int, id);
+    if (req.branchId) verifyReq.input('branch_id', sql.NVarChar, req.branchId);
+    const verify = await verifyReq.query(`
+      SELECT b.id FROM aufmass_bilder b
+      INNER JOIN aufmass_forms f ON b.form_id = f.id
+      WHERE b.id = @id ${branchFilter}
+    `);
+    if (verify.recordset.length === 0) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+
     await pool.request()
       .input('id', sql.Int, id)
       .query('DELETE FROM aufmass_bilder WHERE id = @id');
@@ -2070,8 +2161,16 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
 // Get Montageteam stats (with project counts from forms)
 app.get('/api/stats/montageteam', authenticateToken, async (req, res) => {
   try {
-    // Get all montageteams with their project counts
-    const result = await pool.request().query(`
+    // Branch isolation for both montageteams and forms
+    const mtBranchFilter = req.branchId ? 'AND m.branch_id = @branch_id' : '';
+    const formBranchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
+
+    const request = pool.request();
+    if (req.branchId) {
+      request.input('branch_id', sql.NVarChar, req.branchId);
+    }
+
+    const result = await request.query(`
       SELECT
         m.id,
         m.name as montageteam,
@@ -2090,9 +2189,10 @@ app.get('/api/stats/montageteam', authenticateToken, async (req, res) => {
         FROM aufmass_forms
         WHERE JSON_VALUE(specifications, '$.montageteam') IS NOT NULL
           AND JSON_VALUE(specifications, '$.montageteam') != ''
+          ${formBranchFilter}
         GROUP BY JSON_VALUE(specifications, '$.montageteam')
       ) f ON m.name = f.team_name
-      WHERE m.is_active = 1
+      WHERE m.is_active = 1 ${mtBranchFilter}
       ORDER BY m.name ASC
     `);
 
@@ -2843,9 +2943,16 @@ app.get('/api/esignature/download/:requestId', authenticateToken, async (req, re
   try {
     const { requestId } = req.params;
 
-    const result = await pool.request()
-      .input('id', sql.Int, requestId)
-      .query('SELECT signed_document, signature_type, form_id FROM aufmass_esignature_requests WHERE id = @id');
+    // Branch isolation: join with forms to verify branch
+    const branchFilter = req.branchId ? 'AND (f.branch_id = @branch_id OR f.branch_id IS NULL)' : '';
+    const request = pool.request().input('id', sql.Int, requestId);
+    if (req.branchId) request.input('branch_id', sql.NVarChar, req.branchId);
+    const result = await request.query(`
+      SELECT e.signed_document, e.signature_type, e.form_id
+      FROM aufmass_esignature_requests e
+      INNER JOIN aufmass_forms f ON e.form_id = f.id
+      WHERE e.id = @id ${branchFilter}
+    `);
 
     if (result.recordset.length === 0 || !result.recordset[0].signed_document) {
       return res.status(404).json({ error: 'Signed document not found' });
