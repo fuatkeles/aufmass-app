@@ -118,41 +118,6 @@ const getImageDimensions = (base64: string): Promise<{ width: number; height: nu
   });
 };
 
-// Helper to compress image for PDF (resize and reduce quality)
-const compressImageForPDF = (base64: string, maxDimension: number = 800, quality: number = 0.6): Promise<string> => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      let { width, height } = img;
-
-      // Scale down if larger than maxDimension
-      if (width > maxDimension || height > maxDimension) {
-        if (width > height) {
-          height = Math.round((height / width) * maxDimension);
-          width = maxDimension;
-        } else {
-          width = Math.round((width / height) * maxDimension);
-          height = maxDimension;
-        }
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        resolve(base64);
-        return;
-      }
-
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-    img.onerror = () => resolve(base64);
-    img.src = base64;
-  });
-};
-
 // Helper to get EXIF orientation from base64 string
 const getExifOrientationFromBase64 = (base64: string): number => {
   try {

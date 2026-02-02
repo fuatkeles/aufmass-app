@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { isAdminBranch } from '../hooks/useBranchMeta';
+// import { isAdminBranch } from '../hooks/useBranchMeta';
 import type { Stats } from '../services/api';
 
 interface LayoutProps {
@@ -11,7 +11,7 @@ interface LayoutProps {
   onOpenEsignatureAdmin?: () => void;
 }
 
-const Layout = ({ children, stats, onOpenAdminPanel, onOpenEsignatureAdmin }: LayoutProps) => {
+const Layout = ({ children, stats, onOpenAdminPanel, onOpenEsignatureAdmin: _onOpenEsignatureAdmin }: LayoutProps) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, isAdmin } = useAuth();

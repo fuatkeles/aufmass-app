@@ -83,7 +83,6 @@ export default function DashboardStats() {
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const thisMonthForms = forms.filter(f => new Date(f.created_at || '') >= thisMonthStart).length;
-  const thisMonthLeads = leads.filter(l => new Date(l.created_at) >= thisMonthStart).length;
 
   // Pending montage
   const pendingMontage = forms.filter(f =>

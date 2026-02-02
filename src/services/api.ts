@@ -5,7 +5,7 @@ export interface User {
   id: number;
   email: string;
   name: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'user' | 'office';
   is_active?: boolean;
   last_login?: string;
   created_at?: string;

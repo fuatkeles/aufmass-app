@@ -101,12 +101,13 @@ const FormPage = () => {
           }
 
           // Build weitereProdukte from additional lead items
-          const weitereProdukte = (leadState.leadItems || []).slice(1).map(item => {
+          const weitereProdukte = (leadState.leadItems || []).slice(1).map((item, index) => {
             const wpSpecs: DynamicFormData = {
               breite: item.breite * 10,
               tiefe: item.tiefe * 10
             };
             return {
+              id: `lead-wp-${index}`,
               category: 'ÜBERDACHUNG',
               productType: 'Glasdach',
               model: 'Premiumline',

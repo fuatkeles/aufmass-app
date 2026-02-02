@@ -9,7 +9,8 @@ import Montageteam from './pages/Montageteam';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import EsignatureAdmin from './components/EsignatureAdmin';
-import { isAdminBranch } from './hooks/useBranchMeta';
+// isAdminBranch used in future feature flags
+// import { isAdminBranch } from './hooks/useBranchMeta';
 import { getStats, getUsers, getInvitations, createInvitation, deleteInvitation, deleteUser, updateUser } from './services/api';
 import type { Stats, User, Invitation } from './services/api';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -39,7 +40,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { user, logout, isAdmin } = useAuth();
   const { stats } = useStats();
-  const { openAdminPanel, openEsignatureAdmin } = useAdminPanel();
+  const { openAdminPanel } = useAdminPanel();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Theme state
