@@ -9,6 +9,7 @@ interface GrunddatenSectionProps {
     kundeVorname: string;
     kundeNachname: string;
     kundeEmail?: string;
+    kundeTelefon?: string;
     kundenlokation: string;
   };
   updateField: (field: string, value: string) => void;
@@ -104,7 +105,7 @@ const GrunddatenSection = ({ formData, updateField }: GrunddatenSectionProps) =>
         </motion.div>
 
         <motion.div
-          className="form-group full-width"
+          className="form-group"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.45 }}
@@ -118,6 +119,25 @@ const GrunddatenSection = ({ formData, updateField }: GrunddatenSectionProps) =>
             value={formData.kundeEmail || ''}
             onChange={(e) => updateField('kundeEmail', e.target.value)}
             placeholder="kunde@beispiel.de"
+            required
+          />
+        </motion.div>
+
+        <motion.div
+          className="form-group"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.47 }}
+        >
+          <label htmlFor="kundeTelefon">
+            Kunde Telefon <span className="required">*</span>
+          </label>
+          <input
+            type="tel"
+            id="kundeTelefon"
+            value={formData.kundeTelefon || ''}
+            onChange={(e) => updateField('kundeTelefon', e.target.value)}
+            placeholder="+49 123 456789"
             required
           />
         </motion.div>

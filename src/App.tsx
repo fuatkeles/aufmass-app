@@ -27,17 +27,12 @@ const STATUS_STEPS = [
   { value: 'montage_gestartet', label: 'Montage Gestartet', color: '#ec4899' },
   { value: 'abnahme', label: 'Abnahme', color: '#10b981' },
   { value: 'reklamation_eingegangen', label: 'Reklamation Eingegangen', color: '#ef4444' },
-  { value: 'reklamation_anerkannt', label: 'Reklamation Anerkannt', color: '#dc2626' },
   { value: 'reklamation_abgelehnt', label: 'Reklamation Abgelehnt', color: '#b91c1c' },
-  { value: 'reklamation_in_bearbeitung', label: 'Reklamation in Bearbeitung', color: '#f97316' },
-  { value: 'reklamation_in_planung', label: 'Reklamation in Planung', color: '#fb923c' },
-  { value: 'reklamation_behoben', label: 'Reklamation Behoben', color: '#22c55e' },
-  { value: 'reklamation_geschlossen', label: 'Reklamation Geschlossen', color: '#16a34a' },
 ];
 
-const isAdmin = () => {
+const isAdminOrOffice = () => {
   const user = getStoredUser();
-  return user?.role === 'admin';
+  return user?.role === 'admin' || user?.role === 'office';
 };
 
 interface AufmassFormProps {
@@ -56,6 +51,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     kundeVorname: '',
     kundeNachname: '',
     kundeEmail: '',
+    kundeTelefon: '',
     kundenlokation: '',
     productSelection: {
       category: '',
@@ -970,6 +966,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
               kundeVorname: formData.kundeVorname,
               kundeNachname: formData.kundeNachname,
               kundeEmail: formData.kundeEmail,
+              kundeTelefon: formData.kundeTelefon,
               kundenlokation: formData.kundenlokation
             }}
             updateField={updateGrunddatenField}
@@ -1152,7 +1149,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             className="form-wrapper"
           >
             {/* Status Breadcrumb - inside form card, only for admin and existing forms */}
-            {isAdmin() && isExistingForm && formStatus && onStatusChange && (
+            {isAdminOrOffice() && isExistingForm && formStatus && onStatusChange && (
               <div className="status-breadcrumb-inner">
                 {STATUS_STEPS.map((step) => {
                   const isActive = step.value === formStatus;

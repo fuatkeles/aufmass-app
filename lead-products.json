@@ -1,0 +1,644 @@
+[
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 200,
+    "tiefe": 150,
+    "price": 1800
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 300,
+    "tiefe": 150,
+    "price": 1963
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 400,
+    "tiefe": 150,
+    "price": 2604
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 500,
+    "tiefe": 150,
+    "price": 3114
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 600,
+    "tiefe": 150,
+    "price": 3584
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 700,
+    "tiefe": 150,
+    "price": 4054
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 800,
+    "tiefe": 150,
+    "price": 4513
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 900,
+    "tiefe": 150,
+    "price": 5719
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1000,
+    "tiefe": 150,
+    "price": 6229
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1100,
+    "tiefe": 150,
+    "price": 6699
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1200,
+    "tiefe": 150,
+    "price": 7169
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 200,
+    "tiefe": 200,
+    "price": 1963
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 300,
+    "tiefe": 200,
+    "price": 2160
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 400,
+    "tiefe": 200,
+    "price": 2865
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 500,
+    "tiefe": 200,
+    "price": 3426
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 600,
+    "tiefe": 200,
+    "price": 3943
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 700,
+    "tiefe": 200,
+    "price": 4460
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 800,
+    "tiefe": 200,
+    "price": 4965
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 900,
+    "tiefe": 200,
+    "price": 6291
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1000,
+    "tiefe": 200,
+    "price": 6852
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1100,
+    "tiefe": 200,
+    "price": 7369
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1200,
+    "tiefe": 200,
+    "price": 7886
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 200,
+    "tiefe": 250,
+    "price": 2198
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 300,
+    "tiefe": 250,
+    "price": 2418
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 400,
+    "tiefe": 250,
+    "price": 3084
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 500,
+    "tiefe": 250,
+    "price": 3842
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 600,
+    "tiefe": 250,
+    "price": 4489
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 700,
+    "tiefe": 250,
+    "price": 5277
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 800,
+    "tiefe": 250,
+    "price": 5590
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 900,
+    "tiefe": 250,
+    "price": 6926
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1000,
+    "tiefe": 250,
+    "price": 7684
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1100,
+    "tiefe": 250,
+    "price": 8331
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1200,
+    "tiefe": 250,
+    "price": 8978
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 200,
+    "tiefe": 300,
+    "price": 2432
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 300,
+    "tiefe": 300,
+    "price": 2676
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 400,
+    "tiefe": 300,
+    "price": 3464
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 500,
+    "tiefe": 300,
+    "price": 3880
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 600,
+    "tiefe": 300,
+    "price": 5062
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 700,
+    "tiefe": 300,
+    "price": 5919
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 800,
+    "tiefe": 300,
+    "price": 6214
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 900,
+    "tiefe": 300,
+    "price": 7655
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1000,
+    "tiefe": 300,
+    "price": 8382
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1100,
+    "tiefe": 300,
+    "price": 9253
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1200,
+    "tiefe": 300,
+    "price": 10124
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 200,
+    "tiefe": 350,
+    "price": 2895
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 300,
+    "tiefe": 350,
+    "price": 3185
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 400,
+    "tiefe": 350,
+    "price": 3897
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 500,
+    "tiefe": 350,
+    "price": 4625
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 600,
+    "tiefe": 350,
+    "price": 5634
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 700,
+    "tiefe": 350,
+    "price": 6821
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 800,
+    "tiefe": 350,
+    "price": 7407
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 900,
+    "tiefe": 350,
+    "price": 8646
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1000,
+    "tiefe": 350,
+    "price": 9498
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1100,
+    "tiefe": 350,
+    "price": 10383
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1200,
+    "tiefe": 350,
+    "price": 11268
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 200,
+    "tiefe": 400,
+    "price": 3160
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 300,
+    "tiefe": 400,
+    "price": 3476
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 400,
+    "tiefe": 400,
+    "price": 4232
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 500,
+    "tiefe": 400,
+    "price": 5167
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 600,
+    "tiefe": 400,
+    "price": 6187
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 700,
+    "tiefe": 400,
+    "price": 7231
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 800,
+    "tiefe": 400,
+    "price": 8104
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 900,
+    "tiefe": 400,
+    "price": 9399
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1000,
+    "tiefe": 400,
+    "price": 10334
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1100,
+    "tiefe": 400,
+    "price": 11354
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1200,
+    "tiefe": 400,
+    "price": 12374
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 200,
+    "tiefe": 450,
+    "price": 4490
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 300,
+    "tiefe": 450,
+    "price": 4948
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 400,
+    "tiefe": 450,
+    "price": 6199
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 500,
+    "tiefe": 450,
+    "price": 7125
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 600,
+    "tiefe": 450,
+    "price": 8397
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 700,
+    "tiefe": 450,
+    "price": 9668
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 800,
+    "tiefe": 450,
+    "price": 11298
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 900,
+    "tiefe": 450,
+    "price": 12324
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1000,
+    "tiefe": 450,
+    "price": 13250
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1100,
+    "tiefe": 450,
+    "price": 14522
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1200,
+    "tiefe": 450,
+    "price": 15794
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 200,
+    "tiefe": 500,
+    "price": 5407
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 300,
+    "tiefe": 500,
+    "price": 5948
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 400,
+    "tiefe": 500,
+    "price": 7399
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 500,
+    "tiefe": 500,
+    "price": 8925
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 600,
+    "tiefe": 500,
+    "price": 10297
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 700,
+    "tiefe": 500,
+    "price": 11768
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 800,
+    "tiefe": 500,
+    "price": 12998
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 900,
+    "tiefe": 500,
+    "price": 14924
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1000,
+    "tiefe": 500,
+    "price": 16450
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1100,
+    "tiefe": 500,
+    "price": 17922
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1200,
+    "tiefe": 500,
+    "price": 18994
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 200,
+    "tiefe": 550,
+    "price": 5948
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 300,
+    "tiefe": 550,
+    "price": 7399
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 400,
+    "tiefe": 550,
+    "price": 8925
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 500,
+    "tiefe": 550,
+    "price": 10297
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 600,
+    "tiefe": 550,
+    "price": 11768
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 700,
+    "tiefe": 550,
+    "price": 12998
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 800,
+    "tiefe": 550,
+    "price": 14924
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 900,
+    "tiefe": 550,
+    "price": 16235
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1000,
+    "tiefe": 550,
+    "price": 17922
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1100,
+    "tiefe": 550,
+    "price": 18994
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 200,
+    "tiefe": 600,
+    "price": 7399
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 300,
+    "tiefe": 600,
+    "price": 8925
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 400,
+    "tiefe": 600,
+    "price": 10297
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 500,
+    "tiefe": 600,
+    "price": 11768
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 600,
+    "tiefe": 600,
+    "price": 12998
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 700,
+    "tiefe": 600,
+    "price": 14924
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 800,
+    "tiefe": 600,
+    "price": 16235
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 900,
+    "tiefe": 600,
+    "price": 17922
+  },
+  {
+    "product_name": "PREMIUMLINE 8 MM VSG",
+    "breite": 1000,
+    "tiefe": 600,
+    "price": 18994
+  }
+]

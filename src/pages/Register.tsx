@@ -134,7 +134,7 @@ const Register = () => {
             </div>
           </div>
           <h1>Konto erstellen</h1>
-          <p>Sie wurden eingeladen als <strong>{invitation.role === 'admin' ? 'Administrator' : 'Benutzer'}</strong></p>
+          <p>Sie wurden eingeladen als <strong>{invitation.role === 'admin' ? 'Administrator' : invitation.role === 'office' ? 'Office' : 'Benutzer'}</strong></p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">

@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ServerImage } from '../types';
 import { deleteImage } from '../services/api';
+import { useToast } from './Toast';
 import './FinalSection.css';
 import './SectionStyles.css';
 
@@ -26,6 +27,7 @@ const FinalSection = ({
   onSave,
   onNewForm
 }: FinalSectionProps) => {
+  const toast = useToast();
   const [dragActive, setDragActive] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -119,7 +121,7 @@ const FinalSection = ({
         await deleteImage(fileToRemove.id);
       } catch (err) {
         console.error('Error deleting image from server:', err);
-        alert('Fehler beim Löschen des Bildes');
+        toast.error('Fehler', 'Bild konnte nicht gelöscht werden.');
         return; // Don't remove from UI if server delete failed
       }
     }

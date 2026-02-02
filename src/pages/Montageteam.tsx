@@ -8,7 +8,7 @@ import './Dashboard.css';
 
 const MontageteamPage = () => {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdminOrOffice } = useAuth();
   const [teams, setTeams] = useState<MontageteamStats[]>([]);
   const [allTeams, setAllTeams] = useState<Montageteam[]>([]);
   const [forms, setForms] = useState<FormData[]>([]);
@@ -136,7 +136,7 @@ const MontageteamPage = () => {
           <h1>Montageteams</h1>
           <p className="header-subtitle">{allTeams.length} Teams registriert</p>
         </div>
-        {isAdmin && (
+        {isAdminOrOffice && (
           <div className="header-right">
             <motion.button
               className="btn-primary-new"
@@ -174,7 +174,7 @@ const MontageteamPage = () => {
                     <span className="team-created">Erstellt: {formatDate(team.created_at)}</span>
                   </div>
                 </div>
-                {isAdmin && (
+                {isAdminOrOffice && (
                   <div className="team-actions">
                     <button
                       className="team-action-btn edit"
@@ -292,7 +292,7 @@ const MontageteamPage = () => {
                     <span className="team-created">Erstellt: {formatDate(team.created_at)}</span>
                   </div>
                 </div>
-                {isAdmin && (
+                {isAdminOrOffice && (
                   <div className="team-actions">
                     <button className="team-action-btn edit" onClick={() => openEditModal(team)} title="Bearbeiten">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -341,7 +341,7 @@ const MontageteamPage = () => {
             </svg>
             <h3>Keine Montageteams</h3>
             <p>Erstellen Sie Ihr erstes Montageteam</p>
-            {isAdmin && (
+            {isAdminOrOffice && (
               <button className="btn-primary-new" onClick={() => setShowAddModal(true)}>
                 Erstes Team erstellen
               </button>

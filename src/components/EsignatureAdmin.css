@@ -1,0 +1,427 @@
+.esignature-admin-modal {
+  background: var(--card-bg, #1e1e2e);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.esignature-admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color, #333);
+  background: linear-gradient(135deg, #7fa93d 0%, #5a7a2e 100%);
+}
+
+.esignature-admin-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: white;
+}
+
+.esignature-admin-header .close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.esignature-admin-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.esignature-admin-header .close-btn svg {
+  width: 18px;
+  height: 18px;
+  color: white;
+}
+
+.esignature-admin-content {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  color: #ef4444;
+}
+
+.error-banner svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.loading-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  gap: 16px;
+  color: var(--text-secondary, #888);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-color, #333);
+  border-top-color: #7fa93d;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.spinner.small {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.branches-list {
+  border: 1px solid var(--border-color, #333);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.branches-header {
+  display: grid;
+  grid-template-columns: 1fr 80px 120px 120px 100px;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-secondary, #252535);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #888);
+}
+
+.branch-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 120px 120px 100px;
+  gap: 12px;
+  padding: 16px;
+  border-top: 1px solid var(--border-color, #333);
+  align-items: center;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.branch-row:hover {
+  background: var(--bg-secondary, #252535);
+}
+
+.branch-row.inactive {
+  opacity: 0.6;
+}
+
+.col-branch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.branch-name {
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+}
+
+.branch-slug {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #888);
+}
+
+.status-badge {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.status-badge.active {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+.status-badge.inactive {
+  background: rgba(107, 114, 128, 0.1);
+  color: #6b7280;
+}
+
+.col-esign,
+.col-mode,
+.col-provider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.provider-select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #333);
+  background: var(--bg-secondary, #252535);
+  color: var(--text-primary, #fff);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.provider-select:hover {
+  border-color: #7fa93d;
+}
+
+.provider-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.light-theme .provider-select {
+  background: #fff;
+  border-color: #e5e7eb;
+  color: #333;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch.small {
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border-color, #333);
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.toggle-switch.small .toggle-slider:before {
+  height: 14px;
+  width: 14px;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #7fa93d;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+.toggle-switch.small input:checked + .toggle-slider:before {
+  transform: translateX(16px);
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle-label {
+  font-size: 0.85rem;
+}
+
+.toggle-label.enabled {
+  color: #22c55e;
+}
+
+.toggle-label.disabled {
+  color: var(--text-secondary, #888);
+}
+
+.mode-label {
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.mode-label.sandbox {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.mode-label.production {
+  background: rgba(34, 197, 94, 0.1);
+  color: #22c55e;
+}
+
+.saving-indicator {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.esignature-admin-info {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--bg-secondary, #252535);
+  border-radius: 8px;
+}
+
+.esignature-admin-info h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  color: var(--text-primary, #fff);
+}
+
+.esignature-admin-info ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.esignature-admin-info li {
+  padding: 6px 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #888);
+}
+
+.esignature-admin-info li strong {
+  color: var(--text-primary, #fff);
+}
+
+.esignature-admin-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color, #333);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.esignature-admin-footer .btn-secondary {
+  padding: 10px 20px;
+  background: var(--bg-secondary, #252535);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 8px;
+  color: var(--text-primary, #fff);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.esignature-admin-footer .btn-secondary:hover {
+  background: var(--border-color, #333);
+}
+
+/* Light theme */
+.light-theme .esignature-admin-modal {
+  background: #fff;
+}
+
+.light-theme .esignature-admin-header {
+  border-bottom-color: #e5e7eb;
+}
+
+.light-theme .branches-header {
+  background: #f9fafb;
+}
+
+.light-theme .branch-row {
+  border-top-color: #e5e7eb;
+}
+
+.light-theme .branch-row:hover {
+  background: #f9fafb;
+}
+
+.light-theme .esignature-admin-info {
+  background: #f9fafb;
+}
+
+.light-theme .esignature-admin-footer {
+  border-top-color: #e5e7eb;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .branches-header {
+    display: none;
+  }
+
+  .branch-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .col-esign,
+  .col-mode,
+  .col-provider {
+    justify-content: space-between;
+  }
+
+  .col-esign::before {
+    content: 'E-Signatur:';
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+  }
+
+  .col-provider::before {
+    content: 'Provider:';
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+  }
+
+  .col-mode::before {
+    content: 'Modus:';
+    font-size: 0.8rem;
+    color: var(--text-secondary, #888);
+  }
+}

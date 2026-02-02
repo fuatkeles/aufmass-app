@@ -51,6 +51,7 @@ export interface FormData {
   kundeVorname: string;
   kundeNachname: string;
   kundeEmail?: string;
+  kundeTelefon?: string;
   kundenlokation: string;
 
   // Product Selection
@@ -73,6 +74,31 @@ export interface FormData {
 
   // Abnahme (acceptance) data - optional, only when status is 'abnahme'
   abnahme?: AbnahmeData;
+
+  // Angebot (quote) data - optional, only when status is 'angebot_versendet'
+  angebot?: AngebotPdfData;
+}
+
+// Angebot (Quote) data for PDF
+export interface AngebotPdfItem {
+  bezeichnung: string;
+  menge: number;
+  einzelpreis: number;
+  gesamtpreis: number;
+}
+
+export interface AngebotPdfSummary {
+  netto_summe: number;
+  mwst_satz: number;
+  mwst_betrag: number;
+  brutto_summe: number;
+  angebot_datum?: string;
+  bemerkungen?: string;
+}
+
+export interface AngebotPdfData {
+  items: AngebotPdfItem[];
+  summary: AngebotPdfSummary | null;
 }
 
 // Legacy interfaces (keeping for backward compatibility during migration)

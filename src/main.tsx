@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import { AuthProvider } from './contexts/AuthContext'
+import { ToastProvider } from './components/Toast'
 import AppWrapper from './AppWrapper'
 import { useBranchMeta } from './hooks/useBranchMeta'
 
@@ -25,9 +26,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <BranchMetaWrapper>
-          <AppWrapper />
-        </BranchMetaWrapper>
+        <ToastProvider>
+          <BranchMetaWrapper>
+            <AppWrapper />
+          </BranchMetaWrapper>
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

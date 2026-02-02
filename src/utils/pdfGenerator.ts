@@ -118,6 +118,41 @@ const getImageDimensions = (base64: string): Promise<{ width: number; height: nu
   });
 };
 
+// Helper to compress image for PDF (resize and reduce quality)
+const compressImageForPDF = (base64: string, maxDimension: number = 800, quality: number = 0.6): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+
+      // Scale down if larger than maxDimension
+      if (width > maxDimension || height > maxDimension) {
+        if (width > height) {
+          height = Math.round((height / width) * maxDimension);
+          width = maxDimension;
+        } else {
+          width = Math.round((width / height) * maxDimension);
+          height = maxDimension;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(base64);
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(base64);
+    img.src = base64;
+  });
+};
+
 // Helper to get EXIF orientation from base64 string
 const getExifOrientationFromBase64 = (base64: string): number => {
   try {
@@ -229,7 +264,8 @@ const isServerImage = (obj: unknown): obj is ServerImage => {
          typeof (obj as ServerImage).id === 'number';
 };
 
-export const generatePDF = async (formData: FormData, options?: { returnBlob?: boolean }): Promise<{ blob: Blob; fileName: string } | void> => {
+export const generatePDF = async (formData: FormData, options?: { returnBlob?: boolean; forSignature?: boolean }): Promise<{ blob: Blob; fileName: string } | void> => {
+  const forSignature = options?.forSignature || false;
   const pdf = new jsPDF();
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -264,8 +300,8 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
 
   yPos = 45;
 
-  // ============ ABNAHME SECTION - If exists ============
-  if (formData.abnahme) {
+  // ============ ABNAHME SECTION - If exists (skip for signature PDF) ============
+  if (formData.abnahme && !forSignature) {
     const abnahme = formData.abnahme;
 
     // Abnahme header with green background
@@ -480,6 +516,112 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     yPos += 10;
   }
 
+  // ============ ANGEBOT SECTION - If exists ============
+  if (formData.angebot && formData.angebot.items && formData.angebot.items.length > 0) {
+    const angebot = formData.angebot;
+
+    // Check if we need a new page
+    checkNewPage(80);
+
+    // Angebot header with purple background
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFillColor(167, 139, 250); // Purple color for angebot
+    pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text('ANGEBOT / PREISE', margin + 2, yPos);
+    yPos += 12;
+
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+
+    // Table header
+    const colWidths = {
+      bezeichnung: 80,
+      menge: 25,
+      einzelpreis: 35,
+      gesamtpreis: 35
+    };
+    const tableWidth = colWidths.bezeichnung + colWidths.menge + colWidths.einzelpreis + colWidths.gesamtpreis;
+    const tableStartX = margin;
+
+    // Header row background
+    pdf.setFillColor(240, 240, 240);
+    pdf.rect(tableStartX, yPos - 4, tableWidth, 8, 'F');
+
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    let xPos = tableStartX + 2;
+    pdf.text('Bezeichnung', xPos, yPos);
+    xPos += colWidths.bezeichnung;
+    pdf.text('Menge', xPos, yPos);
+    xPos += colWidths.menge;
+    pdf.text('Einzelpreis', xPos, yPos);
+    xPos += colWidths.einzelpreis;
+    pdf.text('Gesamt', xPos, yPos);
+    yPos += 8;
+
+    // Item rows
+    pdf.setFont('helvetica', 'normal');
+    for (const item of angebot.items) {
+      checkNewPage(10);
+
+      xPos = tableStartX + 2;
+      // Truncate long descriptions
+      const maxBezeichnungWidth = colWidths.bezeichnung - 4;
+      const bezeichnungLines = pdf.splitTextToSize(item.bezeichnung, maxBezeichnungWidth);
+      pdf.text(bezeichnungLines[0], xPos, yPos);
+
+      xPos += colWidths.bezeichnung;
+      pdf.text(String(item.menge), xPos, yPos);
+
+      xPos += colWidths.menge;
+      pdf.text(`${Number(item.einzelpreis).toFixed(2)} EUR`, xPos, yPos);
+
+      xPos += colWidths.einzelpreis;
+      pdf.text(`${Number(item.gesamtpreis).toFixed(2)} EUR`, xPos, yPos);
+
+      yPos += 6;
+
+      // Draw line under each row
+      pdf.setDrawColor(230, 230, 230);
+      pdf.setLineWidth(0.2);
+      pdf.line(tableStartX, yPos - 2, tableStartX + tableWidth, yPos - 2);
+    }
+
+    yPos += 4;
+
+    // Summary section
+    if (angebot.summary) {
+      const summaryX = tableStartX + colWidths.bezeichnung + colWidths.menge;
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('Netto:', summaryX, yPos);
+      pdf.text(`${Number(angebot.summary.netto_summe).toFixed(2)} EUR`, summaryX + colWidths.einzelpreis, yPos);
+      yPos += 6;
+
+      pdf.text(`MwSt. (${angebot.summary.mwst_satz || 19}%):`, summaryX, yPos);
+      pdf.text(`${Number(angebot.summary.mwst_betrag).toFixed(2)} EUR`, summaryX + colWidths.einzelpreis, yPos);
+      yPos += 6;
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Brutto:', summaryX, yPos);
+      pdf.text(`${Number(angebot.summary.brutto_summe).toFixed(2)} EUR`, summaryX + colWidths.einzelpreis, yPos);
+      yPos += 6;
+
+      // Angebot date
+      if (angebot.summary.angebot_datum) {
+        yPos += 4;
+        pdf.setFont('helvetica', 'normal');
+        const angebotDateFormatted = new Date(angebot.summary.angebot_datum).toLocaleDateString('de-DE');
+        pdf.text(`Angebotsdatum: ${angebotDateFormatted}`, tableStartX + 2, yPos);
+      }
+    }
+
+    yPos += 15;
+  }
+
   // ============ GRUNDDATEN ============
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
@@ -500,6 +642,8 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     ['Datum:', formData.datum || '-'],
     ['Aufmasser / Berater:', formData.aufmasser || '-'],
     ['Kunde:', `${formData.kundeVorname || ''} ${formData.kundeNachname || ''}`.trim() || '-'],
+    ['E-Mail:', formData.kundeEmail || '-'],
+    ['Telefon:', formData.kundeTelefon || '-'],
     ['Kundenlokation:', formData.kundenlokation || '-'],
     ['Montageteam:', String(montageteam)],
   ];
@@ -1211,9 +1355,9 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     pdf.setTextColor(0, 0, 0);
   }
 
-  // ============ BILDER & ANHÄNGE ============
+  // ============ BILDER & ANHÄNGE (skip for signature PDF) ============
   const bilder = formData.bilder as (File | ServerImage)[];
-  if (bilder && bilder.length > 0) {
+  if (bilder && bilder.length > 0 && !forSignature) {
     // Separate images and PDFs - handle both File and ServerImage objects
     const imageItems: (File | ServerImage)[] = [];
     const pdfFiles: File[] = [];

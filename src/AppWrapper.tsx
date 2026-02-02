@@ -1,14 +1,19 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
+import DashboardStats from './pages/DashboardStats';
 import Dashboard from './pages/Dashboard';
+import Angebote from './pages/Angebote';
 import FormPage from './pages/FormPage';
 import Montageteam from './pages/Montageteam';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import EsignatureAdmin from './components/EsignatureAdmin';
+import { isAdminBranch } from './hooks/useBranchMeta';
 import { getStats, getUsers, getInvitations, createInvitation, deleteInvitation, deleteUser, updateUser } from './services/api';
 import type { Stats, User, Invitation } from './services/api';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useToast } from './components/Toast';
 import './pages/Dashboard.css';
 
 // Stats Context
@@ -23,9 +28,10 @@ export const useStats = () => useContext(StatsContext);
 // Admin Panel Context
 interface AdminPanelContextType {
   openAdminPanel: () => void;
+  openEsignatureAdmin: () => void;
 }
 
-const AdminPanelContext = createContext<AdminPanelContextType>({ openAdminPanel: () => {} });
+const AdminPanelContext = createContext<AdminPanelContextType>({ openAdminPanel: () => {}, openEsignatureAdmin: () => {} });
 export const useAdminPanel = () => useContext(AdminPanelContext);
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -33,7 +39,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { user, logout, isAdmin } = useAuth();
   const { stats } = useStats();
-  const { openAdminPanel } = useAdminPanel();
+  const { openAdminPanel, openEsignatureAdmin } = useAdminPanel();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Theme state
@@ -114,7 +120,7 @@ function Layout({ children }: { children: React.ReactNode }) {
         <nav className="sidebar-nav">
           <div className="nav-section">
             <span className="nav-section-title">Hauptmenü</span>
-            <a href="#" className={`nav-item ${isActive('/') ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); navigate('/'); }}>
+            <a href="#" className={`nav-item ${isActive('/') ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); handleNavClick('/'); }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="3" width="7" height="9" rx="2" />
                 <rect x="14" y="3" width="7" height="5" rx="2" />
@@ -123,11 +129,41 @@ function Layout({ children }: { children: React.ReactNode }) {
               </svg>
               <span>Dashboard</span>
             </a>
-            <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); navigate('/form/new'); }}>
+            <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); handleNavClick('/form/new'); }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 5v14M5 12h14" />
               </svg>
               <span>Neues Aufmaß</span>
+            </a>
+            <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); handleNavClick('/angebot/new'); }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+              </svg>
+              <span>Neues Angebot</span>
+            </a>
+          </div>
+
+          <div className="nav-section">
+            <span className="nav-section-title">Aufträge</span>
+            <a href="#" className={`nav-item ${isActive('/angebote') ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); handleNavClick('/angebote'); }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+              </svg>
+              <span>Angebote</span>
+            </a>
+            <a href="#" className={`nav-item ${isActive('/aufmasse') ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); handleNavClick('/aufmasse'); }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+              <span>Aufmaße</span>
             </a>
           </div>
 
@@ -151,7 +187,7 @@ function Layout({ children }: { children: React.ReactNode }) {
 
           <div className="nav-section">
             <span className="nav-section-title">Teams</span>
-            <a href="#" className={`nav-item ${isActive('/montageteam') ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); navigate('/montageteam'); }}>
+            <a href="#" className={`nav-item ${isActive('/montageteam') ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); handleNavClick('/montageteam'); }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
                 <circle cx="9" cy="7" r="4" />
@@ -165,7 +201,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           {isAdmin && (
             <div className="nav-section">
               <span className="nav-section-title">Administration</span>
-              <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); openAdminPanel(); }}>
+              <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); openAdminPanel(); setMobileMenuOpen(false); }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
                   <circle cx="9" cy="7" r="4" />
@@ -195,7 +231,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             </div>
             <div className="user-info">
               <span className="user-name">{user?.name || 'Benutzer'}</span>
-              <span className="user-role">{user?.role === 'admin' ? 'Administrator' : 'Benutzer'}</span>
+              <span className="user-role">{user?.role === 'admin' ? 'Administrator' : user?.role === 'office' ? 'Office' : 'Benutzer'}</span>
             </div>
             <button
               className="theme-toggle-sidebar"
@@ -244,12 +280,14 @@ function Layout({ children }: { children: React.ReactNode }) {
 
 function ProtectedContent() {
   const { user, isAdmin } = useAuth();
+  const toast = useToast();
   const [stats, setStats] = useState<Stats>({ total: 0, completed: 0, draft: 0 });
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showEsignatureAdmin, setShowEsignatureAdmin] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'user' | 'admin'>('user');
+  const [inviteRole, setInviteRole] = useState<'user' | 'office' | 'admin'>('user');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
 
@@ -282,6 +320,10 @@ function ProtectedContent() {
     loadAdminData();
   };
 
+  const openEsignatureAdmin = () => {
+    setShowEsignatureAdmin(true);
+  };
+
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail) return;
@@ -293,7 +335,7 @@ function ProtectedContent() {
       setInviteEmail('');
       loadAdminData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Fehler');
+      toast.error('Fehler', err instanceof Error ? err.message : 'Einladung konnte nicht erstellt werden.');
     } finally {
       setInviteLoading(false);
     }
@@ -301,7 +343,7 @@ function ProtectedContent() {
 
   return (
     <StatsContext.Provider value={{ stats, refreshStats: loadStats }}>
-      <AdminPanelContext.Provider value={{ openAdminPanel }}>
+      <AdminPanelContext.Provider value={{ openAdminPanel, openEsignatureAdmin }}>
         <Routes>
           {/* Form sayfası sidebar olmadan */}
           <Route path="/form/:id" element={<FormPage />} />
@@ -310,7 +352,10 @@ function ProtectedContent() {
           <Route path="/*" element={
             <Layout>
               <Routes>
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/" element={<DashboardStats />} />
+                <Route path="/aufmasse" element={<Dashboard />} />
+                <Route path="/angebote" element={<Angebote />} />
+                <Route path="/angebot/new" element={<Angebote />} />
                 <Route path="/montageteam" element={<Montageteam />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
@@ -348,8 +393,9 @@ function ProtectedContent() {
                   <h3>Neuen Benutzer einladen</h3>
                   <form onSubmit={handleInviteUser} className="invite-form">
                     <input type="email" placeholder="E-Mail-Adresse" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required />
-                    <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as 'user' | 'admin')}>
+                    <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as 'user' | 'office' | 'admin')}>
                       <option value="user">Benutzer</option>
+                      <option value="office">Office</option>
                       <option value="admin">Administrator</option>
                     </select>
                     <button type="submit" disabled={inviteLoading}>{inviteLoading ? 'Lädt...' : 'Einladen'}</button>
@@ -359,7 +405,7 @@ function ProtectedContent() {
                       <p>Einladungslink erstellt!</p>
                       <div className="invite-link-box">
                         <input type="text" value={inviteSuccess} readOnly />
-                        <button type="button" className="copy-btn" onClick={() => { navigator.clipboard.writeText(inviteSuccess); alert('Kopiert!'); }}>
+                        <button type="button" className="copy-btn" onClick={() => { navigator.clipboard.writeText(inviteSuccess); toast.success('Kopiert', 'Link wurde in die Zwischenablage kopiert.'); }}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <rect x="9" y="9" width="13" height="13" rx="2" />
                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
@@ -419,6 +465,13 @@ function ProtectedContent() {
                 </div>
               </motion.div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* E-Signatur Admin Modal */}
+        <AnimatePresence>
+          {showEsignatureAdmin && (
+            <EsignatureAdmin onClose={() => setShowEsignatureAdmin(false)} />
           )}
         </AnimatePresence>
       </AdminPanelContext.Provider>

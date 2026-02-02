@@ -1,17 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage, uploadImages, getPdfUrl, getPdfStatus, getForm, savePdf } from '../services/api';
+import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage, uploadImages, getPdfUrl, getPdfStatus, getForm, savePdf, getBranchFeatures, sendAesSignature, sendAbnahmeAesSignature, getEsignatureStatus, downloadBoldSignDocument, refreshSignatureStatus, getAngebot, saveAngebot, sendAngebotAesSignature, getSignatureNotifications, downloadSignedDocument, getLeadPdfUrl } from '../services/api';
+import type { BranchFeatures, EsignatureStatus, EsignatureRequest, AngebotItem, SignatureNotification } from '../services/api';
 import { generatePDF } from '../utils/pdfGenerator';
 import type { AbnahmeImage } from '../services/api';
 import type { FormData, MontageteamStats, Montageteam, StatusHistoryEntry, AbnahmeData } from '../services/api';
 import { useStats } from '../AppWrapper';
+import { useToast } from '../components/Toast';
 import './Dashboard.css';
 
-// Check if current user is admin
-const isAdmin = () => {
+// Check if current user is admin or office (both have elevated permissions)
+const isAdminOrOffice = () => {
   const user = getStoredUser();
-  return user?.role === 'admin';
+  return user?.role === 'admin' || user?.role === 'office';
 };
 
 // Status options for forms - ordered workflow
@@ -27,12 +29,7 @@ const STATUS_OPTIONS = [
   { value: 'montage_gestartet', label: 'Montage Gestartet', color: '#ec4899' },
   { value: 'abnahme', label: 'Abnahme', color: '#10b981' },
   { value: 'reklamation_eingegangen', label: 'Reklamation Eingegangen', color: '#ef4444' },
-  { value: 'reklamation_anerkannt', label: 'Reklamation Anerkannt', color: '#dc2626' },
   { value: 'reklamation_abgelehnt', label: 'Reklamation Abgelehnt', color: '#b91c1c' },
-  { value: 'reklamation_in_bearbeitung', label: 'Reklamation in Bearbeitung', color: '#f97316' },
-  { value: 'reklamation_in_planung', label: 'Reklamation in Planung', color: '#fb923c' },
-  { value: 'reklamation_behoben', label: 'Reklamation Behoben', color: '#22c55e' },
-  { value: 'reklamation_geschlossen', label: 'Reklamation Geschlossen', color: '#16a34a' },
   { value: 'papierkorb', label: 'Papierkorb', color: '#71717a' },
 ];
 
@@ -48,12 +45,7 @@ const STATUS_ORDER = [
   'montage_gestartet',
   'abnahme',
   'reklamation_eingegangen',
-  'reklamation_anerkannt',
   'reklamation_abgelehnt',
-  'reklamation_in_bearbeitung',
-  'reklamation_in_planung',
-  'reklamation_behoben',
-  'reklamation_geschlossen',
 ];
 
 // Check if form editing is locked (status is after auftrag_erteilt)
@@ -73,6 +65,7 @@ const isStatusBackward = (currentStatus: string, newStatus: string): boolean => 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { refreshStats } = useStats();
+  const toast = useToast();
   const [forms, setForms] = useState<FormData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -115,28 +108,146 @@ const Dashboard = () => {
   const [statusDateValue, setStatusDateValue] = useState<string>('');
   const [pendingStatus, setPendingStatus] = useState<string>('');
 
+  // Angebot modal
+  const [angebotModalOpen, setAngebotModalOpen] = useState(false);
+  const [angebotFormId, setAngebotFormId] = useState<number | null>(null);
+  const [angebotItems, setAngebotItems] = useState<AngebotItem[]>([{ bezeichnung: '', menge: 1, einzelpreis: 0, gesamtpreis: 0 }]);
+  const [angebotDate, setAngebotDate] = useState<string>('');
+  const [angebotBemerkungen, setAngebotBemerkungen] = useState<string>('');
+  const [angebotSaving, setAngebotSaving] = useState(false);
+  const [angebotConfirmOpen, setAngebotConfirmOpen] = useState(false);
+  const [angebotEditMode, setAngebotEditMode] = useState(false);
+
   // Document/Video upload state
   const [uploadingDocFormId, setUploadingDocFormId] = useState<number | null>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
+
+  // E-Signature state
+  const [branchFeatures, setBranchFeatures] = useState<BranchFeatures | null>(null);
+  const [esignatureStatuses, setEsignatureStatuses] = useState<Record<number, EsignatureStatus>>({});
+  const [esignatureLoading, setEsignatureLoading] = useState<number | null>(null);
+  const [abnahmeSignatureLoading, setAbnahmeSignatureLoading] = useState(false);
+  const [refreshingSignatures, setRefreshingSignatures] = useState<Set<number>>(new Set());
 
 
   useEffect(() => {
     loadData();
   }, []);
 
+  // Polling for pending signatures (every 30 seconds)
+  useEffect(() => {
+    if (!branchFeatures?.esignature_enabled) return;
+
+    const pollPendingSignatures = async () => {
+      // Find all pending signatures
+      const pendingSignatures: { formId: number; requestId: number }[] = [];
+
+      Object.entries(esignatureStatuses).forEach(([formId, status]) => {
+        status.signatures?.forEach(sig => {
+          if (sig.status === 'pending' || sig.status === 'viewed' || sig.status === 'signing') {
+            pendingSignatures.push({ formId: Number(formId), requestId: sig.id });
+          }
+        });
+      });
+
+      if (pendingSignatures.length === 0) return;
+
+      // Refresh status for each pending signature
+      for (const { formId, requestId } of pendingSignatures) {
+        try {
+          const result = await refreshSignatureStatus(requestId);
+          if (result.updated) {
+            // Reload the full status for this form
+            const newStatus = await getEsignatureStatus(formId);
+            setEsignatureStatuses(prev => ({ ...prev, [formId]: newStatus }));
+          }
+        } catch (err) {
+          console.error('Error polling signature status:', err);
+        }
+      }
+    };
+
+    // Poll every 2 minutes (BoldSign rate limit: 50 calls/hour)
+    const interval = setInterval(pollPendingSignatures, 120000);
+
+    return () => clearInterval(interval);
+  }, [branchFeatures?.esignature_enabled, esignatureStatuses]);
+
+  // Poll for new signature notifications (every 30 seconds)
+  const lastNotificationCheckRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!branchFeatures?.esignature_enabled) return;
+
+    const checkNotifications = async () => {
+      try {
+        const response = await getSignatureNotifications(lastNotificationCheckRef.current || undefined);
+
+        // Show toast for each new signed document
+        response.notifications.forEach((notification: SignatureNotification) => {
+          const customerName = `${notification.kunde_vorname} ${notification.kunde_nachname}`.trim();
+          const docType = notification.document_type === 'aufmass' ? 'Aufmaß'
+            : notification.document_type === 'angebot' ? 'Angebot'
+            : notification.document_type === 'abnahme' ? 'Abnahme' : 'Dokument';
+
+          toast.success(
+            'Neue Unterschrift',
+            `${customerName} hat ${docType} unterschrieben`
+          );
+
+          // Refresh signature status for this form
+          getEsignatureStatus(notification.form_id).then(newStatus => {
+            setEsignatureStatuses(prev => ({ ...prev, [notification.form_id]: newStatus }));
+          }).catch(() => {});
+        });
+
+        lastNotificationCheckRef.current = response.checked_at;
+      } catch (err) {
+        console.error('Error checking signature notifications:', err);
+      }
+    };
+
+    // Initial check
+    checkNotifications();
+
+    // Poll every 30 seconds
+    const interval = setInterval(checkNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [branchFeatures?.esignature_enabled, toast]);
+
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const [formsData, teamStats, teams] = await Promise.all([
+      const [formsData, teamStats, teams, features] = await Promise.all([
         getForms(),
         getMontageteamStats(),
-        getMontageteams()
+        getMontageteams(),
+        getBranchFeatures().catch(() => null)
       ]);
       setForms(formsData);
       setMontageteamStats(teamStats);
       setMontageteams(teams.filter(t => t.is_active));
+      setBranchFeatures(features);
       refreshStats();
+
+      // Load signature statuses for recent forms (non-blocking)
+      if (features?.esignature_enabled && formsData.length > 0) {
+        // Load for first 20 forms to avoid too many requests
+        const recentForms = formsData.slice(0, 20);
+        Promise.all(
+          recentForms.map(form =>
+            getEsignatureStatus(form.id!).catch(() => null)
+          )
+        ).then(statuses => {
+          const statusMap: Record<number, EsignatureStatus> = {};
+          recentForms.forEach((form, i) => {
+            if (statuses[i]) {
+              statusMap[form.id!] = statuses[i]!;
+            }
+          });
+          setEsignatureStatuses(prev => ({ ...prev, ...statusMap }));
+        });
+      }
     } catch (err) {
       console.error('Error loading data:', err);
       setError('Daten konnten nicht geladen werden.');
@@ -180,7 +291,7 @@ const Dashboard = () => {
       setTeamDropdownOpen(null);
     } catch (err) {
       console.error('Error updating montageteam:', err);
-      alert('Fehler beim Aktualisieren des Montageteams');
+      toast.error('Fehler', 'Das Montageteam konnte nicht aktualisiert werden.');
     }
   };
 
@@ -214,8 +325,44 @@ const Dashboard = () => {
     const currentStatus = form ? getFormStatus(form) : 'neu';
 
     // Prevent non-admin users from going backward in status
-    if (!isAdmin() && isStatusBackward(currentStatus, newStatus)) {
-      alert('Status kann nur von einem Admin zurückgesetzt werden.');
+    if (!isAdminOrOffice() && isStatusBackward(currentStatus, newStatus)) {
+      toast.warning('Nicht erlaubt', 'Status kann nur von einem Admin zurückgesetzt werden.');
+      setStatusDropdownOpen(null);
+      return;
+    }
+
+    // If selecting angebot_versendet status, open angebot modal
+    if (newStatus === 'angebot_versendet') {
+      setAngebotFormId(formId);
+      setAngebotEditMode(false);
+      // Load existing angebot data
+      try {
+        const [existingAngebot, sigStatus] = await Promise.all([
+          getAngebot(formId),
+          getEsignatureStatus(formId).catch(() => null)
+        ]);
+        if (existingAngebot?.items && existingAngebot.items.length > 0) {
+          setAngebotItems(existingAngebot.items);
+          setAngebotEditMode(true); // If data exists, we're editing
+        } else {
+          setAngebotItems([{ bezeichnung: '', menge: 1, einzelpreis: 0, gesamtpreis: 0 }]);
+        }
+        if (existingAngebot?.summary) {
+          setAngebotDate(existingAngebot.summary.angebot_datum?.split('T')[0] || new Date().toISOString().split('T')[0]);
+          setAngebotBemerkungen(existingAngebot.summary.bemerkungen || '');
+        } else {
+          setAngebotDate(new Date().toISOString().split('T')[0]);
+          setAngebotBemerkungen('');
+        }
+        if (sigStatus) {
+          setEsignatureStatuses(prev => ({ ...prev, [formId]: sigStatus }));
+        }
+      } catch {
+        setAngebotItems([{ bezeichnung: '', menge: 1, einzelpreis: 0, gesamtpreis: 0 }]);
+        setAngebotDate(new Date().toISOString().split('T')[0]);
+        setAngebotBemerkungen('');
+      }
+      setAngebotModalOpen(true);
       setStatusDropdownOpen(null);
       return;
     }
@@ -225,11 +372,12 @@ const Dashboard = () => {
       setAbnahmeFormId(formId);
       // Reset image states
       setMaengelImageFiles([]);
-      // Load existing abnahme data and images
+      // Load existing abnahme data, images, and signature status
       try {
-        const [existingAbnahme, existingImages] = await Promise.all([
+        const [existingAbnahme, existingImages, sigStatus] = await Promise.all([
           getAbnahme(formId),
-          getAbnahmeImages(formId)
+          getAbnahmeImages(formId),
+          getEsignatureStatus(formId).catch(() => null)
         ]);
         if (existingAbnahme) {
           setAbnahmeData(existingAbnahme);
@@ -247,6 +395,10 @@ const Dashboard = () => {
           });
         }
         setMaengelImages(existingImages || []);
+        // Store signature status
+        if (sigStatus) {
+          setEsignatureStatuses(prev => ({ ...prev, [formId]: sigStatus }));
+        }
       } catch {
         setAbnahmeData({
           istFertig: false,
@@ -285,25 +437,26 @@ const Dashboard = () => {
       setHistoryModalOpen(true);
     } catch (err) {
       console.error('Error loading status history:', err);
-      alert('Fehler beim Laden der Status-Historie');
+      toast.error('Fehler', 'Status-Historie konnte nicht geladen werden.');
     }
   };
 
-  // Check if abnahme is locked (already completed with customer signature)
-  const isAbnahmeLocked = !!(abnahmeData.kundeUnterschrift && abnahmeData.abnahmeDatum);
+  // Check if abnahme is locked (signed via e-signature)
+  const abnahmeSignature = abnahmeFormId ? esignatureStatuses[abnahmeFormId]?.signatures?.find(s => s.document_type === 'abnahme') : null;
+  const isAbnahmeLocked = abnahmeSignature?.status === 'signed';
 
   // Check if Abnahme photos are required but missing (min 2 photos for both cases)
   const totalPhotos = maengelImages.length + maengelImageFiles.length;
   const abnahmePhotosRequired = (abnahmeData.istFertig || abnahmeData.hatProbleme) && totalPhotos < 2;
 
-  // Comprehensive Abnahme validation - ALL fields required
+  // Comprehensive Abnahme validation - core fields required, signature is separate
   const abnahmeValidation = {
     statusSelected: abnahmeData.istFertig === true || abnahmeData.hatProbleme === true,
     baustelleSauber: !!abnahmeData.baustelleSauber,
     monteurNote: !!abnahmeData.monteurNote && abnahmeData.monteurNote >= 1 && abnahmeData.monteurNote <= 6,
     photosOk: totalPhotos >= 2,
-    kundeName: !!(abnahmeData.kundeName && abnahmeData.kundeName.trim()),
-    kundeUnterschrift: !!abnahmeData.kundeUnterschrift
+    kundeName: !!(abnahmeData.kundeName && abnahmeData.kundeName.trim())
+    // Note: kundeUnterschrift validation removed - now handled via e-signature
   };
   const abnahmeIsValid = Object.values(abnahmeValidation).every(v => v);
 
@@ -314,15 +467,14 @@ const Dashboard = () => {
   if (!abnahmeValidation.monteurNote) abnahmeMissingFields.push('Monteur Note');
   if (!abnahmeValidation.photosOk) abnahmeMissingFields.push('Min. 2 Fotos');
   if (!abnahmeValidation.kundeName) abnahmeMissingFields.push('Kundenname');
-  if (!abnahmeValidation.kundeUnterschrift) abnahmeMissingFields.push('Kundenbestätigung');
 
-  // Save abnahme and update status
+  // Save abnahme and update status, then send e-signature
   const handleSaveAbnahme = async () => {
     if (!abnahmeFormId) return;
 
     // Validate all required fields
     if (!abnahmeIsValid) {
-      alert('Bitte füllen Sie alle erforderlichen Felder aus:\n' + abnahmeMissingFields.join('\n'));
+      toast.warning('Fehlende Felder', 'Bitte füllen Sie alle erforderlichen Felder aus: ' + abnahmeMissingFields.join(', '));
       return;
     }
 
@@ -335,6 +487,25 @@ const Dashboard = () => {
       if (maengelImageFiles.length > 0) {
         await uploadAbnahmeImages(abnahmeFormId, maengelImageFiles);
         setMaengelImageFiles([]);
+      }
+
+      // Regenerate PDF with abnahme data before sending for signature (forSignature: true = no media)
+      await ensurePdfExists(abnahmeFormId, true);
+
+      // Send e-signature request automatically if enabled
+      if (branchFeatures?.esignature_enabled) {
+        try {
+          const sigResult = await sendAbnahmeAesSignature(abnahmeFormId);
+          console.log('Abnahme signature sent:', sigResult);
+
+          // Update local signature status
+          loadEsignatureStatus(abnahmeFormId);
+
+          toast.success('Abnahme gespeichert', 'E-Signatur wurde an den Kunden gesendet.');
+        } catch (sigErr) {
+          console.error('Error sending Abnahme signature:', sigErr);
+          toast.warning('Abnahme gespeichert', `E-Signatur konnte nicht gesendet werden: ${sigErr instanceof Error ? sigErr.message : 'Unbekannter Fehler'}`);
+        }
       }
 
       // Determine status: ES GIBT MÄNGEL → reklamation_eingegangen, otherwise → abnahme
@@ -353,7 +524,7 @@ const Dashboard = () => {
       refreshStats();
     } catch (err) {
       console.error('Error saving abnahme:', err);
-      alert('Fehler beim Speichern der Abnahme');
+      toast.error('Fehler', 'Abnahme konnte nicht gespeichert werden.');
     } finally {
       setAbnahmeSaving(false);
     }
@@ -368,7 +539,7 @@ const Dashboard = () => {
     const maxSize = 10 * 1024 * 1024; // 10MB
 
     if (file.size > maxSize) {
-      alert('Die Datei ist zu groß. Maximale Größe: 10MB');
+      toast.warning('Datei zu groß', 'Maximale Dateigröße: 10MB');
       return;
     }
 
@@ -380,13 +551,292 @@ const Dashboard = () => {
       setAttachmentDropdownOpen(null);
     } catch (err) {
       console.error('Error uploading document:', err);
-      alert('Fehler beim Hochladen der Datei');
+      toast.error('Fehler', 'Datei konnte nicht hochgeladen werden.');
     } finally {
       setUploadingDocFormId(null);
       if (docInputRef.current) {
         docInputRef.current.value = '';
       }
     }
+  };
+
+  // E-Signature handlers
+  // Helper to generate and save PDF before signature
+  const ensurePdfExists = async (formId: number, forSignature: boolean = false): Promise<boolean> => {
+    try {
+      // Get fresh form data including abnahme and angebot
+      const [formData, abnahmeData, abnahmeImages, angebotData] = await Promise.all([
+        getForm(formId),
+        getAbnahme(formId),
+        getAbnahmeImages(formId),
+        getAngebot(formId).catch(() => ({ summary: null, items: [] }))
+      ]);
+
+      const pdfFormData = {
+        ...formData,
+        id: String(formData.id),
+        productSelection: {
+          category: formData.category,
+          productType: formData.productType,
+          model: formData.model ? formData.model.split(',') : []
+        },
+        specifications: formData.specifications as Record<string, string | number | boolean | string[]>,
+        bilder: formData.bilder || [],
+        abnahme: abnahmeData ? {
+          ...abnahmeData,
+          maengelBilder: abnahmeImages || []
+        } : undefined,
+        angebot: angebotData?.items?.length > 0 ? {
+          items: angebotData.items,
+          summary: angebotData.summary
+        } : undefined
+      };
+
+      // Generate PDF (forSignature: true = lightweight PDF without images for SES)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await generatePDF(pdfFormData as any, { returnBlob: true, forSignature });
+
+      if (result && result.blob) {
+        await savePdf(formId, result.blob);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error generating PDF for signature:', err);
+      return false;
+    }
+  };
+
+  const handleSendAesSignature = async (form: FormData) => {
+    if (!form.id) return;
+    setEsignatureLoading(form.id);
+    try {
+      // First ensure PDF exists (forSignature: true = lightweight PDF without images)
+      const pdfReady = await ensurePdfExists(form.id, true);
+      if (!pdfReady) {
+        throw new Error('PDF konnte nicht erstellt werden');
+      }
+
+      await sendAesSignature(form.id);
+
+      // BoldSign sends email directly to signer
+      toast.success('Signatur gesendet', 'E-Signatur wurde erfolgreich an den Kunden gesendet.');
+
+      // Refresh e-signature status
+      loadEsignatureStatus(form.id);
+    } catch (err) {
+      console.error('Error sending AES signature:', err);
+      toast.error('Fehler', err instanceof Error ? err.message : 'Fehler beim Senden der Signatur');
+    } finally {
+      setEsignatureLoading(null);
+    }
+  };
+
+
+  const loadEsignatureStatus = async (formId: number) => {
+    try {
+      const statuses = await getEsignatureStatus(formId);
+      setEsignatureStatuses(prev => ({ ...prev, [formId]: statuses }));
+    } catch (err) {
+      console.error('Error loading e-signature status:', err);
+    }
+  };
+
+  // Manual refresh signature status from BoldSign API
+  const handleRefreshSignatureStatus = async (requestId: number, formId: number) => {
+    setRefreshingSignatures(prev => new Set(prev).add(requestId));
+    try {
+      const result = await refreshSignatureStatus(requestId);
+      // Always reload to get fresh data
+      const newStatus = await getEsignatureStatus(formId);
+      setEsignatureStatuses(prev => ({ ...prev, [formId]: newStatus }));
+
+      if (result.updated) {
+        console.log(`Signature status updated: ${result.previous_status} -> ${result.current_status}`);
+      }
+    } catch (err) {
+      console.error('Error refreshing signature status:', err);
+    } finally {
+      setRefreshingSignatures(prev => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
+    }
+  };
+
+  // Send Abnahme signature
+  const handleSendAbnahmeSignature = async () => {
+    if (!abnahmeFormId) return;
+
+    setAbnahmeSignatureLoading(true);
+    try {
+      // First ensure PDF exists
+      await ensurePdfExists(abnahmeFormId, true);
+
+      await sendAbnahmeAesSignature(abnahmeFormId);
+      toast.success('Signatur gesendet', 'Abnahme E-Signatur wurde an den Kunden gesendet.');
+
+      // Refresh signature status
+      loadEsignatureStatus(abnahmeFormId);
+    } catch (err) {
+      console.error('Error sending Abnahme signature:', err);
+      toast.error('Fehler', err instanceof Error ? err.message : 'Fehler beim Senden der Abnahme Signatur');
+    } finally {
+      setAbnahmeSignatureLoading(false);
+    }
+  };
+
+  // ============ ANGEBOT HANDLERS ============
+
+  // Update angebot item
+  const updateAngebotItem = (index: number, field: keyof AngebotItem, value: string | number) => {
+    setAngebotItems(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      // Auto-calculate gesamtpreis
+      if (field === 'menge' || field === 'einzelpreis') {
+        const menge = field === 'menge' ? Number(value) : updated[index].menge;
+        const einzelpreis = field === 'einzelpreis' ? Number(value) : updated[index].einzelpreis;
+        updated[index].gesamtpreis = menge * einzelpreis;
+      }
+      return updated;
+    });
+  };
+
+  // Add new angebot item
+  const addAngebotItem = () => {
+    setAngebotItems(prev => [...prev, { bezeichnung: '', menge: 1, einzelpreis: 0, gesamtpreis: 0 }]);
+  };
+
+  // Remove angebot item
+  const removeAngebotItem = (index: number) => {
+    if (angebotItems.length > 1) {
+      setAngebotItems(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  // Calculate angebot totals
+  const angebotNetto = angebotItems.reduce((sum, item) => sum + (item.gesamtpreis || 0), 0);
+  const angebotMwst = angebotNetto * 0.19;
+  const angebotBrutto = angebotNetto + angebotMwst;
+
+  // Validate angebot
+  const isAngebotValid = angebotItems.every(item =>
+    item.bezeichnung.trim() !== '' &&
+    item.menge > 0 &&
+    item.einzelpreis >= 0
+  ) && angebotDate !== '';
+
+  // Save angebot and show confirmation
+  const handleSaveAngebot = async () => {
+    if (!angebotFormId || !isAngebotValid) return;
+
+    setAngebotSaving(true);
+    try {
+      // Save angebot data
+      await saveAngebot(angebotFormId, {
+        items: angebotItems,
+        angebot_datum: angebotDate,
+        bemerkungen: angebotBemerkungen,
+        mwst_satz: 19
+      });
+
+      // Regenerate PDF with angebot data
+      await ensurePdfExists(angebotFormId, false);
+
+      // If e-signature is enabled and not in edit mode, show confirmation dialog
+      if (branchFeatures?.esignature_enabled && !angebotEditMode) {
+        setAngebotConfirmOpen(true);
+      } else {
+        // Just save and update status
+        await updateForm(angebotFormId, { status: 'angebot_versendet', statusDate: angebotDate });
+        setForms(forms.map(f => f.id === angebotFormId ? { ...f, status: 'angebot_versendet', statusDate: angebotDate } : f));
+        setAngebotModalOpen(false);
+        setAngebotFormId(null);
+        refreshStats();
+        toast.success('Gespeichert', 'Angebot wurde gespeichert.');
+      }
+    } catch (err) {
+      console.error('Error saving angebot:', err);
+      toast.error('Fehler', err instanceof Error ? err.message : 'Fehler beim Speichern des Angebots');
+    } finally {
+      setAngebotSaving(false);
+    }
+  };
+
+  // Send angebot signature after confirmation
+  const handleConfirmSendAngebot = async () => {
+    if (!angebotFormId) return;
+
+    setAngebotSaving(true);
+    try {
+      // Regenerate PDF without media before sending for signature
+      await ensurePdfExists(angebotFormId, true);
+
+      // Send e-signature
+      await sendAngebotAesSignature(angebotFormId);
+
+      // Update status
+      await updateForm(angebotFormId, { status: 'angebot_versendet', statusDate: angebotDate });
+      setForms(forms.map(f => f.id === angebotFormId ? { ...f, status: 'angebot_versendet', statusDate: angebotDate } : f));
+
+      // Load signature status
+      loadEsignatureStatus(angebotFormId);
+
+      setAngebotConfirmOpen(false);
+      setAngebotModalOpen(false);
+      setAngebotFormId(null);
+      refreshStats();
+      toast.success('Angebot gesendet', 'E-Signatur wurde an den Kunden gesendet.');
+    } catch (err) {
+      console.error('Error sending angebot signature:', err);
+      toast.error('Fehler', err instanceof Error ? err.message : 'Fehler beim Senden der Signatur');
+    } finally {
+      setAngebotSaving(false);
+    }
+  };
+
+  // Get signature for specific document type
+  const getSignatureByType = (formId: number, docType: 'aufmass' | 'abnahme' | 'angebot'): EsignatureRequest | null => {
+    const status = esignatureStatuses[formId];
+    if (!status?.signatures) return null;
+    return status.signatures.find(s => s.document_type === docType) || null;
+  };
+
+  // Get signature status label and color
+  const getSignatureStatusDisplay = (status: string): { label: string; color: string } => {
+    switch (status) {
+      case 'signed': return { label: 'Unterschrieben', color: '#10b981' };
+      case 'pending': return { label: 'Ausstehend', color: '#f59e0b' };
+      case 'viewed': return { label: 'Angesehen', color: '#3b82f6' };
+      case 'signing': return { label: 'Wird unterschrieben', color: '#8b5cf6' };
+      case 'declined': return { label: 'Abgelehnt', color: '#ef4444' };
+      case 'expired': return { label: 'Abgelaufen', color: '#6b7280' };
+      case 'failed': return { label: 'Fehlgeschlagen', color: '#ef4444' };
+      default: return { label: status, color: '#6b7280' };
+    }
+  };
+
+  // Download signed document
+  const handleDownloadSignedDocument = async (documentId: string, docType: string) => {
+    try {
+      const blob = await downloadBoldSignDocument(documentId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `signed-${docType}-${documentId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading signed document:', err);
+      toast.error('Fehler', 'Signiertes Dokument konnte nicht heruntergeladen werden.');
+    }
+  };
+
+  // E-signature available for these statuses (BoldSign AES only)
+  const canSendEsignature = (status: string): boolean => {
+    return ['neu', 'angebot_versendet', 'abnahme'].includes(status);
   };
 
   // Format date for display
@@ -551,7 +1001,7 @@ Aylux Team`;
         setDeleteModalOpen(false);
         setFormToDelete(null);
       } catch (err) {
-        alert('Fehler beim Löschen');
+        toast.error('Fehler', 'Aufmaß konnte nicht gelöscht werden.');
       }
     }
   };
@@ -564,24 +1014,37 @@ Aylux Team`;
         f.id === formId ? { ...f, status: 'neu' } : f
       ));
       refreshStats();
+      toast.success('Wiederhergestellt', 'Aufmaß wurde wiederhergestellt.');
     } catch (err) {
-      alert('Fehler beim Wiederherstellen');
+      toast.error('Fehler', 'Aufmaß konnte nicht wiederhergestellt werden.');
     }
   };
 
-  const filteredForms = forms.filter(form => {
-    const matchesSearch =
-      form.kundeVorname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      form.kundeNachname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      form.kundenlokation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      form.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      form.productType?.toLowerCase().includes(searchTerm.toLowerCase());
-    // "Alle" excludes Papierkorb, must explicitly select Papierkorb to see trash
-    const matchesFilter = filterStatus === 'alle'
-      ? form.status !== 'papierkorb'
-      : form.status === filterStatus;
-    return matchesSearch && matchesFilter;
-  });
+  const filteredForms = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return forms.filter(form => {
+      const matchesSearch = !term ||
+        form.kundeVorname?.toLowerCase().includes(term) ||
+        form.kundeNachname?.toLowerCase().includes(term) ||
+        form.kundenlokation?.toLowerCase().includes(term) ||
+        form.category?.toLowerCase().includes(term) ||
+        form.productType?.toLowerCase().includes(term);
+      const matchesFilter = filterStatus === 'alle'
+        ? form.status !== 'papierkorb'
+        : form.status === filterStatus;
+      return matchesSearch && matchesFilter;
+    });
+  }, [forms, searchTerm, filterStatus]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { alle: 0 };
+    for (const form of forms) {
+      if (form.status !== 'papierkorb') counts.alle++;
+      const s = form.status || 'neu';
+      counts[s] = (counts[s] || 0) + 1;
+    }
+    return counts;
+  }, [forms]);
 
   const getTimeAgo = (dateString?: string) => {
     if (!dateString) return '';
@@ -661,9 +1124,7 @@ Aylux Team`;
                 <span className="status-dot" style={{ backgroundColor: option.color }} />
                 <span className="tab-label">{option.label}</span>
                 <span className="tab-count">
-                  {option.value === 'alle'
-                    ? forms.filter(f => f.status !== 'papierkorb').length
-                    : forms.filter(f => f.status === option.value).length}
+                  {statusCounts[option.value] || 0}
                 </span>
               </button>
             ))}
@@ -677,7 +1138,7 @@ Aylux Team`;
             >
               <span className="status-dot" style={{ backgroundColor: getStatusColor(filterStatus) }} />
               <span>{getStatusLabel(filterStatus)}</span>
-              <span className="dropdown-count">{filterStatus === 'alle' ? forms.filter(f => f.status !== 'papierkorb').length : filteredForms.length}</span>
+              <span className="dropdown-count">{statusCounts[filterStatus] || 0}</span>
               <svg className={`chevron ${filterDropdownOpen ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
             </button>
             <AnimatePresence>
@@ -700,9 +1161,7 @@ Aylux Team`;
                       <span className="status-dot" style={{ backgroundColor: option.color }} />
                       <span>{option.label}</span>
                       <span className="option-count">
-                        {option.value === 'alle'
-                          ? forms.filter(f => f.status !== 'papierkorb').length
-                          : forms.filter(f => f.status === option.value).length}
+                        {statusCounts[option.value] || 0}
                       </span>
                     </button>
                   ))}
@@ -739,7 +1198,7 @@ Aylux Team`;
                           {form.kundenlokation || 'Keine Adresse'}
                         </p>
                       </div>
-                      {isAdmin() ? (
+                      {isAdminOrOffice() ? (
                         <div className="status-selector">
                           <button
                             className="status-pill-btn"
@@ -788,6 +1247,41 @@ Aylux Team`;
                               <span>Löschung: {(() => { const d = new Date(form.papierkorbDate); d.setDate(d.getDate() + 30); return d.toLocaleDateString('de-DE'); })()}</span>
                             </div>
                           )}
+                          {/* Signature status badge */}
+                          {(() => {
+                            const sigStatus = esignatureStatuses[form.id!];
+                            const pendingSig = sigStatus?.signatures?.find(s => s.status === 'pending' || s.status === 'viewed' || s.status === 'signing');
+                            const signedCount = sigStatus?.signatures?.filter(s => s.status === 'signed').length || 0;
+                            if (pendingSig) {
+                              const isRefreshing = refreshingSignatures.has(pendingSig.id);
+                              return (
+                                <div className="signature-status-badge pending">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                                  <span>{pendingSig.status === 'viewed' ? 'Angesehen' : pendingSig.status === 'signing' ? 'Wird signiert' : 'Signatur ausstehend'}</span>
+                                  <button
+                                    className={`signature-refresh-btn ${isRefreshing ? 'refreshing' : ''}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRefreshSignatureStatus(pendingSig.id, form.id!);
+                                    }}
+                                    disabled={isRefreshing}
+                                    title="Status aktualisieren"
+                                  >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                  </button>
+                                </div>
+                              );
+                            }
+                            if (signedCount > 0) {
+                              return (
+                                <div className="signature-status-badge signed">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                  <span>{signedCount > 1 ? 'Signiert' : 'Signiert'}</span>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                       ) : (
                         <div className="status-selector">
@@ -816,6 +1310,41 @@ Aylux Team`;
                               <span>Löschung: {(() => { const d = new Date(form.papierkorbDate); d.setDate(d.getDate() + 30); return d.toLocaleDateString('de-DE'); })()}</span>
                             </div>
                           )}
+                          {/* Signature status badge */}
+                          {(() => {
+                            const sigStatus = esignatureStatuses[form.id!];
+                            const pendingSig = sigStatus?.signatures?.find(s => s.status === 'pending' || s.status === 'viewed' || s.status === 'signing');
+                            const signedCount = sigStatus?.signatures?.filter(s => s.status === 'signed').length || 0;
+                            if (pendingSig) {
+                              const isRefreshing = refreshingSignatures.has(pendingSig.id);
+                              return (
+                                <div className="signature-status-badge pending">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                                  <span>{pendingSig.status === 'viewed' ? 'Angesehen' : pendingSig.status === 'signing' ? 'Wird signiert' : 'Signatur ausstehend'}</span>
+                                  <button
+                                    className={`signature-refresh-btn ${isRefreshing ? 'refreshing' : ''}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRefreshSignatureStatus(pendingSig.id, form.id!);
+                                    }}
+                                    disabled={isRefreshing}
+                                    title="Status aktualisieren"
+                                  >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                  </button>
+                                </div>
+                              );
+                            }
+                            if (signedCount > 0) {
+                              return (
+                                <div className="signature-status-badge signed">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 6L9 17l-5-5"/></svg>
+                                  <span>Signiert</span>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                       )}
                     </div>
@@ -965,6 +1494,84 @@ Aylux Team`;
                                 ))}
                               </>
                             )}
+                            {/* Initial Angebot PDF from Lead */}
+                            {form.lead_id && (
+                              <>
+                                <div className="attachment-divider">Initial Angebot</div>
+                                <a
+                                  href={getLeadPdfUrl(form.lead_id)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="attachment-option pdf-file"
+                                  onClick={() => setAttachmentDropdownOpen(null)}
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14,2 14,8 20,8" /><path d="M9 15h6"/><path d="M9 11h6"/></svg>
+                                  <span className="pdf-filename">Angebot_{form.lead_id}.pdf</span>
+                                </a>
+                              </>
+                            )}
+                            {/* E-Signature Status Section */}
+                            {branchFeatures?.esignature_enabled && (
+                              <>
+                                <div className="attachment-divider">E-Signaturen</div>
+                                {(['aufmass', 'angebot', 'abnahme'] as const).map((docType) => {
+                                  const sig = esignatureStatuses[form.id!]?.signatures?.find(
+                                    s => s.document_type === docType
+                                  );
+                                  const label = docType === 'aufmass' ? 'Aufmaß'
+                                    : docType === 'angebot' ? 'Angebot'
+                                    : 'Abnahme';
+                                  const isSigned = sig?.status === 'signed';
+                                  const isPending = sig?.status === 'pending' || sig?.status === 'viewed' || sig?.status === 'signing';
+                                  const notSent = !sig;
+
+                                  return (
+                                    <button
+                                      key={docType}
+                                      className={`attachment-option esig-status ${isSigned ? 'signed' : isPending ? 'pending' : 'not-sent'}`}
+                                      disabled={notSent}
+                                      onClick={async () => {
+                                        if (isSigned && sig?.id) {
+                                          try {
+                                            const blob = await downloadSignedDocument(sig.id);
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = `${label}_${form.id}_signiert.pdf`;
+                                            a.click();
+                                            URL.revokeObjectURL(url);
+                                          } catch (err) {
+                                            toast.error('Fehler', 'Signiertes Dokument konnte nicht heruntergeladen werden.');
+                                          }
+                                        }
+                                        setAttachmentDropdownOpen(null);
+                                      }}
+                                    >
+                                      {isSigned ? (
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="esig-icon signed">
+                                          <path d="M9 12l2 2 4-4" />
+                                          <circle cx="12" cy="12" r="10" />
+                                        </svg>
+                                      ) : isPending ? (
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="esig-icon pending">
+                                          <circle cx="12" cy="12" r="10" />
+                                          <polyline points="12 6 12 12 16 14" />
+                                        </svg>
+                                      ) : (
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="esig-icon not-sent">
+                                          <circle cx="12" cy="12" r="10" />
+                                          <line x1="8" y1="12" x2="16" y2="12" />
+                                        </svg>
+                                      )}
+                                      <span className="esig-label">{label}</span>
+                                      <span className="esig-status-text">
+                                        {isSigned ? 'Signiert' : isPending ? 'Wartet' : '—'}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </>
+                            )}
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -979,8 +1586,30 @@ Aylux Team`;
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
                       </a>
                     )}
+                    {/* E-Signature button - only show if feature is enabled */}
+                    {branchFeatures?.esignature_enabled && canSendEsignature(getFormStatus(form)) && (
+                      <button
+                        className={`action-btn esignature ${esignatureLoading === form.id ? 'loading' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSendAesSignature(form);
+                        }}
+                        disabled={esignatureLoading === form.id}
+                        title="E-Signatur (BoldSign AES)"
+                      >
+                        {esignatureLoading === form.id ? (
+                          <div className="spinner small"></div>
+                        ) : (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+                          </svg>
+                        )}
+                        <span>E-Signatur</span>
+                      </button>
+                    )}
                     {/* BEARBEITEN - only for admin or unlocked forms */}
-                    {(isAdmin() || !isFormLocked(getFormStatus(form))) ? (
+                    {(isAdminOrOffice() || !isFormLocked(getFormStatus(form))) ? (
                       <button className="action-btn edit" onClick={() => handleEditForm(form.id!)}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         <span>Bearbeiten</span>
@@ -1150,13 +1779,193 @@ Aylux Team`;
                       refreshStats();
                     } catch (err) {
                       console.error('Error updating status:', err);
-                      alert('Fehler beim Speichern des Status');
+                      toast.error('Fehler', 'Status konnte nicht gespeichert werden.');
                     }
                   }}
                 >
                   Speichern
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Angebot Modal */}
+      <AnimatePresence>
+        {angebotModalOpen && (
+          <motion.div className="modal-overlay-modern" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => { setAngebotModalOpen(false); setAngebotConfirmOpen(false); }}>
+            <motion.div className="modal-modern modal-large angebot-modal" initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} onClick={(e) => e.stopPropagation()}>
+              <h3>{angebotEditMode ? 'Angebot bearbeiten' : 'Angebot erstellen'}</h3>
+
+              {/* Angebot Form */}
+              <div className="angebot-form">
+                {/* Date Picker */}
+                <div className="form-group">
+                  <label>Angebotsdatum *</label>
+                  <input
+                    type="date"
+                    value={angebotDate}
+                    onChange={(e) => setAngebotDate(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* Line Items */}
+                <div className="angebot-items">
+                  <div className="angebot-items-header">
+                    <span>Bezeichnung / Beschreibung *</span>
+                    <span>Menge</span>
+                    <span>Preis (EUR)</span>
+                    <span>Gesamt</span>
+                    <span></span>
+                  </div>
+                  {angebotItems.map((item, index) => (
+                    <div key={index} className="angebot-item-row">
+                      <input
+                        type="text"
+                        placeholder="Beschreibung eingeben..."
+                        value={item.bezeichnung}
+                        onChange={(e) => updateAngebotItem(index, 'bezeichnung', e.target.value)}
+                        required
+                      />
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={item.menge}
+                        onChange={(e) => updateAngebotItem(index, 'menge', parseFloat(e.target.value) || 0)}
+                        required
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.einzelpreis}
+                        onChange={(e) => updateAngebotItem(index, 'einzelpreis', parseFloat(e.target.value) || 0)}
+                        required
+                      />
+                      <span className="col-gesamtpreis">{item.gesamtpreis.toFixed(2)} EUR</span>
+                      <button
+                        type="button"
+                        className="btn-remove-item"
+                        onClick={() => removeAngebotItem(index)}
+                        disabled={angebotItems.length === 1}
+                        title="Entfernen"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <line x1="18" y1="6" x2="6" y2="18" />
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+
+                  <button type="button" className="btn-add-item" onClick={addAngebotItem}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Position hinzufugen
+                  </button>
+                </div>
+
+                {/* Totals */}
+                <div className="angebot-totals">
+                  <div className="total-row">
+                    <span>Netto:</span>
+                    <span>{angebotNetto.toFixed(2)} EUR</span>
+                  </div>
+                  <div className="total-row">
+                    <span>MwSt. (19%):</span>
+                    <span>{angebotMwst.toFixed(2)} EUR</span>
+                  </div>
+                  <div className="total-row total-brutto">
+                    <span>Brutto:</span>
+                    <span>{angebotBrutto.toFixed(2)} EUR</span>
+                  </div>
+                </div>
+
+                {/* Bemerkungen */}
+                <div className="form-group">
+                  <label>Bemerkungen</label>
+                  <textarea
+                    value={angebotBemerkungen}
+                    onChange={(e) => setAngebotBemerkungen(e.target.value)}
+                    placeholder="Optionale Bemerkungen zum Angebot..."
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="modal-actions-modern">
+                <button
+                  className="modal-btn secondary"
+                  onClick={() => { setAngebotModalOpen(false); setAngebotConfirmOpen(false); }}
+                  disabled={angebotSaving}
+                >
+                  Abbrechen
+                </button>
+                <button
+                  className="modal-btn primary"
+                  onClick={handleSaveAngebot}
+                  disabled={!isAngebotValid || angebotSaving}
+                >
+                  {angebotSaving ? 'Speichern...' : (angebotEditMode ? 'Angebot speichern' : 'Speichern & Senden')}
+                </button>
+              </div>
+
+              {/* Confirmation Dialog Overlay */}
+              <AnimatePresence>
+                {angebotConfirmOpen && (
+                  <motion.div
+                    className="confirm-overlay"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <motion.div
+                      className="confirm-dialog"
+                      initial={{ scale: 0.9 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0.9 }}
+                    >
+                      <div className="confirm-icon warning">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                          <line x1="12" y1="9" x2="12" y2="13" />
+                          <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                      </div>
+                      <h4>E-Signatur senden?</h4>
+                      <p>
+                        Das Angebot wird per E-Mail an den Kunden gesendet.
+                        Der Kunde muss das Angebot digital unterschreiben.
+                      </p>
+                      <p className="confirm-warning">
+                        Stellen Sie sicher, dass alle Angaben korrekt sind!
+                      </p>
+                      <div className="confirm-actions">
+                        <button
+                          className="btn-secondary"
+                          onClick={() => setAngebotConfirmOpen(false)}
+                          disabled={angebotSaving}
+                        >
+                          Zuruck
+                        </button>
+                        <button
+                          className="btn-primary"
+                          onClick={handleConfirmSendAngebot}
+                          disabled={angebotSaving}
+                        >
+                          {angebotSaving ? 'Senden...' : 'Ja, Angebot senden'}
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           </motion.div>
         )}
@@ -1433,16 +2242,95 @@ Aylux Team`;
                   />
                 </div>
 
+                {/* E-Signature Section */}
                 <div className="abnahme-row">
-                  <label className="abnahme-checkbox confirmation">
-                    <input
-                      type="checkbox"
-                      checked={abnahmeData.kundeUnterschrift || false}
-                      onChange={(e) => setAbnahmeData({ ...abnahmeData, kundeUnterschrift: e.target.checked })}
-                    />
-                    <span>Kunde hat die Abnahme bestätigt <span style={{ color: '#ef4444' }}>*</span></span>
-                  </label>
+                  <label>E-Signatur Status</label>
+                  {(() => {
+                    const abnahmeSig = abnahmeFormId ? getSignatureByType(abnahmeFormId, 'abnahme') : null;
+                    const aufmassSig = abnahmeFormId ? getSignatureByType(abnahmeFormId, 'aufmass') : null;
+
+                    return (
+                      <div className="esignature-status-section">
+                        {/* Aufmass Signature Status */}
+                        <div className="signature-item">
+                          <span className="signature-label">Aufmaß:</span>
+                          {aufmassSig ? (
+                            <div className="signature-status-row">
+                              <span
+                                className="signature-status-badge"
+                                style={{ backgroundColor: getSignatureStatusDisplay(aufmassSig.status).color }}
+                              >
+                                {getSignatureStatusDisplay(aufmassSig.status).label}
+                              </span>
+                              {aufmassSig.status === 'signed' && aufmassSig.boldsign_document_id && (
+                                <button
+                                  className="btn-download-signed"
+                                  onClick={() => handleDownloadSignedDocument(aufmassSig.boldsign_document_id!, 'aufmass')}
+                                >
+                                  Download
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="signature-status-badge" style={{ backgroundColor: '#6b7280' }}>Nicht gesendet</span>
+                          )}
+                        </div>
+
+                        {/* Abnahme Signature Status */}
+                        <div className="signature-item">
+                          <span className="signature-label">Abnahme:</span>
+                          {abnahmeSig ? (
+                            <div className="signature-status-row">
+                              <span
+                                className="signature-status-badge"
+                                style={{ backgroundColor: getSignatureStatusDisplay(abnahmeSig.status).color }}
+                              >
+                                {getSignatureStatusDisplay(abnahmeSig.status).label}
+                              </span>
+                              {abnahmeSig.status === 'signed' && abnahmeSig.boldsign_document_id && (
+                                <button
+                                  className="btn-download-signed"
+                                  onClick={() => handleDownloadSignedDocument(abnahmeSig.boldsign_document_id!, 'abnahme')}
+                                >
+                                  Download
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="signature-status-row">
+                              <span className="signature-status-badge" style={{ backgroundColor: '#6b7280' }}>Nicht gesendet</span>
+                              {branchFeatures?.esignature_enabled && (
+                                <button
+                                  className="btn-send-signature"
+                                  onClick={handleSendAbnahmeSignature}
+                                  disabled={abnahmeSignatureLoading}
+                                >
+                                  {abnahmeSignatureLoading ? 'Senden...' : 'Signatur anfordern'}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {abnahmeSig && ['declined', 'expired', 'failed'].includes(abnahmeSig.status) && branchFeatures?.esignature_enabled && (
+                            <button
+                              className="btn-send-signature"
+                              onClick={handleSendAbnahmeSignature}
+                              disabled={abnahmeSignatureLoading}
+                              style={{ marginTop: '8px' }}
+                            >
+                              {abnahmeSignatureLoading ? 'Senden...' : 'Erneut senden'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
+
+                {/* Legacy checkbox - hidden but keeps validation working */}
+                <input
+                  type="hidden"
+                  value={abnahmeData.kundeUnterschrift ? 'true' : 'false'}
+                />
               </div>
 
               <div className="modal-actions-modern">

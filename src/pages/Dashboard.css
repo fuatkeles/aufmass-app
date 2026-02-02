@@ -376,6 +376,37 @@
   font-size: 1rem;
 }
 
+.btn-secondary-new {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.875rem 1.5rem;
+  background: transparent;
+  color: var(--primary-color);
+  border: 2px solid var(--primary-color);
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary-new svg {
+  width: 18px;
+  height: 18px;
+}
+
+.btn-secondary-new:hover {
+  background: rgba(127, 169, 61, 0.1);
+  box-shadow: 0 4px 12px rgba(127, 169, 61, 0.2);
+}
+
+.header-right {
+  display: flex;
+  gap: 12px;
+}
+
 /* ============ QUICK STATS ============ */
 .quick-stats {
   display: grid;
@@ -1010,6 +1041,72 @@
 
 .attachment-option.media-file.video svg {
   color: #8b5cf6;
+}
+
+/* E-Signature Status in Attachment Dropdown */
+.attachment-option.esig-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  justify-content: flex-start;
+}
+
+.attachment-option.esig-status .esig-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.attachment-option.esig-status .esig-label {
+  flex: 1;
+  text-align: left;
+}
+
+.attachment-option.esig-status .esig-status-text {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.attachment-option.esig-status.signed {
+  cursor: pointer;
+}
+
+.attachment-option.esig-status.signed .esig-icon {
+  color: #10b981;
+}
+
+.attachment-option.esig-status.signed .esig-status-text {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.attachment-option.esig-status.pending .esig-icon {
+  color: #f59e0b;
+}
+
+.attachment-option.esig-status.pending .esig-status-text {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.attachment-option.esig-status.not-sent {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.attachment-option.esig-status.not-sent .esig-icon {
+  color: var(--text-secondary);
+}
+
+.attachment-option.esig-status.not-sent .esig-status-text {
+  color: var(--text-secondary);
+}
+
+.attachment-option.esig-status:disabled {
+  pointer-events: none;
 }
 
 .card-actions-modern {
@@ -4141,4 +4238,643 @@
 .light-theme .btn-primary-new {
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
   color: white;
+}
+
+/* ============ E-SIGNATURE STYLES ============ */
+.esignature-selector {
+  position: relative;
+}
+
+.action-btn.esignature {
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.action-btn.esignature:hover {
+  color: #7fa93d;
+  background: rgba(127, 169, 61, 0.1);
+}
+
+.action-btn.esignature.loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.action-btn.esignature .spinner.small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-color);
+  border-top-color: #7fa93d;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.esignature-dropdown {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 0.5rem;
+  min-width: 200px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  z-index: 100;
+}
+
+.esignature-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: none;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.esignature-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.esignature-option svg {
+  width: 18px;
+  height: 18px;
+  color: #7fa93d;
+  flex-shrink: 0;
+}
+
+/* Light theme e-signature styles */
+.light-theme .esignature-dropdown {
+  background: #fff;
+  border-color: #e5e7eb;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .esignature-option:hover {
+  background: #f9fafb;
+}
+
+/* Provider-specific e-signature option styles */
+.esignature-option.openapi {
+  border-left: 3px solid #7fa93d;
+}
+
+.esignature-option.boldsign {
+  border-left: 3px solid #3b82f6;
+}
+
+.esignature-option.openapi svg {
+  color: #7fa93d;
+}
+
+.esignature-option.boldsign svg {
+  color: #3b82f6;
+}
+
+/* ============ SIGNATURE STATUS SECTION ============ */
+.esignature-status-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.signature-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.signature-label {
+  font-weight: 500;
+  min-width: 80px;
+  color: var(--text-secondary);
+}
+
+.signature-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.signature-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+}
+
+.btn-download-signed {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-download-signed:hover {
+  background: #059669;
+}
+
+.btn-send-signature {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-send-signature:hover {
+  background: #2563eb;
+}
+
+.btn-send-signature:disabled {
+  background: #6b7280;
+  cursor: not-allowed;
+}
+
+/* Light theme signature styles */
+.light-theme .esignature-status-section {
+  background: #f3f4f6;
+}
+
+/* ============ SIGNATURE STATUS BADGE (in status-selector) ============ */
+.signature-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.signature-status-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.signature-status-badge.pending {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.signature-status-badge.signed {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+/* Light theme */
+.light-theme .signature-status-badge.pending {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.light-theme .signature-status-badge.signed {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+/* Signature refresh button */
+.signature-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.signature-refresh-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.signature-refresh-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.signature-refresh-btn.refreshing svg {
+  animation: spin 1s linear infinite;
+}
+
+.signature-refresh-btn:disabled {
+  cursor: not-allowed;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.light-theme .signature-refresh-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* ============ ANGEBOT MODAL STYLES ============ */
+
+.modal-modern.angebot-modal {
+  max-width: 900px;
+  width: 95%;
+  text-align: left;
+}
+
+.angebot-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.angebot-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.angebot-form .form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.angebot-form .form-group input[type="date"],
+.angebot-form .form-group textarea {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  font-size: 14px;
+}
+
+.angebot-form .form-group input[type="date"]:focus,
+.angebot-form .form-group textarea:focus {
+  outline: none;
+  border-color: #7fa93d;
+}
+
+.angebot-form .form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Angebot Items Table */
+.angebot-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.angebot-items-header {
+  display: grid;
+  grid-template-columns: 1fr 80px 100px 100px 36px;
+  gap: 12px;
+  padding: 0 0 10px 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.angebot-item-row {
+  display: grid;
+  grid-template-columns: 1fr 80px 100px 100px 36px;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.angebot-item-row:last-of-type {
+  border-bottom: none;
+}
+
+.angebot-item-row .col-gesamtpreis {
+  font-weight: 600;
+  color: #7fa93d;
+  font-size: 14px;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.angebot-item-row input {
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  font-size: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+.angebot-item-row input:focus {
+  outline: none;
+  border-color: #7fa93d;
+}
+
+.angebot-item-row input[type="number"] {
+  text-align: right;
+}
+
+.btn-remove-item {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.1);
+  border: none;
+  border-radius: 6px;
+  color: #ef4444;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+  margin-top: 8px;
+}
+
+.btn-remove-item:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.btn-remove-item:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.btn-remove-item svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-add-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(127, 169, 61, 0.1);
+  border: 1px dashed rgba(127, 169, 61, 0.4);
+  border-radius: 8px;
+  color: #7fa93d;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+}
+
+.btn-add-item:hover {
+  background: rgba(127, 169, 61, 0.2);
+  border-color: #7fa93d;
+}
+
+.btn-add-item svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Angebot Modal Actions */
+.angebot-modal .modal-actions-modern {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Angebot Totals */
+.angebot-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: rgba(127, 169, 61, 0.1);
+  border-radius: 12px;
+  margin-left: auto;
+  width: fit-content;
+  min-width: 250px;
+}
+
+.angebot-totals .total-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.angebot-totals .total-row.total-brutto {
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  margin-top: 4px;
+}
+
+/* Confirmation Dialog */
+.confirm-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  z-index: 10;
+}
+
+.confirm-dialog {
+  background: #1a1a2e;
+  padding: 32px;
+  border-radius: 16px;
+  text-align: center;
+  max-width: 400px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.confirm-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.confirm-icon.warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.confirm-icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.confirm-dialog h4 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: white;
+}
+
+.confirm-dialog p {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.confirm-dialog .confirm-warning {
+  color: #f59e0b;
+  font-weight: 500;
+  margin-top: 16px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.confirm-actions button {
+  flex: 1;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+/* Light theme */
+.light-theme .angebot-form .form-group label {
+  color: #374151;
+}
+
+.light-theme .angebot-form .form-group input[type="date"],
+.light-theme .angebot-form .form-group textarea {
+  background: white;
+  border-color: #e5e7eb;
+  color: #111827;
+}
+
+.light-theme .angebot-items {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.light-theme .angebot-items-header {
+  color: #6b7280;
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .angebot-item-row input {
+  background: white;
+  border-color: #e5e7eb;
+  color: #111827;
+}
+
+.light-theme .angebot-items-header {
+  color: #6b7280;
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .angebot-item-row {
+  border-bottom-color: rgba(0, 0, 0, 0.05);
+}
+
+.light-theme .angebot-item-row .col-gesamtpreis {
+  color: #059669;
+}
+
+.light-theme .angebot-modal .modal-actions-modern {
+  border-top-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .angebot-totals {
+  background: rgba(127, 169, 61, 0.08);
+}
+
+.light-theme .angebot-totals .total-row {
+  color: #374151;
+}
+
+.light-theme .angebot-totals .total-row.total-brutto {
+  color: #111827;
+  border-top-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .confirm-overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.light-theme .confirm-dialog {
+  background: white;
+  border-color: #e5e7eb;
+}
+
+.light-theme .confirm-dialog h4 {
+  color: #111827;
+}
+
+.light-theme .confirm-dialog p {
+  color: #6b7280;
+}
+
+/* Responsive - Angebot */
+@media (max-width: 700px) {
+  .angebot-items-header {
+    display: none;
+  }
+
+  .angebot-item-row {
+    grid-template-columns: 1fr 60px 80px 80px 32px;
+    gap: 8px;
+  }
+
+  .angebot-item-row input {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .angebot-totals {
+    width: 100%;
+  }
 }

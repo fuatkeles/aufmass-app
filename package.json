@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "openapi:test": "cd tools/openapi-esignature-test && npm install && npx tsx run.ts",
+    "openapi:test:multi": "cd tools/openapi-esignature-test && npm install && npx tsx run.ts --runs=3"
   },
   "dependencies": {
     "framer-motion": "^12.23.22",

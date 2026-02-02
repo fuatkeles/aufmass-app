@@ -69,3 +69,10 @@ export function getBranchSlug(): string | null {
   const match = hostname.match(/^([a-z0-9-]+)\.cnsform\.com$/i);
   return match ? match[1].toLowerCase() : null;
 }
+
+// Check if current domain is admin branch (can manage all branches)
+export function isAdminBranch(): boolean {
+  const hostname = window.location.hostname;
+  const adminDomains = ['localhost', 'aufmass-api.conais.com', 'aufmass-app.vercel.app'];
+  return adminDomains.some(d => hostname.includes(d));
+}

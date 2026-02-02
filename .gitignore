@@ -11,6 +11,13 @@ read-excel.js
 # Logs
 logs
 *.log
+openapi-callback-logs/
+
+# OpenAPI eSignature Test Harness artifacts
+tools/openapi-esignature-test/artifacts/
+tools/openapi-esignature-test/reports/
+tools/openapi-esignature-test/logs/
+tools/openapi-esignature-test/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

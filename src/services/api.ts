@@ -43,6 +43,7 @@ export interface FormData {
   kundeVorname: string;
   kundeNachname: string;
   kundeEmail?: string;
+  kundeTelefon?: string;
   kundenlokation: string;
   category: string;
   productType: string;
@@ -61,6 +62,7 @@ export interface FormData {
   pdf_count?: number;
   pdf_files?: { id: number; file_name: string; file_type: string }[];
   media_files?: { id: number; file_name: string; file_type: string }[];
+  lead_id?: number;
 }
 
 export interface ApiForm {
@@ -70,6 +72,7 @@ export interface ApiForm {
   kunde_vorname: string;
   kunde_nachname: string;
   kunde_email?: string;
+  kunde_telefon?: string;
   kundenlokation: string;
   category: string;
   product_type: string;
@@ -89,6 +92,7 @@ export interface ApiForm {
   pdf_count?: number;
   pdf_files?: { id: number; file_name: string; file_type: string }[];
   media_files?: { id: number; file_name: string; file_type: string }[];
+  lead_id?: number;
 }
 
 export interface Stats {
@@ -304,6 +308,7 @@ function transformApiToFrontend(apiForm: ApiForm): FormData {
     kundeVorname: apiForm.kunde_vorname,
     kundeNachname: apiForm.kunde_nachname,
     kundeEmail: apiForm.kunde_email || '',
+    kundeTelefon: apiForm.kunde_telefon || '',
     kundenlokation: apiForm.kundenlokation,
     category: apiForm.category,
     productType: apiForm.product_type,
@@ -321,7 +326,8 @@ function transformApiToFrontend(apiForm: ApiForm): FormData {
     image_count: apiForm.image_count,
     pdf_count: apiForm.pdf_count,
     pdf_files: apiForm.pdf_files,
-    media_files: apiForm.media_files
+    media_files: apiForm.media_files,
+    lead_id: apiForm.lead_id
   };
 }
 
@@ -652,3 +658,329 @@ export async function getPdfStatus(formId: number): Promise<PdfStatus> {
   if (!response.ok) throw new Error('Failed to check PDF status');
   return response.json();
 }
+
+// ============ E-SIGNATURE API ============
+
+export interface BranchFeatures {
+  isAdminBranch: boolean;
+  branchSlug?: string;
+  esignature_enabled: boolean;
+  esignature_sandbox?: boolean;
+  esignature_management: boolean;
+}
+
+export type EsignatureProvider = 'boldsign'; // BoldSign AES only
+
+export interface BranchSettings {
+  slug: string;
+  name: string;
+  is_active: boolean;
+  esignature_enabled: boolean;
+  esignature_sandbox: boolean;
+  esignature_provider: EsignatureProvider;
+}
+
+export interface EsignatureRequest {
+  id: number;
+  signature_type: 'AES';
+  boldsign_document_id: string | null;
+  status: 'pending' | 'sent' | 'signed' | 'failed' | 'expired' | 'viewed' | 'signing' | 'declined';
+  signer_email: string;
+  signer_name: string;
+  signing_url: string | null;
+  signed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  error_message: string | null;
+  document_type: 'aufmass' | 'abnahme' | 'angebot';
+  provider: 'boldsign';
+}
+
+export interface EsignatureStatus {
+  form_id: number;
+  signatures: EsignatureRequest[];
+}
+
+export interface SendSignatureResponse {
+  success: boolean;
+  request_id: number;
+  boldsign_document_id: string;
+  signing_url: string | null;
+  message: string;
+  provider: 'boldsign';
+}
+
+// Get branch features (for frontend to check e-signature availability)
+export async function getBranchFeatures(): Promise<BranchFeatures> {
+  const response = await authFetch(`${API_BASE_URL}/branch/features`);
+  if (!response.ok) throw new Error('Failed to fetch branch features');
+  return response.json();
+}
+
+// Get all branch settings (admin only)
+export async function getBranchSettings(): Promise<BranchSettings[]> {
+  const response = await authFetch(`${API_BASE_URL}/esignature/branch-settings`);
+  if (!response.ok) throw new Error('Failed to fetch branch settings');
+  return response.json();
+}
+
+// Update branch e-signature settings (admin only)
+export async function updateBranchSettings(
+  slug: string,
+  settings: { esignature_enabled: boolean; esignature_sandbox: boolean; esignature_provider?: EsignatureProvider }
+): Promise<{ message: string }> {
+  const response = await authFetch(`${API_BASE_URL}/esignature/branch-settings/${slug}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings)
+  });
+  if (!response.ok) throw new Error('Failed to update branch settings');
+  return response.json();
+}
+
+// Send AES signature request via BoldSign (Advanced Electronic Signature with Email OTP)
+// Uses stored PDF from database
+export async function sendAesSignature(formId: number): Promise<SendSignatureResponse> {
+  const response = await authFetch(`${API_BASE_URL}/boldsign/send-aes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ form_id: formId })
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to send AES signature' }));
+    throw new Error(error.error || error.details || 'Failed to send AES signature');
+  }
+  return response.json();
+}
+
+// Send Abnahme AES signature request via BoldSign
+export async function sendAbnahmeAesSignature(formId: number): Promise<SendSignatureResponse> {
+  const response = await authFetch(`${API_BASE_URL}/boldsign/send-abnahme-aes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ form_id: formId })
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to send Abnahme AES signature' }));
+    throw new Error(error.error || error.details || 'Failed to send Abnahme AES signature');
+  }
+  return response.json();
+}
+
+// Download signed document from BoldSign
+export async function downloadBoldSignDocument(documentId: string): Promise<Blob> {
+  const response = await authFetch(`${API_BASE_URL}/esignature/boldsign/download/${documentId}`);
+  if (!response.ok) throw new Error('Failed to download signed document');
+  return response.blob();
+}
+
+// Get signature status for a form
+export async function getEsignatureStatus(formId: number): Promise<EsignatureStatus> {
+  const response = await authFetch(`${API_BASE_URL}/esignature/status/${formId}`);
+  if (!response.ok) throw new Error('Failed to fetch signature status');
+  return response.json();
+}
+
+// Download signed document
+export async function downloadSignedDocument(requestId: number): Promise<Blob> {
+  const response = await authFetch(`${API_BASE_URL}/esignature/download/${requestId}`);
+  if (!response.ok) throw new Error('Failed to download signed document');
+  return response.blob();
+}
+
+// Refresh signature status from BoldSign API directly (for polling/manual refresh)
+export interface RefreshStatusResponse {
+  request_id: number;
+  previous_status: string;
+  current_status: string;
+  boldsign_status: string;
+  updated: boolean;
+}
+
+export async function refreshSignatureStatus(requestId: number): Promise<RefreshStatusResponse> {
+  const response = await authFetch(`${API_BASE_URL}/esignature/boldsign/refresh-status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ request_id: requestId })
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to refresh signature status' }));
+    throw new Error(error.error || error.details || 'Failed to refresh signature status');
+  }
+  return response.json();
+}
+
+// Poll for new signature notifications
+export interface SignatureNotification {
+  id: number;
+  form_id: number;
+  signature_type: string;
+  document_type: string;
+  status: string;
+  signer_name: string;
+  signed_at: string;
+  kunde_vorname: string;
+  kunde_nachname: string;
+}
+
+export interface NotificationResponse {
+  notifications: SignatureNotification[];
+  checked_at: string;
+}
+
+export async function getSignatureNotifications(since?: string): Promise<NotificationResponse> {
+  const url = since
+    ? `${API_BASE_URL}/esignature/notifications?since=${encodeURIComponent(since)}`
+    : `${API_BASE_URL}/esignature/notifications`;
+  const response = await authFetch(url);
+  if (!response.ok) throw new Error('Failed to fetch notifications');
+  return response.json();
+}
+
+// ============ ANGEBOT (QUOTE) API ============
+
+export interface AngebotItem {
+  id?: number;
+  bezeichnung: string;
+  menge: number;
+  einzelpreis: number;
+  gesamtpreis: number;
+  sort_order?: number;
+}
+
+export interface AngebotSummary {
+  id?: number;
+  form_id?: number;
+  netto_summe: number;
+  mwst_satz: number;
+  mwst_betrag: number;
+  brutto_summe: number;
+  angebot_datum?: string;
+  bemerkungen?: string;
+}
+
+export interface AngebotData {
+  summary: AngebotSummary | null;
+  items: AngebotItem[];
+}
+
+// Get Angebot data for a form
+export async function getAngebot(formId: number): Promise<AngebotData> {
+  const response = await authFetch(`${API_BASE_URL}/forms/${formId}/angebot`);
+  if (!response.ok) throw new Error('Failed to fetch Angebot data');
+  return response.json();
+}
+
+// Save Angebot data
+export interface SaveAngebotRequest {
+  items: AngebotItem[];
+  angebot_datum?: string;
+  bemerkungen?: string;
+  mwst_satz?: number;
+}
+
+export async function saveAngebot(formId: number, data: SaveAngebotRequest): Promise<{ message: string; summary: AngebotSummary }> {
+  const response = await authFetch(`${API_BASE_URL}/forms/${formId}/angebot`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to save Angebot' }));
+    throw new Error(error.error || 'Failed to save Angebot');
+  }
+  return response.json();
+}
+
+// Send Angebot AES signature request via BoldSign
+export async function sendAngebotAesSignature(formId: number): Promise<SendSignatureResponse> {
+  const response = await authFetch(`${API_BASE_URL}/boldsign/send-angebot-aes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ form_id: formId })
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to send Angebot AES signature' }));
+    throw new Error(error.error || error.details || 'Failed to send Angebot AES signature');
+  }
+  return response.json();
+}
+
+// ============ LEAD STATUS ============
+
+export async function updateLeadStatus(leadId: number, status: string): Promise<{ message: string }> {
+  const response = await authFetch(`${API_BASE_URL}/leads/${leadId}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status })
+  });
+  if (!response.ok) throw new Error('Failed to update lead status');
+  return response.json();
+}
+
+// ============ LEAD PDF ============
+
+// Save generated PDF for a lead
+export async function saveLeadPdf(leadId: number, pdfBlob: Blob): Promise<{ message: string }> {
+  const formData = new window.FormData();
+  formData.append('pdf', pdfBlob, `angebot_${leadId}.pdf`);
+
+  const token = getStoredToken();
+  const response = await fetch(`${API_BASE_URL}/leads/${leadId}/pdf`, {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData
+  });
+  if (!response.ok) throw new Error('Failed to save lead PDF');
+  return response.json();
+}
+
+// Get lead PDF URL
+export function getLeadPdfUrl(leadId: number): string {
+  const token = getStoredToken();
+  return `${API_BASE_URL}/leads/${leadId}/pdf${token ? `?token=${token}` : ''}`;
+}
+
+// ============ GENERIC API HELPER ============
+export const api = {
+  async get<T = unknown>(endpoint: string): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || 'Request failed');
+    }
+    return response.json();
+  },
+
+  async post<T = unknown>(endpoint: string, data?: unknown): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: data ? JSON.stringify(data) : undefined
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || 'Request failed');
+    }
+    return response.json();
+  },
+
+  async delete<T = unknown>(endpoint: string): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || 'Request failed');
+    }
+    return response.json();
+  }
+};
+
