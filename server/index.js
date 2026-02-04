@@ -546,6 +546,22 @@ async function initializeTables() {
       )
     `);
 
+    // Add category column to lead_products if not exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_lead_products') AND name = 'category')
+      BEGIN
+        ALTER TABLE aufmass_lead_products ADD category NVARCHAR(100)
+      END
+    `);
+
+    // Add product_type column to lead_products if not exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_lead_products') AND name = 'product_type')
+      BEGIN
+        ALTER TABLE aufmass_lead_products ADD product_type NVARCHAR(100)
+      END
+    `);
+
     // Leads table (customer quotes/angebote)
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_leads' AND xtype='U')
@@ -594,6 +610,34 @@ async function initializeTables() {
         FOREIGN KEY (lead_id) REFERENCES aufmass_leads(id) ON DELETE CASCADE
       )
     `);
+
+    // Add discount column to lead_items if not exists
+    console.log('Adding discount columns to leads tables...');
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_lead_items') AND name = 'discount')
+      BEGIN
+        ALTER TABLE aufmass_lead_items ADD discount DECIMAL(10,2) DEFAULT 0
+      END
+    `);
+    console.log('✅ aufmass_lead_items.discount column ready');
+
+    // Add subtotal column to leads if not exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_leads') AND name = 'subtotal')
+      BEGIN
+        ALTER TABLE aufmass_leads ADD subtotal DECIMAL(10,2) DEFAULT 0
+      END
+    `);
+    console.log('✅ aufmass_leads.subtotal column ready');
+
+    // Add total_discount column to leads if not exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_leads') AND name = 'total_discount')
+      BEGIN
+        ALTER TABLE aufmass_leads ADD total_discount DECIMAL(10,2) DEFAULT 0
+      END
+    `);
+    console.log('✅ aufmass_leads.total_discount column ready');
 
     // Check if admin exists, create default admin if not
     const adminCheck = await pool.request().query(
@@ -661,11 +705,17 @@ const detectBranch = (req, res, next) => {
   const origin = req.headers.origin || '';
 
   // Check both host and origin for branch detection
-  const hostToCheck = origin ? new URL(origin).hostname : host.split(':')[0];
+  let hostToCheck;
+  try {
+    hostToCheck = origin ? new URL(origin).hostname : host.split(':')[0];
+  } catch (e) {
+    // If origin is malformed, fall back to host
+    hostToCheck = host.split(':')[0];
+  }
 
-  // Dev/admin domains - no branch filter (sees all)
-  const devDomains = ['localhost', 'aufmass-api.conais.com', 'aufmass-app.vercel.app'];
-  if (devDomains.some(d => hostToCheck.includes(d))) {
+  // Dev/admin domains - no branch filter (sees all data, full admin access)
+  const adminDomains = ['localhost', '127.0.0.1', 'aufmass-api.conais.com', 'aufmass-app.vercel.app'];
+  if (adminDomains.some(d => hostToCheck === d || hostToCheck.includes(d))) {
     req.branchId = null;
     return next();
   }
@@ -1125,6 +1175,12 @@ app.get('/api/branches', authenticateToken, requireAdmin, async (req, res) => {
 // Get all forms
 app.get('/api/forms', authenticateToken, async (req, res) => {
   try {
+    console.log('=== GET FORMS ===');
+    console.log('User:', req.user.email);
+    console.log('BranchId from middleware:', req.branchId);
+    console.log('Origin:', req.headers.origin);
+    console.log('Host:', req.headers.host);
+
     // Auto-delete forms in Papierkorb older than 30 days
     await pool.request().query(`
       DELETE FROM aufmass_forms
@@ -1189,6 +1245,8 @@ app.get('/api/forms', authenticateToken, async (req, res) => {
       };
     });
 
+    console.log('Forms found:', formsWithFiles.length);
+    console.log('Forms branch_ids:', [...new Set(result.recordset.map(f => f.branch_id))]);
     res.json(formsWithFiles);
   } catch (err) {
     console.error('Error fetching forms:', err);
@@ -1272,6 +1330,11 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
 
     // Auto-set status_date to form datum (Aufmaß date) when form is created
     // Set branch_id from subdomain detection
+    console.log('=== CREATE FORM ===');
+    console.log('User:', req.user.email);
+    console.log('BranchId being set:', req.branchId);
+    console.log('Origin:', req.headers.origin);
+
     const result = await pool.request()
       .input('datum', sql.Date, datum)
       .input('aufmasser', sql.NVarChar, aufmasser)
@@ -4027,6 +4090,196 @@ app.get('/api/lead-products', authenticateToken, async (req, res) => {
   }
 });
 
+// Create a new product price entry (admin/office only)
+app.post('/api/lead-products', authenticateToken, async (req, res) => {
+  console.log('=== CREATE LEAD PRODUCT ===');
+  console.log('Body:', req.body);
+  console.log('User:', req.user?.email);
+  console.log('BranchId:', req.branchId);
+
+  try {
+    if (req.user.role !== 'admin' && req.user.role !== 'office') {
+      console.log('Access denied - role:', req.user.role);
+      return res.status(403).json({ error: 'Admin or office access required' });
+    }
+
+    const { product_name, breite, tiefe, price, category, product_type } = req.body;
+
+    if (!product_name || !breite || !tiefe || price === undefined) {
+      console.log('Missing fields:', { product_name, breite, tiefe, price });
+      return res.status(400).json({ error: 'Product name, breite, tiefe, and price are required' });
+    }
+
+    // Check if already exists for this branch
+    const checkRequest = pool.request()
+      .input('product_name', sql.NVarChar, product_name)
+      .input('breite', sql.Int, breite)
+      .input('tiefe', sql.Int, tiefe)
+      .input('branch_id', sql.NVarChar, req.branchId || null);
+
+    const existing = await checkRequest.query(`
+      SELECT id FROM aufmass_lead_products
+      WHERE product_name = @product_name AND breite = @breite AND tiefe = @tiefe
+      AND (branch_id = @branch_id OR (branch_id IS NULL AND @branch_id IS NULL))
+    `);
+
+    if (existing.recordset.length > 0) {
+      console.log('Product already exists');
+      return res.status(409).json({ error: 'Product with these dimensions already exists' });
+    }
+
+    // Build dynamic INSERT based on provided fields
+    const insertRequest = pool.request()
+      .input('product_name', sql.NVarChar, product_name)
+      .input('breite', sql.Int, breite)
+      .input('tiefe', sql.Int, tiefe)
+      .input('price', sql.Decimal(10, 2), price)
+      .input('branch_id', sql.NVarChar, req.branchId || null);
+
+    let columns = 'product_name, breite, tiefe, price, branch_id';
+    let values = '@product_name, @breite, @tiefe, @price, @branch_id';
+
+    if (category) {
+      insertRequest.input('category', sql.NVarChar, category);
+      columns += ', category';
+      values += ', @category';
+    }
+    if (product_type) {
+      insertRequest.input('product_type', sql.NVarChar, product_type);
+      columns += ', product_type';
+      values += ', @product_type';
+    }
+
+    const result = await insertRequest.query(`
+      INSERT INTO aufmass_lead_products (${columns})
+      OUTPUT INSERTED.*
+      VALUES (${values})
+    `);
+
+    console.log('Product created:', result.recordset[0]);
+    res.status(201).json(result.recordset[0]);
+  } catch (err) {
+    console.error('Create lead product error:', err.message, err.stack);
+    res.status(500).json({ error: 'Failed to create product', details: err.message });
+  }
+});
+
+// Update a product price entry (admin/office only)
+app.put('/api/lead-products/:id', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin' && req.user.role !== 'office') {
+      return res.status(403).json({ error: 'Admin or office access required' });
+    }
+
+    const { id } = req.params;
+    const { product_name, breite, tiefe, price } = req.body;
+
+    // Verify product belongs to this branch
+    const branchCheck = req.branchId
+      ? 'AND (branch_id = @branch_id OR branch_id IS NULL)'
+      : '';
+
+    const checkRequest = pool.request().input('id', sql.Int, id);
+    if (req.branchId) {
+      checkRequest.input('branch_id', sql.NVarChar, req.branchId);
+    }
+
+    const existing = await checkRequest.query(`
+      SELECT * FROM aufmass_lead_products WHERE id = @id ${branchCheck}
+    `);
+
+    if (existing.recordset.length === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const updateRequest = pool.request().input('id', sql.Int, id);
+
+    const updates = [];
+    if (product_name !== undefined) {
+      updates.push('product_name = @product_name');
+      updateRequest.input('product_name', sql.NVarChar, product_name);
+    }
+    if (breite !== undefined) {
+      updates.push('breite = @breite');
+      updateRequest.input('breite', sql.Int, breite);
+    }
+    if (tiefe !== undefined) {
+      updates.push('tiefe = @tiefe');
+      updateRequest.input('tiefe', sql.Int, tiefe);
+    }
+    if (price !== undefined) {
+      updates.push('price = @price');
+      updateRequest.input('price', sql.Decimal(10, 2), price);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    const result = await updateRequest.query(`
+      UPDATE aufmass_lead_products
+      SET ${updates.join(', ')}
+      OUTPUT INSERTED.*
+      WHERE id = @id
+    `);
+
+    res.json(result.recordset[0]);
+  } catch (err) {
+    console.error('Update lead product error:', err);
+    res.status(500).json({ error: 'Failed to update product' });
+  }
+});
+
+// Delete a product price entry (admin/office only)
+app.delete('/api/lead-products/:id', authenticateToken, async (req, res) => {
+  console.log('=== DELETE LEAD PRODUCT START ===');
+  console.log('Params:', req.params);
+  console.log('User:', req.user);
+  console.log('BranchId:', req.branchId);
+
+  try {
+    if (!req.user) {
+      console.log('No user in request');
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (req.user.role !== 'admin' && req.user.role !== 'office') {
+      console.log('Access denied - role:', req.user.role);
+      return res.status(403).json({ error: 'Admin or office access required' });
+    }
+
+    const id = parseInt(req.params.id, 10);
+    console.log('Parsed ID:', id);
+
+    if (isNaN(id)) {
+      console.log('Invalid ID');
+      return res.status(400).json({ error: 'Invalid product ID' });
+    }
+
+    // Simple delete without branch check for debugging
+    console.log('Executing delete query for ID:', id);
+    const deleteResult = await pool.request()
+      .input('id', sql.Int, id)
+      .query('DELETE FROM aufmass_lead_products WHERE id = @id');
+
+    console.log('Delete result:', deleteResult.rowsAffected);
+
+    if (deleteResult.rowsAffected[0] === 0) {
+      console.log('No rows deleted - product not found');
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    console.log('Product deleted successfully:', id);
+    res.json({ success: true, deleted: deleteResult.rowsAffected[0] });
+  } catch (err) {
+    console.error('=== DELETE ERROR ===');
+    console.error('Error name:', err.name);
+    console.error('Error message:', err.message);
+    console.error('Error stack:', err.stack);
+    res.status(500).json({ error: 'Failed to delete product', details: err.message });
+  }
+});
+
 // Get unique product names
 app.get('/api/lead-products/names', authenticateToken, async (req, res) => {
   try {
@@ -4081,15 +4334,21 @@ app.get('/api/lead-products/:productName/dimensions', authenticateToken, async (
 
 // Create a new lead
 app.post('/api/leads', authenticateToken, async (req, res) => {
+  console.log('=== CREATE LEAD START ===');
+  console.log('Body:', JSON.stringify(req.body, null, 2));
   try {
-    const { customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, items, extras } = req.body;
+    const { customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, items, extras, subtotal, total_discount, total_price } = req.body;
 
-    // Calculate total
-    let total = 0;
-    if (items) items.forEach(item => total += (item.unit_price * (item.quantity || 1)));
-    if (extras) extras.forEach(extra => total += extra.price);
+    // Use provided total_price or calculate fallback
+    let finalTotal = total_price;
+    if (finalTotal === undefined) {
+      finalTotal = 0;
+      if (items) items.forEach(item => finalTotal += (item.unit_price * (item.quantity || 1)) - (item.discount || 0));
+      if (extras) extras.forEach(extra => finalTotal += extra.price);
+      finalTotal -= (total_discount || 0);
+    }
 
-    // Insert lead
+    // Insert lead with discount fields
     const leadResult = await pool.request()
       .input('customer_firstname', sql.NVarChar, customer_firstname)
       .input('customer_lastname', sql.NVarChar, customer_lastname)
@@ -4097,20 +4356,24 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
       .input('customer_phone', sql.NVarChar, customer_phone || null)
       .input('customer_address', sql.NVarChar, customer_address || null)
       .input('notes', sql.NVarChar, notes || null)
-      .input('total_price', sql.Decimal(10, 2), total)
+      .input('subtotal', sql.Decimal(10, 2), subtotal || 0)
+      .input('total_discount', sql.Decimal(10, 2), total_discount || 0)
+      .input('total_price', sql.Decimal(10, 2), finalTotal)
       .input('branch_id', sql.NVarChar, req.branchId || null)
       .input('created_by', sql.Int, req.user.id)
       .query(`
-        INSERT INTO aufmass_leads (customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, total_price, status, branch_id, created_by)
+        INSERT INTO aufmass_leads (customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, subtotal, total_discount, total_price, status, branch_id, created_by)
         OUTPUT INSERTED.id
-        VALUES (@customer_firstname, @customer_lastname, @customer_email, @customer_phone, @customer_address, @notes, @total_price, 'offen', @branch_id, @created_by)
+        VALUES (@customer_firstname, @customer_lastname, @customer_email, @customer_phone, @customer_address, @notes, @subtotal, @total_discount, @total_price, 'offen', @branch_id, @created_by)
       `);
 
     const leadId = leadResult.recordset[0].id;
 
-    // Insert items
+    // Insert items with discount
     if (items && items.length > 0) {
       for (const item of items) {
+        const itemDiscount = item.discount || 0;
+        const itemTotal = (item.unit_price * (item.quantity || 1)) - itemDiscount;
         await pool.request()
           .input('lead_id', sql.Int, leadId)
           .input('product_id', sql.Int, item.product_id || null)
@@ -4119,10 +4382,11 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
           .input('tiefe', sql.Int, item.tiefe || null)
           .input('quantity', sql.Int, item.quantity || 1)
           .input('unit_price', sql.Decimal(10, 2), item.unit_price)
-          .input('total_price', sql.Decimal(10, 2), item.unit_price * (item.quantity || 1))
+          .input('discount', sql.Decimal(10, 2), itemDiscount)
+          .input('total_price', sql.Decimal(10, 2), itemTotal)
           .query(`
-            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, total_price)
-            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @total_price)
+            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price)
+            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @discount, @total_price)
           `);
       }
     }
@@ -4143,8 +4407,11 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
 
     res.status(201).json({ id: leadId, message: 'Lead created successfully' });
   } catch (err) {
-    console.error('Create lead error:', err);
-    res.status(500).json({ error: 'Failed to create lead' });
+    console.error('=== CREATE LEAD ERROR ===');
+    console.error('Error message:', err.message);
+    console.error('Error stack:', err.stack);
+    console.error('Request body:', JSON.stringify(req.body, null, 2));
+    res.status(500).json({ error: 'Failed to create lead', details: err.message });
   }
 });
 

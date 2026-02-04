@@ -14,6 +14,8 @@ interface Lead {
   customer_address: string;
   notes: string;
   total_price: number;
+  subtotal?: number;
+  total_discount?: number;
   status: string;
   created_by_name: string;
   created_at: string;
@@ -26,6 +28,7 @@ interface LeadItem {
   tiefe: number;
   quantity: number;
   unit_price: number;
+  discount?: number;
   total_price: number;
 }
 
@@ -444,8 +447,27 @@ export default function Angebote() {
                 )}
 
                 <div className="detail-total">
-                  <span>Gesamtsumme:</span>
-                  <span className="total-price">{formatPrice(selectedLead.total_price)}</span>
+                  {selectedLead.total_discount && selectedLead.total_discount > 0 ? (
+                    <>
+                      <div className="total-row subtotal-row">
+                        <span>Zwischensumme:</span>
+                        <span>{formatPrice(selectedLead.subtotal || (selectedLead.total_price + selectedLead.total_discount))}</span>
+                      </div>
+                      <div className="total-row discount-row">
+                        <span>Rabatt:</span>
+                        <span className="discount-value">-{formatPrice(selectedLead.total_discount)}</span>
+                      </div>
+                      <div className="total-row final-row">
+                        <span>Gesamtsumme:</span>
+                        <span className="total-price">{formatPrice(selectedLead.total_price)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span>Gesamtsumme:</span>
+                      <span className="total-price">{formatPrice(selectedLead.total_price)}</span>
+                    </>
+                  )}
                 </div>
               </div>
 

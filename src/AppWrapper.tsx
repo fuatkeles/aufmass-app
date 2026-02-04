@@ -9,6 +9,7 @@ import Montageteam from './pages/Montageteam';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import EsignatureAdmin from './components/EsignatureAdmin';
+import ProductPricing from './pages/ProductPricing';
 // isAdminBranch used in future feature flags
 // import { isAdminBranch } from './hooks/useBranchMeta';
 import { getStats, getUsers, getInvitations, createInvitation, deleteInvitation, deleteUser, updateUser } from './services/api';
@@ -199,18 +200,26 @@ function Layout({ children }: { children: React.ReactNode }) {
             </a>
           </div>
 
-          {isAdmin && (
+          {(user?.role === 'admin' || user?.role === 'office') && (
             <div className="nav-section">
               <span className="nav-section-title">Administration</span>
-              <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); openAdminPanel(); setMobileMenuOpen(false); }}>
+              <a href="#" className={`nav-item ${isActive('/produkte') ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); handleNavClick('/produkte'); }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 00-3-3.87" />
-                  <path d="M16 3.13a4 4 0 010 7.75" />
+                  <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
-                <span>Benutzer verwalten</span>
+                <span>Produkte & Preise</span>
               </a>
+              {isAdmin && (
+                <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); openAdminPanel(); setMobileMenuOpen(false); }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                    <path d="M16 3.13a4 4 0 010 7.75" />
+                  </svg>
+                  <span>Benutzer verwalten</span>
+                </a>
+              )}
             </div>
           )}
         </nav>
@@ -291,6 +300,7 @@ function ProtectedContent() {
   const [inviteRole, setInviteRole] = useState<'user' | 'office' | 'admin'>('user');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+  const [invitedEmail, setInvitedEmail] = useState<string>(''); // Store the email after success
 
   useEffect(() => {
     loadStats();
@@ -330,9 +340,11 @@ function ProtectedContent() {
     if (!inviteEmail) return;
     setInviteLoading(true);
     setInviteSuccess(null);
+    const emailToInvite = inviteEmail; // Store before clearing
     try {
       const result = await createInvitation(inviteEmail, inviteRole);
       setInviteSuccess(`${window.location.origin}${result.inviteLink}`);
+      setInvitedEmail(emailToInvite); // Save for mailto
       setInviteEmail('');
       loadAdminData();
     } catch (err) {
@@ -358,6 +370,7 @@ function ProtectedContent() {
                 <Route path="/angebote" element={<Angebote />} />
                 <Route path="/angebot/new" element={<Angebote />} />
                 <Route path="/montageteam" element={<Montageteam />} />
+                <Route path="/produkte" element={<ProductPricing />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>
@@ -403,18 +416,30 @@ function ProtectedContent() {
                   </form>
                   {inviteSuccess && (
                     <div className="invite-success">
-                      <p>Einladungslink erstellt!</p>
+                      <p>Einladungslink für <strong>{invitedEmail}</strong> erstellt!</p>
                       <div className="invite-link-box">
                         <input type="text" value={inviteSuccess} readOnly />
-                        <button type="button" className="copy-btn" onClick={() => { navigator.clipboard.writeText(inviteSuccess); toast.success('Kopiert', 'Link wurde in die Zwischenablage kopiert.'); }}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" />
-                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                          </svg>
-                          Kopieren
-                        </button>
+                        <div className="invite-link-buttons">
+                          <button type="button" className="copy-btn" onClick={() => { navigator.clipboard.writeText(inviteSuccess); toast.success('Kopiert', 'Link wurde in die Zwischenablage kopiert.'); }}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="9" y="9" width="13" height="13" rx="2" />
+                              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                            </svg>
+                            Link kopieren
+                          </button>
+                          <a
+                            href={`mailto:${invitedEmail}?subject=${encodeURIComponent('Einladung zur AYLUX Aufmaß App')}&body=${encodeURIComponent(`Hallo,\n\nSie wurden eingeladen, die AYLUX Aufmaß App zu nutzen.\n\nBitte registrieren Sie sich über folgenden Link:\n${inviteSuccess}\n\nDer Link ist 7 Tage gültig.\n\nMit freundlichen Grüßen\nIhr AYLUX Team`)}`}
+                            className="mail-btn"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                              <polyline points="22,6 12,13 2,6" />
+                            </svg>
+                            E-Mail senden
+                          </a>
+                        </div>
                       </div>
-                      <small>7 Tage gültig - manuell versenden</small>
+                      <small>7 Tage gültig</small>
                     </div>
                   )}
                 </div>

@@ -459,9 +459,10 @@ export async function uploadImages(formId: number, files: File[]): Promise<{ mes
   return response.json();
 }
 
-// Get image URL
+// Get image URL (with token for direct browser access)
 export function getImageUrl(imageId: number): string {
-  return `${API_BASE_URL}/images/${imageId}`;
+  const token = getStoredToken();
+  return `${API_BASE_URL}/images/${imageId}${token ? `?token=${token}` : ''}`;
 }
 
 // Get stored PDF URL (for direct browser opening with token)
@@ -961,6 +962,19 @@ export const api = {
   async post<T = unknown>(endpoint: string, data?: unknown): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: data ? JSON.stringify(data) : undefined
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || 'Request failed');
+    }
+    return response.json();
+  },
+
+  async put<T = unknown>(endpoint: string, data?: unknown): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PUT',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: data ? JSON.stringify(data) : undefined
     });

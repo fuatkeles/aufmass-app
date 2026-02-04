@@ -250,10 +250,105 @@
   font-weight: 500;
 }
 
+.price-rounded {
+  color: #fbbf24;
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
 .price-value {
   font-size: 1.25rem;
   font-weight: 700;
   color: #a3e635;
+}
+
+.product-row-warning {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: 0.813rem;
+}
+
+.dimension-input {
+  text-align: center;
+}
+
+.dimension-input::-webkit-outer-spin-button,
+.dimension-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Product Discount Styles */
+.product-row-price-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.product-row-price-section .product-row-price {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.product-discount-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.product-discount-row label {
+  font-size: 0.813rem;
+  color: #8b95a5;
+  white-space: nowrap;
+}
+
+.discount-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.discount-input {
+  width: 100px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.875rem;
+  text-align: right;
+}
+
+.discount-input:focus {
+  outline: none;
+  border-color: #ef4444;
+}
+
+.discount-percent {
+  color: #ef4444;
+  font-size: 0.813rem;
+  font-weight: 600;
+}
+
+.price-after-discount {
+  margin-left: auto;
+  color: #a3e635;
+  font-size: 0.938rem;
+  font-weight: 600;
+}
+
+.dimension-input[type=number] {
+  -moz-appearance: textfield;
 }
 
 /* Add buttons */
@@ -279,6 +374,20 @@
 .btn-add-extra:hover {
   background: rgba(163, 230, 53, 0.05);
   border-color: rgba(163, 230, 53, 0.5);
+}
+
+/* Product discount toggle - under products */
+.product-discount-toggle {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+}
+
+.product-discount-toggle:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.5);
 }
 
 .btn-add-row svg,
@@ -357,6 +466,149 @@
   font-size: 1.5rem;
   font-weight: 700;
   color: #a3e635;
+}
+
+/* Pricing Summary (with discounts) */
+.lead-pricing-summary {
+  margin-top: 24px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Discount toggle checkbox */
+.discount-toggle-row {
+  padding: 8px 0 12px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  margin-bottom: 8px;
+}
+
+.discount-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #8b95a5;
+  transition: color 0.2s;
+}
+
+.discount-toggle-label:hover {
+  color: #a3e635;
+}
+
+.discount-toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #a3e635;
+  cursor: pointer;
+}
+
+.discount-toggle-label span {
+  user-select: none;
+}
+
+.pricing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pricing-row:last-child {
+  border-bottom: none;
+}
+
+.pricing-row span:first-child {
+  color: #8b95a5;
+  font-size: 0.938rem;
+}
+
+.pricing-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.discount-value {
+  color: #ef4444;
+}
+
+.total-discount-row {
+  padding: 16px 0;
+  margin: 8px 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.total-discount-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.total-discount-label span:first-child {
+  color: #8b95a5;
+}
+
+.total-discount-percent {
+  color: #ef4444;
+  font-size: 0.813rem;
+  font-weight: 600;
+}
+
+.total-discount-input-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.total-discount-input {
+  width: 120px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 1rem;
+  text-align: right;
+}
+
+.total-discount-input:focus {
+  outline: none;
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.total-row {
+  padding-top: 16px;
+  margin-top: 8px;
+}
+
+.total-row span:first-child {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.total-with-discount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.total-row .total-price {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #a3e635;
+}
+
+.total-savings {
+  font-size: 0.75rem;
+  color: #ef4444;
+  font-weight: 500;
 }
 
 /* Footer */
@@ -441,4 +693,285 @@
   .extra-row .btn-remove-extra {
     grid-row: 2;
   }
+}
+
+/* Light Theme */
+.light-theme .lead-modal-overlay {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.light-theme .lead-modal {
+  background: #fff;
+  border-color: #e5e7eb;
+}
+
+.light-theme .lead-modal-header {
+  border-color: #e5e7eb;
+}
+
+.light-theme .lead-modal-header h2 {
+  color: #1f2937;
+}
+
+.light-theme .lead-modal-header .close-btn {
+  color: #6b7280;
+}
+
+.light-theme .lead-modal-header .close-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1f2937;
+}
+
+.light-theme .lead-error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #dc2626;
+}
+
+.light-theme .lead-section h3 {
+  color: #6b7280;
+}
+
+.light-theme .form-group label,
+.light-theme .select-group label {
+  color: #6b7280;
+}
+
+.light-theme .lead-modal input[type="text"],
+.light-theme .lead-modal input[type="email"],
+.light-theme .lead-modal input[type="tel"],
+.light-theme .lead-modal input[type="number"],
+.light-theme .lead-modal select,
+.light-theme .lead-modal textarea {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #1f2937;
+}
+
+.light-theme .lead-modal input:focus,
+.light-theme .lead-modal select:focus,
+.light-theme .lead-modal textarea:focus {
+  border-color: #7fa93d;
+}
+
+.light-theme .lead-modal input::placeholder,
+.light-theme .lead-modal textarea::placeholder {
+  color: #9ca3af;
+}
+
+.light-theme .lead-modal select:disabled {
+  background: #f3f4f6;
+}
+
+.light-theme .product-row-card {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.light-theme .lead-product-number {
+  color: #7fa93d;
+}
+
+.light-theme .btn-remove-row {
+  color: #9ca3af;
+}
+
+.light-theme .btn-remove-row:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.light-theme .product-row-price {
+  border-color: #e5e7eb;
+}
+
+.light-theme .price-dims {
+  color: #6b7280;
+}
+
+.light-theme .price-qty {
+  color: #7fa93d;
+}
+
+.light-theme .price-value {
+  color: #7fa93d;
+}
+
+.light-theme .price-rounded {
+  color: #d97706;
+}
+
+.light-theme .product-row-warning {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: #d97706;
+}
+
+.light-theme .btn-add-row,
+.light-theme .btn-add-extra {
+  border-color: rgba(127, 169, 61, 0.3);
+  color: #7fa93d;
+}
+
+.light-theme .btn-add-row:hover,
+.light-theme .btn-add-extra:hover {
+  background: rgba(127, 169, 61, 0.05);
+  border-color: rgba(127, 169, 61, 0.5);
+}
+
+.light-theme .btn-remove-extra {
+  border-color: #e5e7eb;
+  color: #9ca3af;
+}
+
+.light-theme .btn-remove-extra:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #dc2626;
+}
+
+.light-theme .product-discount-toggle {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.light-theme .product-discount-toggle:hover {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.light-theme .lead-total {
+  background: rgba(127, 169, 61, 0.1);
+  border-color: rgba(127, 169, 61, 0.2);
+}
+
+.light-theme .lead-total span:first-child {
+  color: #6b7280;
+}
+
+.light-theme .lead-total .total-price {
+  color: #7fa93d;
+}
+
+.light-theme .lead-modal-footer {
+  border-color: #e5e7eb;
+}
+
+.light-theme .btn-cancel {
+  border-color: #e5e7eb;
+  color: #6b7280;
+}
+
+.light-theme .btn-cancel:hover {
+  border-color: #9ca3af;
+  color: #1f2937;
+}
+
+.light-theme .btn-save {
+  background: #7fa93d;
+}
+
+.light-theme .btn-save:hover:not(:disabled) {
+  background: #6b9132;
+}
+
+/* Light theme - Discount styles */
+.light-theme .product-discount-row {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.light-theme .product-discount-row label {
+  color: #6b7280;
+}
+
+.light-theme .discount-input {
+  background: #fff;
+  border-color: #e5e7eb;
+  color: #1f2937;
+}
+
+.light-theme .discount-input:focus {
+  border-color: #ef4444;
+}
+
+.light-theme .discount-percent {
+  color: #dc2626;
+}
+
+.light-theme .price-after-discount {
+  color: #65a30d;
+}
+
+/* Light theme - Pricing Summary */
+.light-theme .lead-pricing-summary {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: #e5e7eb;
+}
+
+.light-theme .pricing-row {
+  border-color: #f3f4f6;
+}
+
+.light-theme .discount-toggle-row {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .discount-toggle-label {
+  color: #6b7280;
+}
+
+.light-theme .discount-toggle-label:hover {
+  color: #65a30d;
+}
+
+.light-theme .discount-toggle-label input[type="checkbox"] {
+  accent-color: #65a30d;
+}
+
+.light-theme .pricing-row span:first-child {
+  color: #6b7280;
+}
+
+.light-theme .pricing-value {
+  color: #1f2937;
+}
+
+.light-theme .discount-value {
+  color: #dc2626;
+}
+
+.light-theme .total-discount-row {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .total-discount-label span:first-child {
+  color: #6b7280;
+}
+
+.light-theme .total-discount-percent {
+  color: #dc2626;
+}
+
+.light-theme .total-discount-input {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #1f2937;
+}
+
+.light-theme .total-discount-input:focus {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.light-theme .total-row span:first-child {
+  color: #1f2937;
+}
+
+.light-theme .total-row .total-price {
+  color: #65a30d;
+}
+
+.light-theme .total-savings {
+  color: #dc2626;
 }

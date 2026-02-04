@@ -7,6 +7,8 @@ export interface AngebotPdfItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  discount?: number;
+  discount_percent?: number;
 }
 
 export interface AngebotPdfExtra {
@@ -26,6 +28,12 @@ export interface AngebotPdfData {
   // Products
   items: AngebotPdfItem[];
   extras: AngebotPdfExtra[];
+
+  // Pricing with discounts
+  subtotal?: number;
+  item_discounts?: number;
+  total_discount?: number;
+  total_discount_percent?: number;
   total_price: number;
 
   // Optional measurement data (from Aufmaß)
@@ -137,12 +145,23 @@ export const generateAngebotPDF = async (
 
     pdf.setTextColor(0, 0, 0);
 
-    // Table header
-    const colX = {
+    // Check if any discounts exist
+    const hasDiscounts = data.items.some(item => item.discount && item.discount > 0);
+
+    // Table header - adjust columns based on discounts
+    const colX = hasDiscounts ? {
+      produkt: margin + 3,
+      abmessungen: margin + 55,
+      menge: margin + 90,
+      einzelpreis: margin + 108,
+      rabatt: margin + 135,
+      gesamt: margin + 162
+    } : {
       produkt: margin + 3,
       abmessungen: margin + 70,
       menge: margin + 110,
       einzelpreis: margin + 130,
+      rabatt: 0,
       gesamt: margin + 155
     };
     const tableWidth = pageWidth - 2 * margin;
@@ -156,18 +175,36 @@ export const generateAngebotPDF = async (
     pdf.text('Abmessungen', colX.abmessungen, yPos);
     pdf.text('Menge', colX.menge, yPos);
     pdf.text('Einzelpreis', colX.einzelpreis, yPos);
+    if (hasDiscounts) {
+      pdf.text('Rabatt', colX.rabatt, yPos);
+    }
     pdf.text('Gesamt', colX.gesamt, yPos);
     yPos += 8;
 
     // Table rows
     pdf.setFont('helvetica', 'normal');
     data.items.forEach((item) => {
-      checkNewPage(10);
+      checkNewPage(12);
 
+      pdf.setTextColor(0, 0, 0);
       pdf.text(item.product_name, colX.produkt, yPos);
       pdf.text(`${item.breite} x ${item.tiefe} cm`, colX.abmessungen, yPos);
       pdf.text(String(item.quantity), colX.menge, yPos);
       pdf.text(`${formatPrice(item.unit_price)} EUR`, colX.einzelpreis, yPos);
+
+      if (hasDiscounts) {
+        if (item.discount && item.discount > 0) {
+          pdf.setTextColor(220, 38, 38); // Red for discount
+          const discountText = item.discount_percent
+            ? `-${formatPrice(item.discount)} (${item.discount_percent}%)`
+            : `-${formatPrice(item.discount)}`;
+          pdf.text(discountText, colX.rabatt, yPos);
+          pdf.setTextColor(0, 0, 0);
+        } else {
+          pdf.text('-', colX.rabatt, yPos);
+        }
+      }
+
       pdf.text(`${formatPrice(item.total_price)} EUR`, colX.gesamt, yPos);
       yPos += 7;
 
@@ -211,8 +248,50 @@ export const generateAngebotPDF = async (
   }
 
   // ============ TOTAL ============
-  checkNewPage(30);
+  const hasAnyDiscounts = (data.item_discounts && data.item_discounts > 0) || (data.total_discount && data.total_discount > 0);
+  const totalDiscountAmount = (data.item_discounts || 0) + (data.total_discount || 0);
+
+  checkNewPage(hasAnyDiscounts ? 60 : 30);
   yPos += 5;
+
+  // Summary section
+  const summaryX = pageWidth - margin - 100;
+
+  if (hasAnyDiscounts && data.subtotal) {
+    // Subtotal
+    pdf.setTextColor(80, 80, 80);
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text('Zwischensumme:', summaryX, yPos);
+    pdf.text(`${formatPrice(data.subtotal)} EUR`, summaryX + 60, yPos);
+    yPos += 7;
+
+    // Item discounts
+    if (data.item_discounts && data.item_discounts > 0) {
+      pdf.setTextColor(220, 38, 38);
+      pdf.text('Artikel-Rabatt:', summaryX, yPos);
+      pdf.text(`-${formatPrice(data.item_discounts)} EUR`, summaryX + 60, yPos);
+      yPos += 7;
+    }
+
+    // Total discount
+    if (data.total_discount && data.total_discount > 0) {
+      pdf.setTextColor(220, 38, 38);
+      pdf.text('Gesamt-Rabatt:', summaryX, yPos);
+      pdf.text(`-${formatPrice(data.total_discount)} EUR`, summaryX + 60, yPos);
+      yPos += 7;
+    }
+
+    // Total savings with percentage
+    if (totalDiscountAmount > 0 && data.total_discount_percent) {
+      pdf.setTextColor(220, 38, 38);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`Sie sparen: ${formatPrice(totalDiscountAmount)} EUR (${data.total_discount_percent}%)`, summaryX, yPos);
+      yPos += 10;
+    }
+
+    pdf.setTextColor(0, 0, 0);
+  }
 
   // Total box
   const totalBoxWidth = 80;

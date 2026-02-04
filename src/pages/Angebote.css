@@ -561,8 +561,7 @@
 
 .detail-total {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   padding: 1rem 1.25rem;
   background: rgba(127, 169, 61, 0.1);
   border-radius: 10px;
@@ -570,7 +569,14 @@
   margin-top: 1rem;
 }
 
-.detail-total span:first-child {
+/* Simple layout (no discount) */
+.detail-total:not(:has(.total-row)) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.detail-total > span:first-child {
   color: var(--text-secondary);
 }
 
@@ -578,6 +584,39 @@
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--primary-color);
+}
+
+/* With discount rows */
+.detail-total .total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.detail-total .total-row:not(:last-child) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.detail-total .subtotal-row span:first-child,
+.detail-total .discount-row span:first-child {
+  color: var(--text-secondary);
+  font-size: 0.938rem;
+}
+
+.detail-total .discount-row .discount-value {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.detail-total .final-row {
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.detail-total .final-row span:first-child {
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .modal-footer {

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ServerImage } from '../types';
-import { deleteImage } from '../services/api';
+import { deleteImage, getImageUrl } from '../services/api';
 import { useToast } from './Toast';
 import './FinalSection.css';
 import './SectionStyles.css';
@@ -137,9 +137,9 @@ const FinalSection = ({
   };
 
   const getFilePreview = (file: ImageItem) => {
-    // If it's a server-loaded image (has id), use API URL
+    // If it's a server-loaded image (has id), use API URL with full base URL
     if (isServerFile(file)) {
-      return `/api/images/${file.id}`;
+      return getImageUrl(file.id);
     }
     // If it's a local File object, create blob URL
     return URL.createObjectURL(file);

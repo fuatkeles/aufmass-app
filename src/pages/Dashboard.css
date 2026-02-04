@@ -2346,12 +2346,13 @@
 
 .invite-link-box {
   display: flex;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.75rem;
   margin-bottom: 0.5rem;
 }
 
 .invite-link-box input {
-  flex: 1;
+  width: 100%;
   padding: 0.625rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -2359,6 +2360,11 @@
   font-size: 0.75rem;
   color: var(--text-primary);
   font-family: monospace;
+}
+
+.invite-link-buttons {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .invite-link-box .copy-btn {
@@ -2382,6 +2388,32 @@
 }
 
 .invite-link-box .copy-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.invite-link-box .mail-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1rem;
+  background: #3b82f6;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.invite-link-box .mail-btn:hover {
+  background: #2563eb;
+}
+
+.invite-link-box .mail-btn svg {
   width: 16px;
   height: 16px;
 }
