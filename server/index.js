@@ -4071,18 +4071,30 @@ app.get('/api/boldsign/callback-log', (req, res) => {
 // ==================== LEAD / ANGEBOT API ====================
 
 // Get all lead products (price matrix)
+// Branch filtering: branches see only PREMIUMLINE (global) + their own products
 app.get('/api/lead-products', authenticateToken, async (req, res) => {
   try {
-    const branchFilter = req.branchId ? 'WHERE branch_id = @branch_id OR branch_id IS NULL' : '';
     const request = pool.request();
+    let query;
+
     if (req.branchId) {
+      // Branch users: see PREMIUMLINE (global default) + their own branch products
       request.input('branch_id', sql.NVarChar, req.branchId);
+      query = `
+        SELECT * FROM aufmass_lead_products
+        WHERE branch_id = @branch_id
+           OR (branch_id IS NULL AND product_name LIKE '%PREMIUMLINE%')
+        ORDER BY product_name, breite, tiefe
+      `;
+    } else {
+      // Admin (no branch): see all products
+      query = `
+        SELECT * FROM aufmass_lead_products
+        ORDER BY product_name, breite, tiefe
+      `;
     }
-    const result = await request.query(`
-      SELECT * FROM aufmass_lead_products
-      ${branchFilter}
-      ORDER BY product_name, breite, tiefe
-    `);
+
+    const result = await request.query(query);
     res.json(result.recordset);
   } catch (err) {
     console.error('Get lead products error:', err);
@@ -4281,18 +4293,28 @@ app.delete('/api/lead-products/:id', authenticateToken, async (req, res) => {
 });
 
 // Get unique product names
+// Branch filtering: branches see only PREMIUMLINE (global) + their own products
 app.get('/api/lead-products/names', authenticateToken, async (req, res) => {
   try {
-    const branchFilter = req.branchId ? 'WHERE branch_id = @branch_id OR branch_id IS NULL' : '';
     const request = pool.request();
+    let query;
+
     if (req.branchId) {
       request.input('branch_id', sql.NVarChar, req.branchId);
+      query = `
+        SELECT DISTINCT product_name FROM aufmass_lead_products
+        WHERE branch_id = @branch_id
+           OR (branch_id IS NULL AND product_name LIKE '%PREMIUMLINE%')
+        ORDER BY product_name
+      `;
+    } else {
+      query = `
+        SELECT DISTINCT product_name FROM aufmass_lead_products
+        ORDER BY product_name
+      `;
     }
-    const result = await request.query(`
-      SELECT DISTINCT product_name FROM aufmass_lead_products
-      ${branchFilter}
-      ORDER BY product_name
-    `);
+
+    const result = await request.query(query);
     res.json(result.recordset.map(r => r.product_name));
   } catch (err) {
     console.error('Get product names error:', err);
@@ -4301,15 +4323,22 @@ app.get('/api/lead-products/names', authenticateToken, async (req, res) => {
 });
 
 // Get available dimensions for a product
+// Branch filtering: branches see only PREMIUMLINE (global) + their own products
 app.get('/api/lead-products/:productName/dimensions', authenticateToken, async (req, res) => {
   try {
     const { productName } = req.params;
-    const branchFilter = req.branchId ? 'AND (branch_id = @branch_id OR branch_id IS NULL)' : '';
     const request = pool.request()
       .input('product_name', sql.NVarChar, productName);
+
+    let branchFilter;
     if (req.branchId) {
       request.input('branch_id', sql.NVarChar, req.branchId);
+      // Branch users: see their own products OR PREMIUMLINE global products
+      branchFilter = 'AND (branch_id = @branch_id OR (branch_id IS NULL AND product_name LIKE \'%PREMIUMLINE%\'))';
+    } else {
+      branchFilter = '';
     }
+
     const result = await request.query(`
       SELECT breite, tiefe, price FROM aufmass_lead_products
       WHERE product_name = @product_name ${branchFilter}
