@@ -133,11 +133,21 @@ const WeitereProdukte = ({ produkte, updateProdukte }: WeitereProduktProps) => {
     return `Weiteres Produkt ${index + 1}`;
   };
 
-  const renderSpecificationField = (product: WeiteresProdukt, index: number, field: { name: string; label: string; type: string; unit?: string; options?: string[]; required: boolean; hasCustomOption?: boolean; conditionalType?: string; valueUnit?: string; valueLabel?: string }) => {
+  const renderSpecificationField = (product: WeiteresProdukt, index: number, field: { name: string; label: string; type: string; unit?: string; options?: string[]; required: boolean; hasCustomOption?: boolean; conditionalType?: string; valueUnit?: string; valueLabel?: string; showWhen?: { field: string; value?: string; notEquals?: string } }) => {
     const value = product.specifications[field.name];
 
     // Skip certain fields
     if (field.name === 'montageteam' || field.type === 'markise_trigger') return null;
+
+    // Check showWhen condition (same logic as DynamicSpecificationForm)
+    if (field.showWhen) {
+      const dependentValue = product.specifications[field.showWhen.field];
+      if (field.showWhen.value !== undefined) {
+        if (dependentValue !== field.showWhen.value) return null;
+      } else if (field.showWhen.notEquals !== undefined) {
+        if (dependentValue === field.showWhen.notEquals || !dependentValue) return null;
+      }
+    }
 
     switch (field.type) {
       case 'number':
