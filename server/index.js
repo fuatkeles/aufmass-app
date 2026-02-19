@@ -639,6 +639,18 @@ async function initializeTables() {
     `);
     console.log('✅ aufmass_leads.total_discount column ready');
 
+    // Add extra spec columns to lead_items
+    const specColumns = ['pi_ober_kante', 'pi_unter_kante', 'pi_gestell_farbe', 'pi_sicherheitglas', 'pi_pfostenanzahl'];
+    for (const col of specColumns) {
+      await pool.request().query(`
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_lead_items') AND name = '${col}')
+        BEGIN
+          ALTER TABLE aufmass_lead_items ADD ${col} NVARCHAR(100)
+        END
+      `);
+    }
+    console.log('✅ aufmass_lead_items extra spec columns ready');
+
     // Check if admin exists, create default admin if not
     const adminCheck = await pool.request().query(
       "SELECT COUNT(*) as count FROM aufmass_users WHERE role = 'admin'"
@@ -4413,9 +4425,14 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
           .input('unit_price', sql.Decimal(10, 2), item.unit_price)
           .input('discount', sql.Decimal(10, 2), itemDiscount)
           .input('total_price', sql.Decimal(10, 2), itemTotal)
+          .input('pi_ober_kante', sql.NVarChar, item.piOberKante || null)
+          .input('pi_unter_kante', sql.NVarChar, item.piUnterKante || null)
+          .input('pi_gestell_farbe', sql.NVarChar, item.piGestellFarbe || null)
+          .input('pi_sicherheitglas', sql.NVarChar, item.piSicherheitglas || null)
+          .input('pi_pfostenanzahl', sql.NVarChar, item.piPfostenanzahl || null)
           .query(`
-            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price)
-            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @discount, @total_price)
+            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pi_ober_kante, pi_unter_kante, pi_gestell_farbe, pi_sicherheitglas, pi_pfostenanzahl)
+            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @discount, @total_price, @pi_ober_kante, @pi_unter_kante, @pi_gestell_farbe, @pi_sicherheitglas, @pi_pfostenanzahl)
           `);
       }
     }

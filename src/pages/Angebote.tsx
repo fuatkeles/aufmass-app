@@ -30,6 +30,11 @@ interface LeadItem {
   unit_price: number;
   discount?: number;
   total_price: number;
+  pi_ober_kante?: string;
+  pi_unter_kante?: string;
+  pi_gestell_farbe?: string;
+  pi_sicherheitglas?: string;
+  pi_pfostenanzahl?: string;
 }
 
 interface LeadExtra {
@@ -419,6 +424,15 @@ export default function Angebote() {
                             <span className="item-qty">x {item.quantity}</span>
                           </div>
                           <span className="item-price">{formatPrice(item.total_price)}</span>
+                          {(item.pi_ober_kante || item.pi_unter_kante || item.pi_gestell_farbe || item.pi_sicherheitglas || item.pi_pfostenanzahl) && (
+                            <div className="item-specs">
+                              {item.pi_ober_kante && <span>Ober Kante: {item.pi_ober_kante}</span>}
+                              {item.pi_unter_kante && <span>Unter Kante: {item.pi_unter_kante}</span>}
+                              {item.pi_gestell_farbe && <span>Gestell Farbe: {item.pi_gestell_farbe}</span>}
+                              {item.pi_sicherheitglas && <span>Sicherheitglas: {item.pi_sicherheitglas}</span>}
+                              {item.pi_pfostenanzahl && <span>Pfostenanzahl: {item.pi_pfostenanzahl}</span>}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

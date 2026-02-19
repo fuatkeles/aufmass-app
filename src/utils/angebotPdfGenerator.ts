@@ -9,6 +9,12 @@ export interface AngebotPdfItem {
   total_price: number;
   discount?: number;
   discount_percent?: number;
+  // Extra specification fields
+  piOberKante?: string;
+  piUnterKante?: string;
+  piGestellFarbe?: string;
+  piSicherheitglas?: string;
+  piPfostenanzahl?: string;
 }
 
 export interface AngebotPdfExtra {
@@ -207,6 +213,28 @@ export const generateAngebotPDF = async (
 
       pdf.text(`${formatPrice(item.total_price)} EUR`, colX.gesamt, yPos);
       yPos += 7;
+
+      // Extra specification fields (below product row)
+      const specs = [
+        { label: 'Ober Kante', value: item.piOberKante },
+        { label: 'Unter Kante', value: item.piUnterKante },
+        { label: 'Gestell Farbe', value: item.piGestellFarbe },
+        { label: 'Sicherheitglas', value: item.piSicherheitglas },
+        { label: 'Pfostenanzahl', value: item.piPfostenanzahl },
+      ].filter(s => s.value);
+
+      if (specs.length > 0) {
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(80, 80, 80);
+        specs.forEach(spec => {
+          checkNewPage(6);
+          pdf.text(`• ${spec.label}: ${spec.value}`, colX.produkt + 3, yPos);
+          yPos += 5;
+        });
+        pdf.setFontSize(10);
+        pdf.setTextColor(0, 0, 0);
+        yPos += 1;
+      }
 
       // Row separator
       pdf.setDrawColor(230, 230, 230);

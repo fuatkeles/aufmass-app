@@ -522,6 +522,28 @@
   padding: 0.75rem 1rem;
   background: var(--bg-tertiary);
   border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.item-specs {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.item-specs span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.item-specs span::before {
+  content: '•';
+  margin-right: 0.35rem;
+  color: var(--primary-color);
 }
 
 .item-info {

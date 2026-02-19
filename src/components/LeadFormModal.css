@@ -282,6 +282,50 @@
   margin: 0;
 }
 
+/* Extra Specification Fields */
+.product-extra-specs {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.extra-specs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.spec-field label {
+  display: block;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.spec-field input {
+  width: 100%;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.85rem;
+  transition: border-color 0.2s;
+}
+
+.spec-field input:focus {
+  border-color: #a3e635;
+  outline: none;
+}
+
+.spec-field input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
 /* Product Discount Styles */
 .product-row-price-section {
   margin-top: 16px;
@@ -805,6 +849,29 @@
   background: rgba(251, 191, 36, 0.1);
   border-color: rgba(251, 191, 36, 0.3);
   color: #d97706;
+}
+
+.light-theme .product-extra-specs {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: #e5e7eb;
+}
+
+.light-theme .spec-field label {
+  color: #6b7280;
+}
+
+.light-theme .spec-field input {
+  background: #fff;
+  border-color: #d1d5db;
+  color: #1f2937;
+}
+
+.light-theme .spec-field input:focus {
+  border-color: #7fa93d;
+}
+
+.light-theme .spec-field input::placeholder {
+  color: #9ca3af;
 }
 
 .light-theme .btn-add-row,
