@@ -112,6 +112,76 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
   }
   const productConfig = productConfigData as ProductConfig;
 
+  // Validate all Weitere Produkte fields
+  const checkWeitereProdukteValid = useCallback((): boolean => {
+    if (!formData.weitereProdukte || formData.weitereProdukte.length === 0) return true;
+
+    const excludedFields = ['montageteam', 'bemerkungen'];
+
+    interface ProductField {
+      name: string;
+      label?: string;
+      type: string;
+      required?: boolean;
+      allowZero?: boolean;
+      showWhen?: { field: string; value?: string; notEquals?: string };
+      conditionalField?: { trigger: string; field: string; label?: string };
+      options?: string[];
+    }
+
+    for (const wp of formData.weitereProdukte) {
+      if (!wp.category) return false;
+      if (!wp.productType) return false;
+      if (!wp.model) return false;
+
+      const wpConfig = productConfig[wp.category]?.[wp.productType];
+      if (wpConfig?.fields) {
+        for (const field of wpConfig.fields as ProductField[]) {
+          if (excludedFields.includes(field.name)) continue;
+          if (field.type === 'markise_trigger' || field.type === 'senkrecht_section') continue;
+
+          if (field.showWhen) {
+            const dependentValue = wp.specifications[field.showWhen.field];
+            if (field.showWhen.value !== undefined && dependentValue !== field.showWhen.value) continue;
+            if (field.showWhen.notEquals !== undefined && (dependentValue === field.showWhen.notEquals || !dependentValue)) continue;
+          }
+
+          const wpValue = wp.specifications[field.name];
+
+          if (field.type === 'conditional') {
+            const activeValue = wp.specifications[`${field.name}Active`];
+            if (activeValue === undefined) return false;
+            if (activeValue === true) {
+              if (!wpValue || (typeof wpValue === 'number' && wpValue <= 0)) return false;
+            }
+            continue;
+          }
+
+          if (field.type === 'bauform') {
+            if (!wp.specifications['bauformType']) return false;
+            continue;
+          }
+
+          if (field.type === 'fundament') {
+            if (!wpValue) return false;
+            continue;
+          }
+
+          if (field.type === 'multiselect') {
+            if (!Array.isArray(wpValue) || wpValue.length === 0) return false;
+            continue;
+          }
+
+          if (wpValue === undefined || wpValue === null || wpValue === '') return false;
+
+          if (field.type === 'number' && (typeof wpValue !== 'number' || wpValue <= 0)) return false;
+        }
+      }
+    }
+
+    return true;
+  }, [formData.weitereProdukte, productConfig]);
+
   // Check if all required specification fields are filled
   // Uses getMissingFields - if any fields are missing, validation fails
   const checkSpecificationsValid = useCallback(() => {
@@ -280,76 +350,10 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     }
 
     // ============ VALIDATE WEITERE PRODUKTE ============
-    // All fields in weitere produkte are required (except montageteam, bemerkungen)
-    if (formData.weitereProdukte && formData.weitereProdukte.length > 0) {
-      for (const wp of formData.weitereProdukte) {
-        if (!wp.category) return false;
-        if (!wp.productType) return false;
-        if (!wp.model) return false;
-
-        const wpConfig = productConfig[wp.category]?.[wp.productType];
-        if (wpConfig?.fields) {
-          for (const field of wpConfig.fields as ProductField[]) {
-            // Skip excluded fields
-            if (excludedFields.includes(field.name)) continue;
-            if (field.type === 'markise_trigger' || field.type === 'senkrecht_section') continue;
-
-            // Handle showWhen conditions
-            if (field.showWhen) {
-              const dependentValue = wp.specifications[field.showWhen.field];
-              if (field.showWhen.value !== undefined && dependentValue !== field.showWhen.value) continue;
-              if (field.showWhen.notEquals !== undefined && (dependentValue === field.showWhen.notEquals || !dependentValue)) continue;
-            }
-
-            const wpValue = wp.specifications[field.name];
-
-            // Handle conditional fields
-            if (field.type === 'conditional') {
-              const activeValue = wp.specifications[`${field.name}Active`];
-              if (activeValue === undefined) return false;
-              if (activeValue === true) {
-                if (!wpValue || (typeof wpValue === 'number' && wpValue <= 0)) {
-                  return false;
-                }
-              }
-              continue;
-            }
-
-            // Handle bauform
-            if (field.type === 'bauform') {
-              const bauformType = wp.specifications['bauformType'];
-              if (!bauformType) return false;
-              continue;
-            }
-
-            // Handle fundament
-            if (field.type === 'fundament') {
-              if (!wpValue) return false;
-              continue;
-            }
-
-            // Handle multiselect
-            if (field.type === 'multiselect') {
-              if (!Array.isArray(wpValue) || wpValue.length === 0) return false;
-              continue;
-            }
-
-            // Check value exists
-            if (wpValue === undefined || wpValue === null || wpValue === '') {
-              return false;
-            }
-
-            // Number validation
-            if (field.type === 'number' && (typeof wpValue !== 'number' || wpValue <= 0)) {
-              return false;
-            }
-          }
-        }
-      }
-    }
+    if (!checkWeitereProdukteValid()) return false;
 
     return true;
-  }, [formData.productSelection, formData.specifications, formData.weitereProdukte, productConfig]);
+  }, [formData.productSelection, formData.specifications, formData.weitereProdukte, productConfig, checkWeitereProdukteValid]);
 
   // Get list of missing required fields with their labels
   // ALL fields are required EXCEPT: montageteam, bemerkungen
@@ -734,7 +738,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             if (!Array.isArray(elements) || elements.length === 0) return false;
 
             // Validate each element has required fields
-            return elements.every((el: UnterbauelementData) => {
+            const allElementsValid = elements.every((el: UnterbauelementData) => {
               if (!el.produktTyp || !el.modell || !el.gestellfarbe || !el.position) return false;
 
               // Type-specific validation
@@ -759,6 +763,13 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
 
               return true;
             });
+
+            if (!allElementsValid) return false;
+
+            // Also validate Weitere Produkte on this step
+            if (!checkWeitereProdukteValid()) return false;
+
+            return true;
           } catch {
             return false;
           }
@@ -842,7 +853,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     });
 
     return baseSteps;
-  }, [formData, hasMarkise, isUnterbauelemente, isUeberdachung, checkSpecificationsValid]);
+  }, [formData, hasMarkise, isUnterbauelemente, isUeberdachung, checkSpecificationsValid, checkWeitereProdukteValid]);
 
   const currentStepInfo = steps[currentStep];
 
