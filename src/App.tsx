@@ -150,7 +150,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       if (field.showWhen) {
         const dependentValue = formData.specifications[field.showWhen.field];
         if (field.showWhen.value !== undefined && dependentValue !== field.showWhen.value) continue;
-        if (field.showWhen.notEquals !== undefined && dependentValue === field.showWhen.notEquals) continue;
+        if (field.showWhen.notEquals !== undefined && (dependentValue === field.showWhen.notEquals || !dependentValue)) continue;
       }
 
       // Handle conditional fields (ja_nein_with_value type like Überstand, Dämmung)
@@ -298,7 +298,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             if (field.showWhen) {
               const dependentValue = wp.specifications[field.showWhen.field];
               if (field.showWhen.value !== undefined && dependentValue !== field.showWhen.value) continue;
-              if (field.showWhen.notEquals !== undefined && dependentValue === field.showWhen.notEquals) continue;
+              if (field.showWhen.notEquals !== undefined && (dependentValue === field.showWhen.notEquals || !dependentValue)) continue;
             }
 
             const wpValue = wp.specifications[field.name];
@@ -392,7 +392,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       if (field.showWhen) {
         const dependentValue = formData.specifications[field.showWhen.field];
         if (field.showWhen.value !== undefined && dependentValue !== field.showWhen.value) continue;
-        if (field.showWhen.notEquals !== undefined && dependentValue === field.showWhen.notEquals) continue;
+        if (field.showWhen.notEquals !== undefined && (dependentValue === field.showWhen.notEquals || !dependentValue)) continue;
       }
 
       // Handle conditional fields (ja/nein with value)
@@ -561,7 +561,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             if (field.showWhen) {
               const dependentValue = wp.specifications[field.showWhen.field];
               if (field.showWhen.value !== undefined && dependentValue !== field.showWhen.value) continue;
-              if (field.showWhen.notEquals !== undefined && dependentValue === field.showWhen.notEquals) continue;
+              if (field.showWhen.notEquals !== undefined && (dependentValue === field.showWhen.notEquals || !dependentValue)) continue;
             }
 
             const wpValue = wp.specifications[field.name];
