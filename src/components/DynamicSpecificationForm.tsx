@@ -1729,6 +1729,22 @@ const DynamicSpecificationForm = ({
           </div>
         );
 
+      case 'text':
+        return (
+          <div key={field.name} className="form-field">
+            <label>
+              {field.label}
+              {isFieldRequired(field.name) && <span className="required">*</span>}
+            </label>
+            <input
+              type="text"
+              value={value as string || ''}
+              onChange={(e) => handleWPSpecChange(index, field.name, e.target.value)}
+              placeholder={field.placeholder || `${field.label} eingeben`}
+            />
+          </div>
+        );
+
       default:
         return null;
     }

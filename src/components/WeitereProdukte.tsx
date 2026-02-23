@@ -133,7 +133,7 @@ const WeitereProdukte = ({ produkte, updateProdukte }: WeitereProduktProps) => {
     return `Weiteres Produkt ${index + 1}`;
   };
 
-  const renderSpecificationField = (product: WeiteresProdukt, index: number, field: { name: string; label: string; type: string; unit?: string; options?: string[]; required: boolean; hasCustomOption?: boolean; conditionalType?: string; valueUnit?: string; valueLabel?: string; showWhen?: { field: string; value?: string; notEquals?: string } }) => {
+  const renderSpecificationField = (product: WeiteresProdukt, index: number, field: { name: string; label: string; type: string; unit?: string; options?: string[]; required: boolean; hasCustomOption?: boolean; conditionalType?: string; valueUnit?: string; valueLabel?: string; placeholder?: string; showWhen?: { field: string; value?: string; notEquals?: string } }) => {
     const value = product.specifications[field.name];
 
     // Skip certain fields
@@ -344,6 +344,22 @@ const WeitereProdukte = ({ produkte, updateProdukte }: WeitereProduktProps) => {
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 'text':
+        return (
+          <div key={field.name} className="form-field">
+            <label>
+              {field.label}
+              {field.required && <span className="required">*</span>}
+            </label>
+            <input
+              type="text"
+              value={value as string || ''}
+              onChange={(e) => handleSpecChange(index, field.name, e.target.value)}
+              placeholder={field.placeholder || `${field.label} eingeben`}
+            />
           </div>
         );
 

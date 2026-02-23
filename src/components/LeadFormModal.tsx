@@ -23,6 +23,8 @@ interface ProductRow {
   price: number;
   discount: number; // Discount in Euro
   dimensions: ProductDimensions;
+  pricing_type: 'dimension' | 'unit';
+  unit_label?: string;
   // For rounding display
   roundedBreite?: number;
   roundedTiefe?: number;
@@ -100,6 +102,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
     quantity: 1,
     price: 0,
     discount: 0,
+    pricing_type: 'dimension',
     piOberKante: '',
     piUnterKante: '',
     piGestellFarbe: '',
@@ -117,12 +120,16 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
     }
   };
 
-  const loadDimensions = async (productName: string): Promise<ProductDimensions> => {
+  const loadDimensions = async (productName: string): Promise<{ pricing_type: 'dimension' | 'unit'; dimensions?: ProductDimensions; unit_label?: string; unit_price?: number }> => {
     try {
-      return await api.get<ProductDimensions>(`/lead-products/${encodeURIComponent(productName)}/dimensions`);
+      const data = await api.get<Record<string, unknown>>(`/lead-products/${encodeURIComponent(productName)}/dimensions`);
+      if (data.pricing_type === 'unit') {
+        return { pricing_type: 'unit', unit_label: data.unit_label as string, unit_price: data.unit_price as number };
+      }
+      return { pricing_type: 'dimension', dimensions: (data.dimensions as ProductDimensions) || data as unknown as ProductDimensions };
     } catch (err) {
       console.error('Failed to load dimensions:', err);
-      return {};
+      return { pricing_type: 'dimension', dimensions: {} };
     }
   };
 
@@ -138,14 +145,20 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
         updated.tiefe = '';
         updated.price = 0;
         updated.dimensions = {};
+        updated.pricing_type = 'dimension';
+        updated.unit_label = undefined;
         updated.roundedBreite = undefined;
         updated.roundedTiefe = undefined;
         // Load dimensions for new product
         if (value) {
-          loadDimensions(value as string).then(dims => {
-            setProductRows(prev => prev.map(r =>
-              r.id === rowId ? { ...r, dimensions: dims } : r
-            ));
+          loadDimensions(value as string).then(result => {
+            setProductRows(prev => prev.map(r => {
+              if (r.id !== rowId) return r;
+              if (result.pricing_type === 'unit') {
+                return { ...r, pricing_type: 'unit', unit_label: result.unit_label, price: result.unit_price || 0, dimensions: {} };
+              }
+              return { ...r, pricing_type: 'dimension', dimensions: result.dimensions || {} };
+            }));
           });
         }
       } else if (field === 'breite' || field === 'tiefe') {
@@ -254,7 +267,11 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
   };
 
   const getValidItems = () => {
-    return productRows.filter(r => r.product_name && r.breite && r.tiefe && r.price > 0);
+    return productRows.filter(r => {
+      if (!r.product_name || r.price <= 0) return false;
+      if (r.pricing_type === 'unit') return true;
+      return r.breite && r.tiefe;
+    });
   };
 
   const getValidExtras = () => {
@@ -293,11 +310,13 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
         notes: notes.trim() || null,
         items: validItems.map(r => ({
           product_name: r.product_name,
-          breite: r.breite,
-          tiefe: r.tiefe,
+          breite: r.pricing_type === 'unit' ? 0 : r.breite,
+          tiefe: r.pricing_type === 'unit' ? 0 : r.tiefe,
           quantity: r.quantity,
           unit_price: r.price,
           discount: r.discount || 0,
+          pricing_type: r.pricing_type,
+          unit_label: r.unit_label || null,
           piOberKante: r.piOberKante || null,
           piUnterKante: r.piUnterKante || null,
           piGestellFarbe: r.piGestellFarbe || null,
@@ -325,13 +344,15 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
           notes: notes.trim() || undefined,
           items: validItems.map(r => ({
             product_name: r.product_name,
-            breite: r.breite as number,
-            tiefe: r.tiefe as number,
+            breite: r.pricing_type === 'unit' ? 0 : (r.breite as number),
+            tiefe: r.pricing_type === 'unit' ? 0 : (r.tiefe as number),
             quantity: r.quantity,
             unit_price: r.price,
             discount: r.discount || 0,
             discount_percent: getRowDiscountPercent(r),
             total_price: (r.price * r.quantity) - (r.discount || 0),
+            pricing_type: r.pricing_type,
+            unit_label: r.unit_label || undefined,
             piOberKante: r.piOberKante || undefined,
             piUnterKante: r.piUnterKante || undefined,
             piGestellFarbe: r.piGestellFarbe || undefined,
@@ -500,48 +521,62 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
                         </select>
                       </div>
 
-                      <div className="select-group">
-                        <label>Breite (cm)</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="1200"
-                          value={row.breite}
-                          onChange={e => updateRow(row.id, 'breite', e.target.value ? Number(e.target.value) : '')}
-                          disabled={!row.product_name}
-                          placeholder="z.B. 485"
-                          className="dimension-input"
-                        />
-                      </div>
+                      {row.pricing_type === 'unit' ? (
+                        <div className="select-group quantity-group">
+                          <label>Menge{row.unit_label ? ` (${row.unit_label})` : ''}</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={row.quantity}
+                            onChange={e => updateRow(row.id, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="select-group">
+                            <label>Breite (cm)</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="1200"
+                              value={row.breite}
+                              onChange={e => updateRow(row.id, 'breite', e.target.value ? Number(e.target.value) : '')}
+                              disabled={!row.product_name}
+                              placeholder="z.B. 485"
+                              className="dimension-input"
+                            />
+                          </div>
 
-                      <div className="select-group">
-                        <label>Tiefe (cm)</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="600"
-                          value={row.tiefe}
-                          onChange={e => updateRow(row.id, 'tiefe', e.target.value ? Number(e.target.value) : '')}
-                          disabled={!row.product_name}
-                          placeholder="z.B. 287"
-                          className="dimension-input"
-                        />
-                      </div>
+                          <div className="select-group">
+                            <label>Tiefe (cm)</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="600"
+                              value={row.tiefe}
+                              onChange={e => updateRow(row.id, 'tiefe', e.target.value ? Number(e.target.value) : '')}
+                              disabled={!row.product_name}
+                              placeholder="z.B. 287"
+                              className="dimension-input"
+                            />
+                          </div>
 
-                      <div className="select-group quantity-group">
-                        <label>Menge</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={row.quantity}
-                          onChange={e => updateRow(row.id, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
-                          disabled={!row.price}
-                        />
-                      </div>
+                          <div className="select-group quantity-group">
+                            <label>Menge</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={row.quantity}
+                              onChange={e => updateRow(row.id, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                              disabled={!row.price}
+                            />
+                          </div>
+                        </>
+                      )}
                     </div>
 
-                    {/* Extra specification fields - show after dimensions are entered */}
-                    {row.breite && row.tiefe && (
+                    {/* Extra specification fields - show after dimensions are entered (only for dimension products) */}
+                    {row.pricing_type !== 'unit' && row.breite && row.tiefe && (
                       <div className="product-extra-specs">
                         <div className="extra-specs-grid">
                           <div className="spec-field">
@@ -597,11 +632,20 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
                       <div className="product-row-price-section">
                         <div className="product-row-price">
                           <div className="price-breakdown">
-                            <span className="price-dims">{row.breite} x {row.tiefe} cm</span>
-                            {(row.roundedBreite !== row.breite || row.roundedTiefe !== row.tiefe) && (
-                              <span className="price-rounded">→ Preis für {row.roundedBreite} x {row.roundedTiefe} cm</span>
+                            {row.pricing_type === 'unit' ? (
+                              <>
+                                <span className="price-dims">{formatPrice(row.price)}{row.unit_label ? ` / ${row.unit_label}` : ''}</span>
+                                {row.quantity > 1 && <span className="price-qty">x {row.quantity}</span>}
+                              </>
+                            ) : (
+                              <>
+                                <span className="price-dims">{row.breite} x {row.tiefe} cm</span>
+                                {(row.roundedBreite !== row.breite || row.roundedTiefe !== row.tiefe) && (
+                                  <span className="price-rounded">→ Preis für {row.roundedBreite} x {row.roundedTiefe} cm</span>
+                                )}
+                                {row.quantity > 1 && <span className="price-qty">x {row.quantity}</span>}
+                              </>
                             )}
-                            {row.quantity > 1 && <span className="price-qty">x {row.quantity}</span>}
                           </div>
                           <span className="price-value">{formatPrice(row.price * row.quantity)}</span>
                         </div>
@@ -633,7 +677,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
                         )}
                       </div>
                     )}
-                    {row.breite && row.tiefe && row.price === 0 && Object.keys(row.dimensions).length > 0 && (
+                    {row.pricing_type !== 'unit' && row.breite && row.tiefe && row.price === 0 && Object.keys(row.dimensions).length > 0 && (
                       <div className="product-row-warning">
                         Keine Preisdaten für diese Größe verfügbar
                       </div>

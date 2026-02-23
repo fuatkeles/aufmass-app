@@ -30,6 +30,8 @@ interface LeadItem {
   unit_price: number;
   discount?: number;
   total_price: number;
+  pricing_type?: 'dimension' | 'unit';
+  unit_label?: string;
   pi_ober_kante?: string;
   pi_unter_kante?: string;
   pi_gestell_farbe?: string;
@@ -420,7 +422,12 @@ export default function Angebote() {
                         <div key={item.id} className="item-row">
                           <div className="item-info">
                             <span className="item-name">{item.product_name}</span>
-                            <span className="item-dims">{item.breite} x {item.tiefe} cm</span>
+                            <span className="item-dims">
+                              {item.pricing_type === 'unit'
+                                ? (item.unit_label || 'Einheit')
+                                : `${item.breite} x ${item.tiefe} cm`
+                              }
+                            </span>
                             <span className="item-qty">x {item.quantity}</span>
                           </div>
                           <span className="item-price">{formatPrice(item.total_price)}</span>

@@ -79,7 +79,7 @@
           "name": "hoeheStuetzen",
           "label": "Höhe Stützen",
           "type": "select",
-          "options": ["Standard", "300 cm", "350 cm", "400 cm", "Sondermass"],
+          "options": ["Standard", "300 mm", "350 mm", "400 mm", "Sondermass"],
           "required": true,
           "conditionalField": {
             "trigger": "Sondermass",
@@ -143,7 +143,7 @@
           "name": "wasserablauf",
           "label": "Wasserablauf",
           "type": "select",
-          "options": ["Links", "Rechts", "Links + Rechts"],
+          "options": ["Links", "Rechts", "Links + Rechts", "Unterirdisch"],
           "required": true
         },
         {
@@ -278,7 +278,7 @@
           "name": "hoeheStuetzen",
           "label": "Höhe Stützen",
           "type": "select",
-          "options": ["Standard", "300 cm", "350 cm", "400 cm", "Sondermass"],
+          "options": ["Standard", "300 mm", "350 mm", "400 mm", "Sondermass"],
           "required": true,
           "conditionalField": {
             "trigger": "Sondermass",
@@ -335,7 +335,7 @@
           "name": "wasserablauf",
           "label": "Wasserablauf",
           "type": "select",
-          "options": ["Links", "Rechts", "Links + Rechts"],
+          "options": ["Links", "Rechts", "Links + Rechts", "Unterirdisch"],
           "required": true
         },
         {
@@ -466,7 +466,7 @@
           "name": "hoeheStuetzen",
           "label": "Höhe Stützen",
           "type": "select",
-          "options": ["Standard", "300 cm", "350 cm", "400 cm", "Sondermass"],
+          "options": ["Standard", "300 mm", "350 mm", "400 mm", "Sondermass"],
           "required": true,
           "conditionalField": {
             "trigger": "Sondermass",
@@ -530,7 +530,7 @@
           "name": "wasserablauf",
           "label": "Wasserablauf",
           "type": "select",
-          "options": ["Links", "Rechts", "Links + Rechts"],
+          "options": ["Links", "Rechts", "Links + Rechts", "Unterirdisch"],
           "required": true
         },
         {
@@ -661,7 +661,7 @@
           "name": "hoeheStuetzen",
           "label": "Höhe Stützen",
           "type": "select",
-          "options": ["Standard", "300 cm", "350 cm", "400 cm", "Sondermass"],
+          "options": ["Standard", "300 mm", "350 mm", "400 mm", "Sondermass"],
           "required": true,
           "conditionalField": {
             "trigger": "Sondermass",
@@ -725,7 +725,7 @@
           "name": "wasserablauf",
           "label": "Wasserablauf",
           "type": "select",
-          "options": ["Links", "Rechts", "Links + Rechts"],
+          "options": ["Links", "Rechts", "Links + Rechts", "Unterirdisch"],
           "required": true
         },
         {

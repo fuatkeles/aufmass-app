@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './UnterbauelementeStep.css';
 import './SectionStyles.css';
@@ -33,6 +33,11 @@ interface UnterbauelementData {
   schloss?: string;
 }
 
+interface MissingField {
+  name: string;
+  label: string;
+}
+
 interface UnterbauelementeStepProps {
   unterbauelemente: UnterbauelementData[];
   updateUnterbauelemente: (data: UnterbauelementData[]) => void;
@@ -42,6 +47,8 @@ interface UnterbauelementeStepProps {
   updateWeitereProdukte?: (data: WeiteresProdukt[]) => void;
   bemerkungen?: string;
   updateBemerkungen?: (value: string) => void;
+  missingFields?: MissingField[];
+  showValidationErrors?: boolean;
 }
 
 interface ProductConfig {
@@ -84,7 +91,9 @@ const UnterbauelementeStep = ({
   weitereProdukte = [],
   updateWeitereProdukte,
   bemerkungen = '',
-  updateBemerkungen
+  updateBemerkungen,
+  missingFields = [],
+  showValidationErrors = false
 }: UnterbauelementeStepProps) => {
   // Create initial element with values from ProductSelection
   const createInitialElement = (): UnterbauelementData => ({
@@ -103,6 +112,80 @@ const UnterbauelementeStep = ({
   });
   const [expandedIndex, setExpandedIndex] = useState<number>(0);
   const [initialized, setInitialized] = useState(false);
+
+  // Scroll to field and highlight
+  const scrollToField = (fieldName: string) => {
+    const fieldElement = document.getElementById(fieldName);
+    if (fieldElement) {
+      // Extract element index from field name (ub_0_hoehe -> 0)
+      const match = fieldName.match(/^ub_(\d+)_/);
+      if (match) {
+        const elIdx = parseInt(match[1]);
+        if (expandedIndex !== elIdx) setExpandedIndex(elIdx);
+      }
+      setTimeout(() => {
+        const el = document.getElementById(fieldName);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('field-highlight');
+          setTimeout(() => el.classList.remove('field-highlight'), 2000);
+        }
+      }, 300);
+    }
+  };
+
+  // Compute missing fields directly from elements state
+  const computedMissingFields = useMemo(() => {
+    const missing: MissingField[] = [];
+    const excludedFields = ['montageteam', 'bemerkungen'];
+
+    elements.forEach((el, elIdx) => {
+      const elPrefix = `Element ${elIdx + 1}`;
+      if (!el.produktTyp) {
+        missing.push({ name: `ub_${elIdx}_produktTyp`, label: `${elPrefix} Produkt Typ` });
+        return;
+      }
+      if (!el.modell) {
+        missing.push({ name: `ub_${elIdx}_modell`, label: `${elPrefix} Modell` });
+      }
+
+      const ubConfig = productConfig['UNTERBAUELEMENTE']?.[el.produktTyp];
+      if (ubConfig?.fields) {
+        for (const field of ubConfig.fields) {
+          if (excludedFields.includes(field.name)) continue;
+
+          // Handle showWhen conditions
+          const showWhen = field.showWhen as { field: string; value?: string; notEquals?: string } | undefined;
+          if (showWhen) {
+            const depValue = el[showWhen.field as keyof UnterbauelementData];
+            if (showWhen.value !== undefined && depValue !== showWhen.value) continue;
+            if (showWhen.notEquals !== undefined && (depValue === showWhen.notEquals || !depValue)) continue;
+          }
+
+          const elValue = el[field.name as keyof UnterbauelementData];
+          const elFieldLabel = field.label || field.name;
+
+          if (field.type === 'fundament') {
+            if (!elValue) missing.push({ name: `ub_${elIdx}_${field.name}`, label: `${elPrefix} ${elFieldLabel}` });
+            continue;
+          }
+          if (field.type === 'modelColorSelect' || field.type === 'select') {
+            if (!elValue || elValue === '') missing.push({ name: `ub_${elIdx}_${field.name}`, label: `${elPrefix} ${elFieldLabel}` });
+            continue;
+          }
+          if (field.type === 'number') {
+            if (!elValue || (typeof elValue === 'number' && elValue <= 0)) missing.push({ name: `ub_${elIdx}_${field.name}`, label: `${elPrefix} ${elFieldLabel}` });
+            continue;
+          }
+          if (elValue === undefined || elValue === null || elValue === '') {
+            missing.push({ name: `ub_${elIdx}_${field.name}`, label: `${elPrefix} ${elFieldLabel}` });
+          }
+        }
+      }
+    });
+
+    return missing;
+  }, [elements]);
 
   // Initialize first element with ProductSelection values if not already set
   useEffect(() => {
@@ -213,6 +296,7 @@ const UnterbauelementeStep = ({
         return (
           <motion.div
             key={field.name}
+            id={`ub_${index}_${field.name}`}
             className="form-field"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -240,6 +324,7 @@ const UnterbauelementeStep = ({
         return (
           <motion.div
             key={field.name}
+            id={`ub_${index}_${field.name}`}
             className="form-field"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -266,6 +351,7 @@ const UnterbauelementeStep = ({
         return (
           <motion.div
             key={field.name}
+            id={`ub_${index}_${field.name}`}
             className="form-field"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -293,6 +379,7 @@ const UnterbauelementeStep = ({
         return (
           <motion.div
             key={field.name}
+            id={`ub_${index}_${field.name}`}
             className="form-field fundament-field"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -417,6 +504,44 @@ const UnterbauelementeStep = ({
           Fügen Sie alle benötigten Unterbauelemente hinzu
         </p>
       </motion.div>
+
+      {/* Missing Fields Banner */}
+      <AnimatePresence>
+        {computedMissingFields.length > 0 && (
+          <motion.div
+            className="missing-fields-bar"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="missing-bar-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <div className="missing-bar-content desktop-only">
+              <span className="missing-label">Fehlt:</span>
+              <div className="missing-fields-tags">
+                {computedMissingFields.slice(0, 4).map((field, idx) => (
+                  <button key={idx} type="button" className="missing-field-tag" onClick={() => scrollToField(field.name)}>{field.label}</button>
+                ))}
+                {computedMissingFields.length > 4 && (
+                  <span className="missing-more">+{computedMissingFields.length - 4} weitere</span>
+                )}
+              </div>
+            </div>
+            <div className="missing-bar-content mobile-only">
+              <span className="missing-label">{computedMissingFields.length} Felder fehlen</span>
+            </div>
+            <div className="missing-bar-progress">
+              <span className="progress-text">0/{computedMissingFields.length}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Element Cards */}
       <div className="element-cards">

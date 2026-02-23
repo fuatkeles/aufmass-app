@@ -16,6 +16,8 @@ interface Product {
   category?: string;
   product_type?: string;
   branch_id: string | null;
+  pricing_type?: 'dimension' | 'unit';
+  unit_label?: string;
 }
 
 interface PendingColumn {
@@ -58,6 +60,9 @@ export default function ProductPricing() {
   const [newProductEntries, setNewProductEntries] = useState<{ breite: string; tiefe: string; price: string }[]>([
     { breite: '', tiefe: '', price: '' }
   ]);
+  const [newProductPricingType, setNewProductPricingType] = useState<'dimension' | 'unit'>('dimension');
+  const [newProductUnitLabel, setNewProductUnitLabel] = useState('');
+  const [newProductUnitPrice, setNewProductUnitPrice] = useState('');
 
   // Custom input mode for each dropdown
   const [customCategoryMode, setCustomCategoryMode] = useState(false);
@@ -96,6 +101,8 @@ export default function ProductPricing() {
   const productMatrices = useMemo(() => {
     const grouped: Record<string, {
       products: Product[];
+      pricing_type: 'dimension' | 'unit';
+      unit_label?: string;
       breiteValues: number[];
       tiefeValues: number[];
       matrix: Record<string, Record<string, Product>>;
@@ -105,6 +112,8 @@ export default function ProductPricing() {
       if (!grouped[p.product_name]) {
         grouped[p.product_name] = {
           products: [],
+          pricing_type: (p.pricing_type as 'dimension' | 'unit') || 'dimension',
+          unit_label: p.unit_label,
           breiteValues: [],
           tiefeValues: [],
           matrix: {}
@@ -112,17 +121,20 @@ export default function ProductPricing() {
       }
       grouped[p.product_name].products.push(p);
 
-      if (!grouped[p.product_name].breiteValues.includes(p.breite)) {
-        grouped[p.product_name].breiteValues.push(p.breite);
-      }
-      if (!grouped[p.product_name].tiefeValues.includes(p.tiefe)) {
-        grouped[p.product_name].tiefeValues.push(p.tiefe);
-      }
+      // Only build dimension matrix for dimension-based products
+      if ((p.pricing_type || 'dimension') === 'dimension') {
+        if (!grouped[p.product_name].breiteValues.includes(p.breite)) {
+          grouped[p.product_name].breiteValues.push(p.breite);
+        }
+        if (!grouped[p.product_name].tiefeValues.includes(p.tiefe)) {
+          grouped[p.product_name].tiefeValues.push(p.tiefe);
+        }
 
-      if (!grouped[p.product_name].matrix[p.breite]) {
-        grouped[p.product_name].matrix[p.breite] = {};
+        if (!grouped[p.product_name].matrix[p.breite]) {
+          grouped[p.product_name].matrix[p.breite] = {};
+        }
+        grouped[p.product_name].matrix[p.breite][p.tiefe] = p;
       }
-      grouped[p.product_name].matrix[p.breite][p.tiefe] = p;
     });
 
     Object.values(grouped).forEach(g => {
@@ -459,6 +471,9 @@ export default function ProductPricing() {
     setNewProductCategory('');
     setNewProductType('');
     setNewProductEntries([{ breite: '', tiefe: '', price: '' }]);
+    setNewProductPricingType('dimension');
+    setNewProductUnitLabel('');
+    setNewProductUnitPrice('');
     setCustomCategoryMode(false);
     setCustomProductTypeMode(false);
     setCustomModelMode(false);
@@ -506,33 +521,55 @@ export default function ProductPricing() {
       return;
     }
 
-    const validEntries = newProductEntries.filter(e =>
-      e.breite && parseInt(e.breite) > 0 &&
-      e.tiefe && parseInt(e.tiefe) > 0 &&
-      e.price && parseFloat(e.price) > 0
-    );
-
-    if (validEntries.length === 0) {
-      setError('Mindestens ein vollständiger Eintrag (Breite, Tiefe, Preis) ist erforderlich');
-      return;
-    }
-
     setSaving(true);
     setError('');
 
     try {
-      await Promise.all(
-        validEntries.map(entry =>
-          api.post('/lead-products', {
-            product_name: newProductName.trim(),
-            category: newProductCategory,
-            product_type: newProductType,
-            breite: parseInt(entry.breite),
-            tiefe: parseInt(entry.tiefe),
-            price: parseFloat(entry.price)
-          })
-        )
-      );
+      if (newProductPricingType === 'unit') {
+        // Unit-based product: single price entry
+        if (!newProductUnitPrice || parseFloat(newProductUnitPrice) <= 0) {
+          setError('Preis ist erforderlich');
+          setSaving(false);
+          return;
+        }
+        await api.post('/lead-products', {
+          product_name: newProductName.trim(),
+          category: newProductCategory,
+          product_type: newProductType,
+          pricing_type: 'unit',
+          unit_label: newProductUnitLabel.trim() || null,
+          breite: 0,
+          tiefe: 0,
+          price: parseFloat(newProductUnitPrice)
+        });
+      } else {
+        // Dimension-based product: multiple entries
+        const validEntries = newProductEntries.filter(e =>
+          e.breite && parseInt(e.breite) > 0 &&
+          e.tiefe && parseInt(e.tiefe) > 0 &&
+          e.price && parseFloat(e.price) > 0
+        );
+
+        if (validEntries.length === 0) {
+          setError('Mindestens ein vollständiger Eintrag (Breite, Tiefe, Preis) ist erforderlich');
+          setSaving(false);
+          return;
+        }
+
+        await Promise.all(
+          validEntries.map(entry =>
+            api.post('/lead-products', {
+              product_name: newProductName.trim(),
+              category: newProductCategory,
+              product_type: newProductType,
+              pricing_type: 'dimension',
+              breite: parseInt(entry.breite),
+              tiefe: parseInt(entry.tiefe),
+              price: parseFloat(entry.price)
+            })
+          )
+        );
+      }
 
       await loadProducts();
       setExpandedProducts(prev => new Set(prev).add(newProductName.trim()));
@@ -779,21 +816,30 @@ export default function ProductPricing() {
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
                     <span className="product-name">{productName}</span>
-                    <span className="price-count">{totalPrices} Preise</span>
+                    <span className="price-count">
+                      {data.pricing_type === 'unit'
+                        ? `Einheitspreis${data.unit_label ? ` (${data.unit_label})` : ''}`
+                        : `${totalPrices} Preise`
+                      }
+                    </span>
                   </div>
                   <div className="accordion-actions" onClick={e => e.stopPropagation()}>
-                    <button className="btn-icon-small" onClick={() => addPendingColumn(productName)}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 5v14M5 12h14" />
-                      </svg>
-                      Breite
-                    </button>
-                    <button className="btn-icon-small" onClick={() => addPendingRow(productName)}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M12 5v14M5 12h14" />
-                      </svg>
-                      Tiefe
-                    </button>
+                    {data.pricing_type !== 'unit' && (
+                      <>
+                        <button className="btn-icon-small" onClick={() => addPendingColumn(productName)}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                          Breite
+                        </button>
+                        <button className="btn-icon-small" onClick={() => addPendingRow(productName)}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                          Tiefe
+                        </button>
+                      </>
+                    )}
                     <button
                       className="btn-icon-small delete"
                       onClick={() => setDeleteConfirm({ type: 'product', productName })}
@@ -815,6 +861,69 @@ export default function ProductPricing() {
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.2 }}
                     >
+                      {data.pricing_type === 'unit' ? (
+                        <div className="unit-pricing-card">
+                          <div className="unit-pricing-row">
+                            <div className="unit-pricing-field">
+                              <label>Einheit</label>
+                              {editingCell?.productName === productName && editingCell?.breite === -1 ? (
+                                <input
+                                  type="text"
+                                  value={editValue}
+                                  onChange={e => setEditValue(e.target.value)}
+                                  onBlur={async () => {
+                                    const product = data.products[0];
+                                    if (product && editValue !== (data.unit_label || '')) {
+                                      await api.put(`/lead-products/${product.id}`, { unit_label: editValue });
+                                      await loadProducts();
+                                    }
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditingCell(null); }}
+                                  autoFocus
+                                  placeholder="z.B. Adet, Metrekare, Stück"
+                                />
+                              ) : (
+                                <span
+                                  className="unit-value clickable"
+                                  onClick={() => { setEditingCell({ productName, breite: -1, tiefe: 0 }); setEditValue(data.unit_label || ''); }}
+                                >
+                                  {data.unit_label || '(klicken zum Bearbeiten)'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="unit-pricing-field">
+                              <label>Preis (EUR)</label>
+                              {editingCell?.productName === productName && editingCell?.breite === -2 ? (
+                                <input
+                                  type="number"
+                                  value={editValue}
+                                  onChange={e => setEditValue(e.target.value)}
+                                  onBlur={async () => {
+                                    const product = data.products[0];
+                                    if (product && editValue) {
+                                      await api.put(`/lead-products/${product.id}`, { price: parseFloat(editValue) });
+                                      await loadProducts();
+                                    }
+                                    setEditingCell(null);
+                                  }}
+                                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditingCell(null); }}
+                                  autoFocus
+                                  min="0"
+                                  step="0.01"
+                                />
+                              ) : (
+                                <span
+                                  className="unit-value clickable price"
+                                  onClick={() => { setEditingCell({ productName, breite: -2, tiefe: 0 }); setEditValue(String(data.products[0]?.price || 0)); }}
+                                >
+                                  {(data.products[0]?.price || 0).toLocaleString('de-DE', { minimumFractionDigits: 2 })} €
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
                       <div className="matrix-wrapper">
                         <table className="price-matrix">
                           <thead>
@@ -1039,6 +1148,7 @@ export default function ProductPricing() {
                           </div>
                         )}
                       </div>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1076,6 +1186,27 @@ export default function ProductPricing() {
 
               <div className="modal-body">
                 {error && <div className="modal-error">{error}</div>}
+
+                {/* Pricing Type Toggle - FIRST */}
+                <div className="form-group">
+                  <label>Preismodell *</label>
+                  <div className="pricing-type-toggle">
+                    <button
+                      type="button"
+                      className={`toggle-btn ${newProductPricingType === 'dimension' ? 'active' : ''}`}
+                      onClick={() => setNewProductPricingType('dimension')}
+                    >
+                      Maßbasiert (Breite × Tiefe)
+                    </button>
+                    <button
+                      type="button"
+                      className={`toggle-btn ${newProductPricingType === 'unit' ? 'active' : ''}`}
+                      onClick={() => setNewProductPricingType('unit')}
+                    >
+                      Einheitspreis
+                    </button>
+                  </div>
+                </div>
 
                 {/* Category Selection */}
                 <div className="form-group">
@@ -1238,7 +1369,34 @@ export default function ProductPricing() {
                   </div>
                 )}
 
-                {/* Price entries - each row: Breite | Tiefe | Price */}
+                {/* Unit pricing inputs */}
+                {newProductPricingType === 'unit' && newProductName && (
+                  <div className="unit-pricing-inputs">
+                    <div className="form-group">
+                      <label>Einheit</label>
+                      <input
+                        type="text"
+                        value={newProductUnitLabel}
+                        onChange={e => setNewProductUnitLabel(e.target.value)}
+                        placeholder="z.B. Stück, Adet, Metrekare, Pauschal"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Preis (€) *</label>
+                      <input
+                        type="number"
+                        value={newProductUnitPrice}
+                        onChange={e => setNewProductUnitPrice(e.target.value)}
+                        placeholder="45"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Dimension price entries - each row: Breite | Tiefe | Price */}
+                {newProductPricingType === 'dimension' && (
                 <div className="price-entries-section">
                   <div className="entries-header">
                     <div className="entry-label">Breite (cm)</div>
@@ -1284,6 +1442,7 @@ export default function ProductPricing() {
                     Weitere Zeile
                   </button>
                 </div>
+                )}
               </div>
 
               <div className="modal-footer">

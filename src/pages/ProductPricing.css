@@ -1577,6 +1577,163 @@
   color: #7fa93d;
 }
 
+/* Unit Pricing Card (Accordion Content) */
+.unit-pricing-card {
+  padding: 20px;
+}
+
+.unit-pricing-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.unit-pricing-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.unit-pricing-field label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #8b95a5;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.unit-pricing-field input {
+  background: #0f1219;
+  border: 1px solid #a3e635;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #fff;
+  font-size: 1rem;
+  outline: none;
+}
+
+.unit-value.clickable {
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+.unit-value.clickable:hover {
+  border-color: rgba(163, 230, 53, 0.4);
+  background: rgba(163, 230, 53, 0.05);
+}
+
+.unit-value.clickable.price {
+  color: #a3e635;
+  font-weight: 600;
+  font-size: 1.125rem;
+}
+
+/* Light Theme - Unit Pricing Card */
+.light-theme .unit-pricing-field input {
+  background: #fff;
+  border-color: #7fa93d;
+  color: #1f2937;
+}
+
+.light-theme .unit-value.clickable {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #1f2937;
+}
+
+.light-theme .unit-value.clickable:hover {
+  border-color: rgba(127, 169, 61, 0.4);
+  background: rgba(127, 169, 61, 0.05);
+}
+
+.light-theme .unit-value.clickable.price {
+  color: #7fa93d;
+}
+
+/* Pricing Type Toggle (New Product Modal) */
+.pricing-type-toggle {
+  display: flex;
+  gap: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pricing-type-toggle .toggle-btn {
+  flex: 1;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: none;
+  color: #8b95a5;
+  font-size: 0.813rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pricing-type-toggle .toggle-btn:first-child {
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pricing-type-toggle .toggle-btn.active {
+  background: rgba(163, 230, 53, 0.15);
+  color: #a3e635;
+  font-weight: 600;
+}
+
+.pricing-type-toggle .toggle-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Unit Pricing Inputs (New Product Modal) */
+.unit-pricing-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.unit-pricing-inputs .form-group {
+  margin-bottom: 0;
+}
+
+/* Light Theme - Pricing Type Toggle & Unit Inputs */
+.light-theme .pricing-type-toggle {
+  border-color: #e5e7eb;
+}
+
+.light-theme .pricing-type-toggle .toggle-btn {
+  background: #f9fafb;
+  color: #6b7280;
+}
+
+.light-theme .pricing-type-toggle .toggle-btn:first-child {
+  border-right-color: #e5e7eb;
+}
+
+.light-theme .pricing-type-toggle .toggle-btn.active {
+  background: rgba(127, 169, 61, 0.15);
+  color: #7fa93d;
+}
+
+.light-theme .pricing-type-toggle .toggle-btn:hover:not(.active) {
+  background: #f3f4f6;
+}
+
+.light-theme .unit-pricing-inputs {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .product-pricing-page {

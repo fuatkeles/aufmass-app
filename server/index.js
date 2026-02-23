@@ -562,6 +562,20 @@ async function initializeTables() {
       END
     `);
 
+    // Add pricing_type and unit_label columns to lead_products
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_lead_products') AND name = 'pricing_type')
+      BEGIN
+        ALTER TABLE aufmass_lead_products ADD pricing_type NVARCHAR(20) DEFAULT 'dimension'
+      END
+    `);
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_lead_products') AND name = 'unit_label')
+      BEGIN
+        ALTER TABLE aufmass_lead_products ADD unit_label NVARCHAR(100)
+      END
+    `);
+
     // Leads table (customer quotes/angebote)
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_leads' AND xtype='U')
@@ -650,6 +664,19 @@ async function initializeTables() {
       `);
     }
     console.log('✅ aufmass_lead_items extra spec columns ready');
+
+    // Add pricing_type and unit_label columns to lead_items
+    const itemPricingColumns = ['pricing_type', 'unit_label'];
+    for (const col of itemPricingColumns) {
+      const defaultVal = col === 'pricing_type' ? " DEFAULT 'dimension'" : '';
+      await pool.request().query(`
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_lead_items') AND name = '${col}')
+        BEGIN
+          ALTER TABLE aufmass_lead_items ADD ${col} NVARCHAR(${col === 'pricing_type' ? 20 : 100})${defaultVal}
+        END
+      `);
+    }
+    console.log('✅ aufmass_lead_items pricing columns ready');
 
     // Check if admin exists, create default admin if not
     const adminCheck = await pool.request().query(
@@ -4127,18 +4154,27 @@ app.post('/api/lead-products', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Admin or office access required' });
     }
 
-    const { product_name, breite, tiefe, price, category, product_type } = req.body;
+    const { product_name, breite, tiefe, price, category, product_type, pricing_type, unit_label } = req.body;
 
-    if (!product_name || !breite || !tiefe || price === undefined) {
-      console.log('Missing fields:', { product_name, breite, tiefe, price });
-      return res.status(400).json({ error: 'Product name, breite, tiefe, and price are required' });
+    if (!product_name || price === undefined) {
+      console.log('Missing fields:', { product_name, price });
+      return res.status(400).json({ error: 'Product name and price are required' });
     }
+
+    // For dimension-based products, breite and tiefe are required
+    const isUnit = pricing_type === 'unit';
+    if (!isUnit && (!breite || !tiefe)) {
+      return res.status(400).json({ error: 'Breite and tiefe are required for dimension products' });
+    }
+
+    const effectiveBreite = isUnit ? 0 : breite;
+    const effectiveTiefe = isUnit ? 0 : tiefe;
 
     // Check if already exists for this branch
     const checkRequest = pool.request()
       .input('product_name', sql.NVarChar, product_name)
-      .input('breite', sql.Int, breite)
-      .input('tiefe', sql.Int, tiefe)
+      .input('breite', sql.Int, effectiveBreite)
+      .input('tiefe', sql.Int, effectiveTiefe)
       .input('branch_id', sql.NVarChar, req.branchId || null);
 
     const existing = await checkRequest.query(`
@@ -4149,14 +4185,14 @@ app.post('/api/lead-products', authenticateToken, async (req, res) => {
 
     if (existing.recordset.length > 0) {
       console.log('Product already exists');
-      return res.status(409).json({ error: 'Product with these dimensions already exists' });
+      return res.status(409).json({ error: isUnit ? 'Unit product already exists' : 'Product with these dimensions already exists' });
     }
 
     // Build dynamic INSERT based on provided fields
     const insertRequest = pool.request()
       .input('product_name', sql.NVarChar, product_name)
-      .input('breite', sql.Int, breite)
-      .input('tiefe', sql.Int, tiefe)
+      .input('breite', sql.Int, effectiveBreite)
+      .input('tiefe', sql.Int, effectiveTiefe)
       .input('price', sql.Decimal(10, 2), price)
       .input('branch_id', sql.NVarChar, req.branchId || null);
 
@@ -4172,6 +4208,16 @@ app.post('/api/lead-products', authenticateToken, async (req, res) => {
       insertRequest.input('product_type', sql.NVarChar, product_type);
       columns += ', product_type';
       values += ', @product_type';
+    }
+    if (pricing_type) {
+      insertRequest.input('pricing_type', sql.NVarChar, pricing_type);
+      columns += ', pricing_type';
+      values += ', @pricing_type';
+    }
+    if (unit_label) {
+      insertRequest.input('unit_label', sql.NVarChar, unit_label);
+      columns += ', unit_label';
+      values += ', @unit_label';
     }
 
     const result = await insertRequest.query(`
@@ -4196,7 +4242,7 @@ app.put('/api/lead-products/:id', authenticateToken, async (req, res) => {
     }
 
     const { id } = req.params;
-    const { product_name, breite, tiefe, price } = req.body;
+    const { product_name, breite, tiefe, price, pricing_type, unit_label } = req.body;
 
     // Verify product belongs to this branch
     const branchCheck = req.branchId
@@ -4234,6 +4280,14 @@ app.put('/api/lead-products/:id', authenticateToken, async (req, res) => {
     if (price !== undefined) {
       updates.push('price = @price');
       updateRequest.input('price', sql.Decimal(10, 2), price);
+    }
+    if (pricing_type !== undefined) {
+      updates.push('pricing_type = @pricing_type');
+      updateRequest.input('pricing_type', sql.NVarChar, pricing_type);
+    }
+    if (unit_label !== undefined) {
+      updates.push('unit_label = @unit_label');
+      updateRequest.input('unit_label', sql.NVarChar, unit_label);
     }
 
     if (updates.length === 0) {
@@ -4352,21 +4406,32 @@ app.get('/api/lead-products/:productName/dimensions', authenticateToken, async (
     }
 
     const result = await request.query(`
-      SELECT breite, tiefe, price FROM aufmass_lead_products
+      SELECT breite, tiefe, price, pricing_type, unit_label FROM aufmass_lead_products
       WHERE product_name = @product_name ${branchFilter}
       ORDER BY breite, tiefe
     `);
 
-    // Group by breite, return available tiefe values
-    const dimensions = {};
-    result.recordset.forEach(row => {
-      if (!dimensions[row.breite]) {
-        dimensions[row.breite] = [];
-      }
-      dimensions[row.breite].push({ tiefe: row.tiefe, price: row.price });
-    });
+    const rows = result.recordset;
 
-    res.json(dimensions);
+    // Check if this is a unit-based product
+    if (rows.length > 0 && rows[0].pricing_type === 'unit') {
+      res.json({
+        pricing_type: 'unit',
+        unit_label: rows[0].unit_label || '',
+        unit_price: rows[0].price
+      });
+    } else {
+      // Dimension-based: group by breite, return available tiefe values
+      const dimensions = {};
+      rows.forEach(row => {
+        if (!dimensions[row.breite]) {
+          dimensions[row.breite] = [];
+        }
+        dimensions[row.breite].push({ tiefe: row.tiefe, price: row.price });
+      });
+
+      res.json({ pricing_type: 'dimension', dimensions });
+    }
   } catch (err) {
     console.error('Get dimensions error:', err);
     res.status(500).json({ error: 'Failed to fetch dimensions' });
@@ -4430,9 +4495,11 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
           .input('pi_gestell_farbe', sql.NVarChar, item.piGestellFarbe || null)
           .input('pi_sicherheitglas', sql.NVarChar, item.piSicherheitglas || null)
           .input('pi_pfostenanzahl', sql.NVarChar, item.piPfostenanzahl || null)
+          .input('pricing_type', sql.NVarChar, item.pricing_type || 'dimension')
+          .input('unit_label', sql.NVarChar, item.unit_label || null)
           .query(`
-            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pi_ober_kante, pi_unter_kante, pi_gestell_farbe, pi_sicherheitglas, pi_pfostenanzahl)
-            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @discount, @total_price, @pi_ober_kante, @pi_unter_kante, @pi_gestell_farbe, @pi_sicherheitglas, @pi_pfostenanzahl)
+            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pi_ober_kante, pi_unter_kante, pi_gestell_farbe, pi_sicherheitglas, pi_pfostenanzahl, pricing_type, unit_label)
+            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @discount, @total_price, @pi_ober_kante, @pi_unter_kante, @pi_gestell_farbe, @pi_sicherheitglas, @pi_pfostenanzahl, @pricing_type, @unit_label)
           `);
       }
     }

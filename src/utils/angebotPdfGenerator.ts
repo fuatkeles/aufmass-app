@@ -9,6 +9,8 @@ export interface AngebotPdfItem {
   total_price: number;
   discount?: number;
   discount_percent?: number;
+  pricing_type?: 'dimension' | 'unit';
+  unit_label?: string;
   // Extra specification fields
   piOberKante?: string;
   piUnterKante?: string;
@@ -194,7 +196,10 @@ export const generateAngebotPDF = async (
 
       pdf.setTextColor(0, 0, 0);
       pdf.text(item.product_name, colX.produkt, yPos);
-      pdf.text(`${item.breite} x ${item.tiefe} cm`, colX.abmessungen, yPos);
+      const dimText = item.pricing_type === 'unit'
+        ? (item.unit_label || 'Einheit')
+        : `${item.breite} x ${item.tiefe} cm`;
+      pdf.text(dimText, colX.abmessungen, yPos);
       pdf.text(String(item.quantity), colX.menge, yPos);
       pdf.text(`${formatPrice(item.unit_price)} EUR`, colX.einzelpreis, yPos);
 
@@ -393,11 +398,14 @@ export const generateAngebotPDF = async (
         if (val !== undefined && val !== null && val !== '' && key !== 'montageteam' && key !== 'markiseData' && key !== 'markiseActive') {
           checkNewPage();
           pdf.setFont('helvetica', 'bold');
-          pdf.text(`${key}:`, margin + 3, yPos);
+          const labelText = `${key}:`;
+          pdf.text(labelText, margin + 3, yPos);
+          const labelWidth = pdf.getTextWidth(labelText);
+          const valueX = Math.max(margin + 50, margin + 3 + labelWidth + 12);
           pdf.setFont('helvetica', 'normal');
           const displayVal = typeof val === 'boolean' ? (val ? 'Ja' : 'Nein') : String(val);
-          const lines = pdf.splitTextToSize(displayVal, pageWidth - margin - 60);
-          pdf.text(lines, margin + 50, yPos);
+          const lines = pdf.splitTextToSize(displayVal, pageWidth - valueX - margin);
+          pdf.text(lines, valueX, yPos);
           yPos += 6 * lines.length;
         }
       });

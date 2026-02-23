@@ -382,7 +382,9 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     }
 
     // Process ALL fields (not just required ones)
-    for (const field of productTypeConfig.fields as ProductField[]) {
+    // Skip main field loop for UNTERBAUELEMENTE - those fields are validated per-element below
+    const isUnterbauelementeCategory = category === 'UNTERBAUELEMENTE';
+    for (const field of (isUnterbauelementeCategory ? [] : productTypeConfig.fields) as ProductField[]) {
       const value = formData.specifications[field.name];
       const fieldLabel = field.label || field.name;
 
@@ -536,6 +538,73 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
           if (!senkrecht.stoffNummer) missingFields.push({ name: `senkrecht_${idx}_stoffNummer`, label: `${prefix} Stoff Nummer` });
         });
       }
+    }
+
+    // ============ VALIDATE UNTERBAUELEMENTE ============
+    const unterbauelementeStr = formData.specifications?.unterbauelementeData as string;
+    if (unterbauelementeStr) {
+      try {
+        const ubElements = JSON.parse(unterbauelementeStr) as UnterbauelementData[];
+        if (Array.isArray(ubElements)) {
+          ubElements.forEach((el, elIdx) => {
+            const elPrefix = `Element ${elIdx + 1}`;
+            if (!el.produktTyp) {
+              missingFields.push({ name: `ub_${elIdx}_produktTyp`, label: `${elPrefix} Produkt Typ` });
+              return; // Can't validate further without type
+            }
+            if (!el.modell) {
+              missingFields.push({ name: `ub_${elIdx}_modell`, label: `${elPrefix} Modell` });
+            }
+
+            // Get fields from config for this product type
+            const ubConfig = productConfig['UNTERBAUELEMENTE']?.[el.produktTyp];
+            if (ubConfig?.fields) {
+              for (const field of ubConfig.fields as ProductField[]) {
+                if (excludedFields.includes(field.name)) continue;
+
+                // Handle showWhen conditions
+                if (field.showWhen) {
+                  const depValue = el[field.showWhen.field as keyof UnterbauelementData];
+                  if (field.showWhen.value !== undefined && depValue !== field.showWhen.value) continue;
+                  if (field.showWhen.notEquals !== undefined && (depValue === field.showWhen.notEquals || !depValue)) continue;
+                }
+
+                const elValue = el[field.name as keyof UnterbauelementData];
+                const elFieldLabel = field.label || field.name;
+
+                // Handle fundament
+                if (field.type === 'fundament') {
+                  if (!elValue) {
+                    missingFields.push({ name: `ub_${elIdx}_${field.name}`, label: `${elPrefix} ${elFieldLabel}` });
+                  }
+                  continue;
+                }
+
+                // Handle modelColorSelect and select
+                if (field.type === 'modelColorSelect' || field.type === 'select') {
+                  if (!elValue || elValue === '') {
+                    missingFields.push({ name: `ub_${elIdx}_${field.name}`, label: `${elPrefix} ${elFieldLabel}` });
+                  }
+                  continue;
+                }
+
+                // Handle number fields
+                if (field.type === 'number') {
+                  if (!elValue || (typeof elValue === 'number' && elValue <= 0)) {
+                    missingFields.push({ name: `ub_${elIdx}_${field.name}`, label: `${elPrefix} ${elFieldLabel}` });
+                  }
+                  continue;
+                }
+
+                // Default check
+                if (elValue === undefined || elValue === null || elValue === '') {
+                  missingFields.push({ name: `ub_${elIdx}_${field.name}`, label: `${elPrefix} ${elFieldLabel}` });
+                }
+              }
+            }
+          });
+        }
+      } catch { /* ignore parse errors */ }
     }
 
     // ============ VALIDATE WEITERE PRODUKTE ============
@@ -1026,6 +1095,8 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
             updateWeitereProdukte={updateWeitereProdukte}
             bemerkungen={formData.bemerkungen}
             updateBemerkungen={updateBemerkungen}
+            missingFields={getMissingFields()}
+            showValidationErrors={showValidationErrors}
           />
         );
       case 'markise':
