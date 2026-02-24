@@ -79,7 +79,7 @@
           "name": "hoeheStuetzen",
           "label": "Höhe Stützen",
           "type": "select",
-          "options": ["Standard", "300 mm", "350 mm", "400 mm", "Sondermass"],
+          "options": ["Standard", "3000 mm", "3500 mm", "4000 mm", "Sondermass"],
           "required": true,
           "conditionalField": {
             "trigger": "Sondermass",
@@ -134,7 +134,7 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament",
+          "label": "Fundament Vorhanden",
           "type": "fundament",
           "options": ["Aylux", "Kunde"],
           "required": true
@@ -278,7 +278,7 @@
           "name": "hoeheStuetzen",
           "label": "Höhe Stützen",
           "type": "select",
-          "options": ["Standard", "300 mm", "350 mm", "400 mm", "Sondermass"],
+          "options": ["Standard", "3000 mm", "3500 mm", "4000 mm", "Sondermass"],
           "required": true,
           "conditionalField": {
             "trigger": "Sondermass",
@@ -326,7 +326,7 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament",
+          "label": "Fundament Vorhanden",
           "type": "fundament",
           "options": ["Aylux", "Kunde"],
           "required": true
@@ -466,7 +466,7 @@
           "name": "hoeheStuetzen",
           "label": "Höhe Stützen",
           "type": "select",
-          "options": ["Standard", "300 mm", "350 mm", "400 mm", "Sondermass"],
+          "options": ["Standard", "3000 mm", "3500 mm", "4000 mm", "Sondermass"],
           "required": true,
           "conditionalField": {
             "trigger": "Sondermass",
@@ -521,7 +521,7 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament",
+          "label": "Fundament Vorhanden",
           "type": "fundament",
           "options": ["Aylux", "Kunde"],
           "required": true
@@ -661,7 +661,7 @@
           "name": "hoeheStuetzen",
           "label": "Höhe Stützen",
           "type": "select",
-          "options": ["Standard", "300 mm", "350 mm", "400 mm", "Sondermass"],
+          "options": ["Standard", "3000 mm", "3500 mm", "4000 mm", "Sondermass"],
           "required": true,
           "conditionalField": {
             "trigger": "Sondermass",
@@ -716,7 +716,7 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament",
+          "label": "Fundament Vorhanden",
           "type": "fundament",
           "options": ["Aylux", "Kunde"],
           "required": true
@@ -1234,7 +1234,7 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament",
+          "label": "Fundament Vorhanden",
           "type": "fundament",
           "options": ["Aylux", "Kunde"],
           "required": true
@@ -1300,7 +1300,7 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament",
+          "label": "Fundament Vorhanden",
           "type": "fundament",
           "options": ["Aylux", "Kunde"],
           "required": true
@@ -1376,7 +1376,7 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament",
+          "label": "Fundament Vorhanden",
           "type": "fundament",
           "options": ["Aylux", "Kunde"],
           "required": true
@@ -1487,7 +1487,7 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament",
+          "label": "Fundament Vorhanden",
           "type": "fundament",
           "options": ["Aylux", "Kunde"],
           "required": true

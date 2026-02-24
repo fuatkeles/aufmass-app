@@ -576,6 +576,16 @@ async function initializeTables() {
       END
     `);
 
+    // Add description column to lead_products
+    console.log('Adding description column to lead_products...');
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_lead_products') AND name = 'description')
+      BEGIN
+        ALTER TABLE aufmass_lead_products ADD description NVARCHAR(MAX)
+      END
+    `);
+    console.log('✅ aufmass_lead_products.description column ready');
+
     // Leads table (customer quotes/angebote)
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_leads' AND xtype='U')
@@ -4219,6 +4229,11 @@ app.post('/api/lead-products', authenticateToken, async (req, res) => {
       columns += ', unit_label';
       values += ', @unit_label';
     }
+    if (req.body.description) {
+      insertRequest.input('description', sql.NVarChar, req.body.description);
+      columns += ', description';
+      values += ', @description';
+    }
 
     const result = await insertRequest.query(`
       INSERT INTO aufmass_lead_products (${columns})
@@ -4288,6 +4303,10 @@ app.put('/api/lead-products/:id', authenticateToken, async (req, res) => {
     if (unit_label !== undefined) {
       updates.push('unit_label = @unit_label');
       updateRequest.input('unit_label', sql.NVarChar, unit_label);
+    }
+    if (req.body.description !== undefined) {
+      updates.push('description = @description');
+      updateRequest.input('description', sql.NVarChar, req.body.description);
     }
 
     if (updates.length === 0) {
@@ -4406,7 +4425,7 @@ app.get('/api/lead-products/:productName/dimensions', authenticateToken, async (
     }
 
     const result = await request.query(`
-      SELECT breite, tiefe, price, pricing_type, unit_label FROM aufmass_lead_products
+      SELECT breite, tiefe, price, pricing_type, unit_label, description FROM aufmass_lead_products
       WHERE product_name = @product_name ${branchFilter}
       ORDER BY breite, tiefe
     `);
@@ -4418,7 +4437,8 @@ app.get('/api/lead-products/:productName/dimensions', authenticateToken, async (
       res.json({
         pricing_type: 'unit',
         unit_label: rows[0].unit_label || '',
-        unit_price: rows[0].price
+        unit_price: rows[0].price,
+        description: rows[0].description || null
       });
     } else {
       // Dimension-based: group by breite, return available tiefe values
@@ -4430,7 +4450,8 @@ app.get('/api/lead-products/:productName/dimensions', authenticateToken, async (
         dimensions[row.breite].push({ tiefe: row.tiefe, price: row.price });
       });
 
-      res.json({ pricing_type: 'dimension', dimensions });
+      const description = rows.length > 0 ? (rows[0].description || null) : null;
+      res.json({ pricing_type: 'dimension', dimensions, description });
     }
   } catch (err) {
     console.error('Get dimensions error:', err);
@@ -4490,16 +4511,11 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
           .input('unit_price', sql.Decimal(10, 2), item.unit_price)
           .input('discount', sql.Decimal(10, 2), itemDiscount)
           .input('total_price', sql.Decimal(10, 2), itemTotal)
-          .input('pi_ober_kante', sql.NVarChar, item.piOberKante || null)
-          .input('pi_unter_kante', sql.NVarChar, item.piUnterKante || null)
-          .input('pi_gestell_farbe', sql.NVarChar, item.piGestellFarbe || null)
-          .input('pi_sicherheitglas', sql.NVarChar, item.piSicherheitglas || null)
-          .input('pi_pfostenanzahl', sql.NVarChar, item.piPfostenanzahl || null)
           .input('pricing_type', sql.NVarChar, item.pricing_type || 'dimension')
           .input('unit_label', sql.NVarChar, item.unit_label || null)
           .query(`
-            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pi_ober_kante, pi_unter_kante, pi_gestell_farbe, pi_sicherheitglas, pi_pfostenanzahl, pricing_type, unit_label)
-            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @discount, @total_price, @pi_ober_kante, @pi_unter_kante, @pi_gestell_farbe, @pi_sicherheitglas, @pi_pfostenanzahl, @pricing_type, @unit_label)
+            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label)
+            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @discount, @total_price, @pricing_type, @unit_label)
           `);
       }
     }

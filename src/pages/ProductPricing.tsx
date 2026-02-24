@@ -18,6 +18,7 @@ interface Product {
   branch_id: string | null;
   pricing_type?: 'dimension' | 'unit';
   unit_label?: string;
+  description?: string;
 }
 
 interface PendingColumn {
@@ -62,6 +63,7 @@ export default function ProductPricing() {
   ]);
   const [newProductPricingType, setNewProductPricingType] = useState<'dimension' | 'unit'>('dimension');
   const [newProductUnitLabel, setNewProductUnitLabel] = useState('');
+  const [newProductDescription, setNewProductDescription] = useState('');
   const [newProductUnitPrice, setNewProductUnitPrice] = useState('');
 
   // Custom input mode for each dropdown
@@ -75,6 +77,10 @@ export default function ProductPricing() {
 
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'product' | 'row' | 'column'; productName: string; value?: number } | null>(null);
+
+  // Description editing for existing products
+  const [editingDescription, setEditingDescription] = useState<string | null>(null);
+  const [editDescriptionValue, setEditDescriptionValue] = useState('');
 
   useEffect(() => {
     loadProducts();
@@ -103,6 +109,7 @@ export default function ProductPricing() {
       products: Product[];
       pricing_type: 'dimension' | 'unit';
       unit_label?: string;
+      description?: string;
       breiteValues: number[];
       tiefeValues: number[];
       matrix: Record<string, Record<string, Product>>;
@@ -114,6 +121,7 @@ export default function ProductPricing() {
           products: [],
           pricing_type: (p.pricing_type as 'dimension' | 'unit') || 'dimension',
           unit_label: p.unit_label,
+          description: p.description,
           breiteValues: [],
           tiefeValues: [],
           matrix: {}
@@ -474,6 +482,7 @@ export default function ProductPricing() {
     setNewProductPricingType('dimension');
     setNewProductUnitLabel('');
     setNewProductUnitPrice('');
+    setNewProductDescription('');
     setCustomCategoryMode(false);
     setCustomProductTypeMode(false);
     setCustomModelMode(false);
@@ -538,6 +547,7 @@ export default function ProductPricing() {
           product_type: newProductType,
           pricing_type: 'unit',
           unit_label: newProductUnitLabel.trim() || null,
+          description: newProductDescription.trim() || null,
           breite: 0,
           tiefe: 0,
           price: parseFloat(newProductUnitPrice)
@@ -563,6 +573,7 @@ export default function ProductPricing() {
               category: newProductCategory,
               product_type: newProductType,
               pricing_type: 'dimension',
+              description: newProductDescription.trim() || null,
               breite: parseInt(entry.breite),
               tiefe: parseInt(entry.tiefe),
               price: parseFloat(entry.price)
@@ -614,6 +625,27 @@ export default function ProductPricing() {
       setDeleteConfirm(null);
     } catch (err) {
       console.error('Delete error:', err);
+    }
+  };
+
+  // ========== DESCRIPTION EDITING ==========
+  const saveDescription = async (productName: string) => {
+    const productsToUpdate = products.filter(p => p.product_name === productName);
+    if (productsToUpdate.length === 0) return;
+
+    try {
+      await Promise.all(
+        productsToUpdate.map(p =>
+          api.put(`/lead-products/${p.id}`, {
+            description: editDescriptionValue.trim() || null
+          })
+        )
+      );
+      await loadProducts();
+      setEditingDescription(null);
+      setEditDescriptionValue('');
+    } catch (err) {
+      console.error('Failed to update description:', err);
     }
   };
 
@@ -1149,6 +1181,54 @@ export default function ProductPricing() {
                         )}
                       </div>
                       )}
+
+                      {/* Description Section - below table */}
+                      <div className="description-section">
+                        {editingDescription === productName ? (
+                          <div className="description-editor">
+                            <textarea
+                              value={editDescriptionValue}
+                              onChange={e => setEditDescriptionValue(e.target.value)}
+                              placeholder="Produktbeschreibung eingeben..."
+                              rows={3}
+                              className="description-textarea"
+                              autoFocus
+                            />
+                            <div className="description-editor-actions">
+                              <button
+                                className="btn-desc-save"
+                                onClick={() => saveDescription(productName)}
+                              >
+                                Speichern
+                              </button>
+                              <button
+                                className="btn-desc-cancel"
+                                onClick={() => { setEditingDescription(null); setEditDescriptionValue(''); }}
+                              >
+                                Abbrechen
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            className={`description-toggle ${data.description ? 'has-content' : ''}`}
+                            onClick={() => {
+                              setEditingDescription(productName);
+                              setEditDescriptionValue(data.description || '');
+                            }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="desc-icon">
+                              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                            {data.description ? (
+                              <span className="desc-content">{data.description}</span>
+                            ) : (
+                              <span className="desc-placeholder">Beschreibung hinzufügen</span>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1366,6 +1446,20 @@ export default function ProductPricing() {
                         <option value="__custom__">➕ Andere eingeben...</option>
                       </select>
                     )}
+                  </div>
+                )}
+
+                {/* Description */}
+                {newProductName && (
+                  <div className="form-group">
+                    <label>Beschreibung (optional)</label>
+                    <textarea
+                      value={newProductDescription}
+                      onChange={e => setNewProductDescription(e.target.value)}
+                      placeholder="Produktbeschreibung eingeben..."
+                      rows={3}
+                      className="description-textarea"
+                    />
                   </div>
                 )}
 

@@ -159,6 +159,15 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
 
           if (field.type === 'bauform') {
             if (!wp.specifications['bauformType']) return false;
+            if (wp.specifications['bauformType'] === 'EINGERUCKT') {
+              const wpLinksActive = wp.specifications['bauformLinksActive'];
+              const wpRechtsActive = wp.specifications['bauformRechtsActive'];
+              const wpLinksValue = wp.specifications['bauformLinksValue'];
+              const wpRechtsValue = wp.specifications['bauformRechtsValue'];
+              if (!wpLinksActive && !wpRechtsActive) return false;
+              if (wpLinksActive && (wpLinksValue === undefined || wpLinksValue === null || wpLinksValue === '')) return false;
+              if (wpRechtsActive && (wpRechtsValue === undefined || wpRechtsValue === null || wpRechtsValue === '')) return false;
+            }
             continue;
           }
 
@@ -256,9 +265,9 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
           const rechtsValue = formData.specifications['bauformRechtsValue'];
           // At least one side must be selected
           if (!linksActive && !rechtsActive) return false;
-          // If a side is active, it must have a value
-          if (linksActive && (!linksValue || Number(linksValue) <= 0)) return false;
-          if (rechtsActive && (!rechtsValue || Number(rechtsValue) <= 0)) return false;
+          // If a side is active, it must have a value (0 is valid)
+          if (linksActive && (linksValue === undefined || linksValue === null || linksValue === '')) return false;
+          if (rechtsActive && (rechtsValue === undefined || rechtsValue === null || rechtsValue === '')) return false;
         }
         continue;
       }
@@ -438,10 +447,10 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
           if (!linksActive && !rechtsActive) {
             missingFields.push({ name: field.name, label: `${fieldLabel} (mindestens eine Seite)` });
           } else {
-            if (linksActive && (!linksValue || Number(linksValue) <= 0)) {
+            if (linksActive && (linksValue === undefined || linksValue === null || linksValue === '')) {
               missingFields.push({ name: 'bauformLinksValue', label: `${fieldLabel} Links (Wert)` });
             }
-            if (rechtsActive && (!rechtsValue || Number(rechtsValue) <= 0)) {
+            if (rechtsActive && (rechtsValue === undefined || rechtsValue === null || rechtsValue === '')) {
               missingFields.push({ name: 'bauformRechtsValue', label: `${fieldLabel} Rechts (Wert)` });
             }
           }
@@ -660,6 +669,21 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
               const bauformType = wp.specifications['bauformType'];
               if (!bauformType) {
                 missingFields.push({ name: `wp_${wpIdx}_${field.name}`, label: `${wpPrefix} ${wpFieldLabel}` });
+              } else if (bauformType === 'EINGERUCKT') {
+                const wpLinksActive = wp.specifications['bauformLinksActive'];
+                const wpRechtsActive = wp.specifications['bauformRechtsActive'];
+                const wpLinksValue = wp.specifications['bauformLinksValue'];
+                const wpRechtsValue = wp.specifications['bauformRechtsValue'];
+                if (!wpLinksActive && !wpRechtsActive) {
+                  missingFields.push({ name: `wp_${wpIdx}_${field.name}`, label: `${wpPrefix} ${wpFieldLabel} (mindestens eine Seite)` });
+                } else {
+                  if (wpLinksActive && (wpLinksValue === undefined || wpLinksValue === null || wpLinksValue === '')) {
+                    missingFields.push({ name: `wp_${wpIdx}_bauformLinksValue`, label: `${wpPrefix} ${wpFieldLabel} Links (Wert)` });
+                  }
+                  if (wpRechtsActive && (wpRechtsValue === undefined || wpRechtsValue === null || wpRechtsValue === '')) {
+                    missingFields.push({ name: `wp_${wpIdx}_bauformRechtsValue`, label: `${wpPrefix} ${wpFieldLabel} Rechts (Wert)` });
+                  }
+                }
               }
               continue;
             }

@@ -11,12 +11,7 @@ export interface AngebotPdfItem {
   discount_percent?: number;
   pricing_type?: 'dimension' | 'unit';
   unit_label?: string;
-  // Extra specification fields
-  piOberKante?: string;
-  piUnterKante?: string;
-  piGestellFarbe?: string;
-  piSicherheitglas?: string;
-  piPfostenanzahl?: string;
+  description?: string;
 }
 
 export interface AngebotPdfExtra {
@@ -159,18 +154,18 @@ export const generateAngebotPDF = async (
     // Table header - adjust columns based on discounts
     const colX = hasDiscounts ? {
       produkt: margin + 3,
-      abmessungen: margin + 55,
-      menge: margin + 90,
-      einzelpreis: margin + 108,
-      rabatt: margin + 135,
-      gesamt: margin + 162
+      abmessungen: margin + 52,
+      menge: margin + 85,
+      einzelpreis: margin + 102,
+      rabatt: margin + 128,
+      gesamt: margin + 150
     } : {
       produkt: margin + 3,
-      abmessungen: margin + 70,
-      menge: margin + 110,
-      einzelpreis: margin + 130,
+      abmessungen: margin + 60,
+      menge: margin + 100,
+      einzelpreis: margin + 118,
       rabatt: 0,
-      gesamt: margin + 155
+      gesamt: margin + 145
     };
     const tableWidth = pageWidth - 2 * margin;
 
@@ -219,23 +214,13 @@ export const generateAngebotPDF = async (
       pdf.text(`${formatPrice(item.total_price)} EUR`, colX.gesamt, yPos);
       yPos += 7;
 
-      // Extra specification fields (below product row)
-      const specs = [
-        { label: 'Ober Kante', value: item.piOberKante },
-        { label: 'Unter Kante', value: item.piUnterKante },
-        { label: 'Gestell Farbe', value: item.piGestellFarbe },
-        { label: 'Sicherheitglas', value: item.piSicherheitglas },
-        { label: 'Pfostenanzahl', value: item.piPfostenanzahl },
-      ].filter(s => s.value);
-
-      if (specs.length > 0) {
+      // Product description (below product row)
+      if (item.description) {
         pdf.setFontSize(8.5);
         pdf.setTextColor(80, 80, 80);
-        specs.forEach(spec => {
-          checkNewPage(6);
-          pdf.text(`• ${spec.label}: ${spec.value}`, colX.produkt + 3, yPos);
-          yPos += 5;
-        });
+        checkNewPage(6);
+        pdf.text(item.description, colX.produkt + 3, yPos);
+        yPos += 5;
         pdf.setFontSize(10);
         pdf.setTextColor(0, 0, 0);
         yPos += 1;

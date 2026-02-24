@@ -25,15 +25,10 @@ interface ProductRow {
   dimensions: ProductDimensions;
   pricing_type: 'dimension' | 'unit';
   unit_label?: string;
+  description?: string;
   // For rounding display
   roundedBreite?: number;
   roundedTiefe?: number;
-  // Extra specification fields (informational, not affecting price)
-  piOberKante: string;
-  piUnterKante: string;
-  piGestellFarbe: string;
-  piSicherheitglas: string;
-  piPfostenanzahl: string;
 }
 
 // Rounding functions for price calculation
@@ -103,11 +98,6 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
     price: 0,
     discount: 0,
     pricing_type: 'dimension',
-    piOberKante: '',
-    piUnterKante: '',
-    piGestellFarbe: '',
-    piSicherheitglas: '',
-    piPfostenanzahl: '',
     dimensions: {}
   });
 
@@ -120,13 +110,13 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
     }
   };
 
-  const loadDimensions = async (productName: string): Promise<{ pricing_type: 'dimension' | 'unit'; dimensions?: ProductDimensions; unit_label?: string; unit_price?: number }> => {
+  const loadDimensions = async (productName: string): Promise<{ pricing_type: 'dimension' | 'unit'; dimensions?: ProductDimensions; unit_label?: string; unit_price?: number; description?: string }> => {
     try {
       const data = await api.get<Record<string, unknown>>(`/lead-products/${encodeURIComponent(productName)}/dimensions`);
       if (data.pricing_type === 'unit') {
-        return { pricing_type: 'unit', unit_label: data.unit_label as string, unit_price: data.unit_price as number };
+        return { pricing_type: 'unit', unit_label: data.unit_label as string, unit_price: data.unit_price as number, description: data.description as string | undefined };
       }
-      return { pricing_type: 'dimension', dimensions: (data.dimensions as ProductDimensions) || data as unknown as ProductDimensions };
+      return { pricing_type: 'dimension', dimensions: (data.dimensions as ProductDimensions) || data as unknown as ProductDimensions, description: data.description as string | undefined };
     } catch (err) {
       console.error('Failed to load dimensions:', err);
       return { pricing_type: 'dimension', dimensions: {} };
@@ -155,9 +145,9 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
             setProductRows(prev => prev.map(r => {
               if (r.id !== rowId) return r;
               if (result.pricing_type === 'unit') {
-                return { ...r, pricing_type: 'unit', unit_label: result.unit_label, price: result.unit_price || 0, dimensions: {} };
+                return { ...r, pricing_type: 'unit', unit_label: result.unit_label, price: result.unit_price || 0, dimensions: {}, description: result.description };
               }
-              return { ...r, pricing_type: 'dimension', dimensions: result.dimensions || {} };
+              return { ...r, pricing_type: 'dimension', dimensions: result.dimensions || {}, description: result.description };
             }));
           });
         }
@@ -316,12 +306,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
           unit_price: r.price,
           discount: r.discount || 0,
           pricing_type: r.pricing_type,
-          unit_label: r.unit_label || null,
-          piOberKante: r.piOberKante || null,
-          piUnterKante: r.piUnterKante || null,
-          piGestellFarbe: r.piGestellFarbe || null,
-          piSicherheitglas: r.piSicherheitglas || null,
-          piPfostenanzahl: r.piPfostenanzahl || null
+          unit_label: r.unit_label || null
         })),
         extras: validExtras.map(e => ({
           description: e.description.trim(),
@@ -353,11 +338,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
             total_price: (r.price * r.quantity) - (r.discount || 0),
             pricing_type: r.pricing_type,
             unit_label: r.unit_label || undefined,
-            piOberKante: r.piOberKante || undefined,
-            piUnterKante: r.piUnterKante || undefined,
-            piGestellFarbe: r.piGestellFarbe || undefined,
-            piSicherheitglas: r.piSicherheitglas || undefined,
-            piPfostenanzahl: r.piPfostenanzahl || undefined
+            description: r.description || undefined
           })),
           extras: validExtras.map(e => ({
             description: e.description.trim(),
@@ -574,59 +555,6 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
                         </>
                       )}
                     </div>
-
-                    {/* Extra specification fields - show after dimensions are entered (only for dimension products) */}
-                    {row.pricing_type !== 'unit' && row.breite && row.tiefe && (
-                      <div className="product-extra-specs">
-                        <div className="extra-specs-grid">
-                          <div className="spec-field">
-                            <label>Ober Kante</label>
-                            <input
-                              type="text"
-                              value={row.piOberKante}
-                              onChange={e => setProductRows(prev => prev.map(r => r.id === row.id ? { ...r, piOberKante: e.target.value } : r))}
-                              placeholder="z.B. 280 cm"
-                            />
-                          </div>
-                          <div className="spec-field">
-                            <label>Unter Kante</label>
-                            <input
-                              type="text"
-                              value={row.piUnterKante}
-                              onChange={e => setProductRows(prev => prev.map(r => r.id === row.id ? { ...r, piUnterKante: e.target.value } : r))}
-                              placeholder="z.B. 240 cm"
-                            />
-                          </div>
-                          <div className="spec-field">
-                            <label>Gestell Farbe</label>
-                            <input
-                              type="text"
-                              value={row.piGestellFarbe}
-                              onChange={e => setProductRows(prev => prev.map(r => r.id === row.id ? { ...r, piGestellFarbe: e.target.value } : r))}
-                              placeholder="z.B. RAL 7016"
-                            />
-                          </div>
-                          <div className="spec-field">
-                            <label>Sicherheitglas</label>
-                            <input
-                              type="text"
-                              value={row.piSicherheitglas}
-                              onChange={e => setProductRows(prev => prev.map(r => r.id === row.id ? { ...r, piSicherheitglas: e.target.value } : r))}
-                              placeholder="z.B. VSG 8 mm Klar"
-                            />
-                          </div>
-                          <div className="spec-field">
-                            <label>Pfostenanzahl</label>
-                            <input
-                              type="text"
-                              value={row.piPfostenanzahl}
-                              onChange={e => setProductRows(prev => prev.map(r => r.id === row.id ? { ...r, piPfostenanzahl: e.target.value } : r))}
-                              placeholder="z.B. 3"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
 
                     {row.price > 0 && (
                       <div className="product-row-price-section">
