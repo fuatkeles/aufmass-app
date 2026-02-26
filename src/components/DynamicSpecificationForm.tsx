@@ -1187,17 +1187,6 @@ const DynamicSpecificationForm = ({
     updateWeitereProdukte(newProducts);
   };
 
-  const handleWPModelChange = (index: number, value: string) => {
-    if (!updateWeitereProdukte) return;
-    const newProducts = [...weitereProdukte];
-    newProducts[index] = {
-      ...newProducts[index],
-      model: value,
-      specifications: {}
-    };
-    updateWeitereProdukte(newProducts);
-  };
-
   const handleWPSpecChange = (index: number, fieldName: string, value: string | number | boolean) => {
     if (!updateWeitereProdukte) return;
     const newProducts = [...weitereProdukte];
@@ -1230,11 +1219,6 @@ const DynamicSpecificationForm = ({
   const getWPProductTypes = (cat: string) => {
     if (!cat) return [];
     return Object.keys(productConfig[cat] || {});
-  };
-
-  const getWPModels = (cat: string, pt: string) => {
-    if (!cat || !pt) return [];
-    return productConfig[cat]?.[pt]?.models || [];
   };
 
   const getWPFields = (cat: string, pt: string) => {
@@ -1776,17 +1760,6 @@ const DynamicSpecificationForm = ({
     const selectedProductTypes = isMarkise && product.productType
       ? product.productType.split(', ').filter(t => t)
       : [];
-
-    // For MARKISE, combine models from all selected produkttyps
-    let models: string[] = [];
-    if (isMarkise && selectedProductTypes.length > 0) {
-      // Collect all models from all selected product types
-      const allModels = selectedProductTypes.flatMap(pt => getWPModels(product.category, pt));
-      // Remove duplicates
-      models = [...new Set(allModels)];
-    } else {
-      models = getWPModels(product.category, product.productType);
-    }
 
     // For fields, use first selected produkttyp (they share similar fields anyway)
     const effectiveProductType = isMarkise ? (selectedProductTypes[0] || '') : product.productType;

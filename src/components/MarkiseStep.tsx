@@ -254,33 +254,7 @@ const MarkiseStep = ({ markiseData, updateMarkiseData, bemerkungen = '', updateB
           )}
         </AnimatePresence>
 
-        {/* Position for SENKRECHT */}
-        <AnimatePresence>
-          {selectedType?.showPosition && (
-            <motion.div
-              className="form-field"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, delay: 0.15 }}
-            >
-              <label htmlFor={`position-${index}`}>
-                Position <span className="required">*</span>
-              </label>
-              <select
-                id={`position-${index}`}
-                value={markise.position}
-                onChange={(e) => handleChange(index, 'position', e.target.value)}
-                required
-              >
-                <option value="">Bitte wählen...</option>
-                {positionOptions.map(pos => (
-                  <option key={pos} value={pos}>{pos}</option>
-                ))}
-              </select>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* ARCHIVED: Position for SENKRECHT - now handled as JA/KEINE module */}
 
         {/* Dimensions - always show Breite and Laenge */}
         <motion.div

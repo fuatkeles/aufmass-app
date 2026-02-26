@@ -56,7 +56,7 @@ interface ProductConfig {
     [productType: string]: {
       models: string[];
       modelColors?: { [model: string]: string[] };
-      fields: { name: string; label: string; type: string; unit?: string; options?: string[]; required: boolean; hasCustomOption?: boolean }[];
+      fields: { name: string; label: string; type: string; unit?: string; options?: string[]; required: boolean; hasCustomOption?: boolean; showWhen?: { field: string; value?: string; notEquals?: string } }[];
     };
   };
 }
@@ -92,8 +92,8 @@ const UnterbauelementeStep = ({
   updateWeitereProdukte,
   bemerkungen = '',
   updateBemerkungen,
-  missingFields = [],
-  showValidationErrors = false
+  missingFields: _missingFields = [],
+  showValidationErrors: _showValidationErrors = false
 }: UnterbauelementeStepProps) => {
   // Create initial element with values from ProductSelection
   const createInitialElement = (): UnterbauelementData => ({
@@ -277,7 +277,7 @@ const UnterbauelementeStep = ({
     return productConfig['UNTERBAUELEMENTE']?.[produktTyp]?.fields || [];
   };
 
-  const renderField = (element: UnterbauelementData, index: number, field: { name: string; label: string; type: string; unit?: string; options?: string[]; required: boolean; hasCustomOption?: boolean; showWhen?: { field: string; value: string } }) => {
+  const renderField = (element: UnterbauelementData, index: number, field: { name: string; label: string; type: string; unit?: string; options?: string[]; required: boolean; hasCustomOption?: boolean; showWhen?: { field: string; value?: string; notEquals?: string } }) => {
     const value = element[field.name as keyof UnterbauelementData];
 
     // Skip montageteam - it's optional and handled at main form level

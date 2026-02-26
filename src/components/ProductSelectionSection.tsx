@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import productConfigData from '../config/productConfig.json';
 import type { ProductConfig } from '../types/productConfig';
 import './ProductSelectionSection.css';
@@ -18,29 +17,10 @@ interface ProductSelectionSectionProps {
 
 const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectionSectionProps) => {
   const categories = Object.keys(productConfig);
-  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const productTypes = selection.category
     ? Object.keys(productConfig[selection.category] || {})
     : [];
-
-  const models = selection.category && selection.productType
-    ? productConfig[selection.category]?.[selection.productType]?.models || []
-    : [];
-
-  const selectedModels = Array.isArray(selection.model) ? selection.model : (selection.model ? [selection.model] : []);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsModelDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleCategorySelect = (category: string) => {
     updateSelection('category', category);
@@ -51,15 +31,6 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
   const handleProductTypeSelect = (productType: string) => {
     updateSelection('productType', productType);
     updateSelection('model', []);
-  };
-
-  // Handle model multi-select toggle
-  const handleModelToggle = (modelName: string) => {
-    if (selectedModels.includes(modelName)) {
-      updateSelection('model', selectedModels.filter(m => m !== modelName));
-    } else {
-      updateSelection('model', [...selectedModels, modelName]);
-    }
   };
 
   return (

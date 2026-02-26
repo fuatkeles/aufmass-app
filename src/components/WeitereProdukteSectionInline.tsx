@@ -73,11 +73,6 @@ const WeitereProdukteSectionInline = ({
     return Object.keys(productConfig[cat]);
   };
 
-  const getWPModels = (cat: string, pType: string) => {
-    if (!cat || !pType || !productConfig[cat]?.[pType]) return [];
-    return productConfig[cat][pType].models || [];
-  };
-
   const getWPFields = (cat: string, pType: string) => {
     if (!cat || !pType || !productConfig[cat]?.[pType]) return [];
     return productConfig[cat][pType].fields || [];
@@ -105,19 +100,6 @@ const WeitereProdukteSectionInline = ({
       productType: value,
       model: '',
       specifications: {}
-    };
-    updateWeitereProdukte(newProducts);
-  };
-
-  const handleWPModelChange = (index: number, value: string) => {
-    const newProducts = [...weitereProdukte];
-    newProducts[index] = {
-      ...newProducts[index],
-      model: value,
-      specifications: {
-        ...newProducts[index].specifications,
-        gestellfarbe: '' // Reset color when model changes
-      }
     };
     updateWeitereProdukte(newProducts);
   };
@@ -734,7 +716,6 @@ const WeitereProdukteSectionInline = ({
 
   const renderWPProductForm = (product: WeiteresProdukt, index: number) => {
     const productTypes = getWPProductTypes(product.category);
-    const models = getWPModels(product.category, product.productType);
     const wpFields = getWPFields(product.category, product.productType);
 
     return (
