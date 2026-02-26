@@ -151,8 +151,8 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
         </motion.div>
       )}
 
-      {/* Model Selection - Dropdown Multi Select */}
-      {selection.productType && models.length > 0 && (
+      {/* ARCHIVED: Model Selection - removed as model selection is no longer needed in first measurement */}
+      {/* {selection.productType && models.length > 0 && (
         <motion.div
           className="selection-step"
           initial={{ opacity: 0, y: 20 }}
@@ -205,10 +205,10 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
             </AnimatePresence>
           </div>
         </motion.div>
-      )}
+      )} */}
 
       {/* Selection Summary */}
-      {selection.category && selection.productType && selectedModels.length > 0 && (
+      {selection.category && selection.productType && (
         <motion.div
           className="selection-summary"
           initial={{ opacity: 0, scale: 0.95 }}
@@ -225,10 +225,11 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
               <span className="summary-label">Produkttyp:</span>
               <span className="summary-value">{selection.productType}</span>
             </div>
-            <div className="summary-item">
+            {/* ARCHIVED: Model display in summary */}
+            {/* <div className="summary-item">
               <span className="summary-label">Modell{selectedModels.length > 1 ? 'e' : ''}:</span>
               <span className="summary-value">{selectedModels.join(', ')}</span>
-            </div>
+            </div> */}
           </div>
         </motion.div>
       )}

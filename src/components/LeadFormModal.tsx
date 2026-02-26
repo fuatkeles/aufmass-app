@@ -4,14 +4,50 @@ import { api, saveLeadPdf } from '../services/api';
 import { generateAngebotPDF } from '../utils/angebotPdfGenerator';
 import './LeadFormModal.css';
 
+interface EditLeadData {
+  id: number;
+  customer_firstname: string;
+  customer_lastname: string;
+  customer_email: string;
+  customer_phone?: string;
+  customer_address?: string;
+  notes?: string;
+  subtotal?: number;
+  total_discount?: number;
+  total_price: number;
+  items: {
+    product_name: string;
+    breite: number;
+    tiefe: number;
+    quantity: number;
+    unit_price: number;
+    discount?: number;
+    total_price: number;
+    pricing_type?: 'dimension' | 'unit';
+    unit_label?: string;
+    custom_field_values?: string | Record<string, string>;
+  }[];
+  extras: { description: string; price: number }[];
+}
+
 interface LeadFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  editData?: EditLeadData | null;
 }
 
 interface ProductDimensions {
   [breite: number]: { tiefe: number; price: number }[];
+}
+
+interface CustomField {
+  id: string;
+  label: string;
+  type: 'text' | 'number' | 'select';
+  unit?: string;
+  options?: string[];
+  required?: boolean;
 }
 
 interface ProductRow {
@@ -26,6 +62,8 @@ interface ProductRow {
   pricing_type: 'dimension' | 'unit';
   unit_label?: string;
   description?: string;
+  custom_fields?: CustomField[];
+  custom_field_values?: Record<string, string>;
   // For rounding display
   roundedBreite?: number;
   roundedTiefe?: number;
@@ -54,11 +92,12 @@ interface LeadExtra {
   id: string;
   description: string;
   price: number | '';
+  assignTo?: string; // 'all' or product row id — only used when einzelAngebote is true
 }
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormModalProps) {
+export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: LeadFormModalProps) {
   // Customer info
   const [firstname, setFirstname] = useState('');
   const [lastname, setLastname] = useState('');
@@ -76,18 +115,87 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
   const [showItemDiscounts, setShowItemDiscounts] = useState(false);
   const [totalDiscount, setTotalDiscount] = useState<number>(0);
 
+  // Einzelangebote (separate quotes per product)
+  const [einzelAngebote, setEinzelAngebote] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Initialize with one empty product row
+  const isEditMode = !!editData;
+
+  // Initialize form
   useEffect(() => {
     if (isOpen) {
       loadProductNames();
-      if (productRows.length === 0) {
+      if (editData) {
+        // Populate form with existing data
+        setFirstname(editData.customer_firstname || '');
+        setLastname(editData.customer_lastname || '');
+        setEmail(editData.customer_email || '');
+        setPhone(editData.customer_phone || '');
+        setAddress(editData.customer_address || '');
+        setNotes(editData.notes || '');
+        setTotalDiscount(editData.total_discount || 0);
+
+        // Load product rows from edit data
+        const loadEditRows = async () => {
+          const rows: ProductRow[] = [];
+          for (const item of editData.items) {
+            const row = createEmptyRow();
+            row.product_name = item.product_name;
+            row.quantity = item.quantity;
+            row.price = item.unit_price;
+            row.discount = item.discount || 0;
+            row.pricing_type = item.pricing_type || 'dimension';
+            row.unit_label = item.unit_label;
+            if (item.pricing_type === 'unit') {
+              row.breite = '';
+              row.tiefe = '';
+            } else {
+              row.breite = item.breite || '';
+              row.tiefe = item.tiefe || '';
+            }
+            // Parse custom_field_values
+            if (item.custom_field_values) {
+              row.custom_field_values = typeof item.custom_field_values === 'string'
+                ? JSON.parse(item.custom_field_values)
+                : item.custom_field_values;
+            }
+            // Load dimensions and custom_fields for the product
+            try {
+              const result = await loadDimensions(item.product_name);
+              row.dimensions = result.dimensions || {};
+              row.description = result.description;
+              row.custom_fields = result.custom_fields;
+              if (item.pricing_type === 'unit') {
+                row.unit_label = result.unit_label;
+              }
+            } catch { /* ignore */ }
+            rows.push(row);
+          }
+          setProductRows(rows.length > 0 ? rows : [createEmptyRow()]);
+          // Check if any items have discounts
+          if (editData.items.some(i => (i.discount || 0) > 0)) {
+            setShowItemDiscounts(true);
+          }
+        };
+        loadEditRows();
+
+        // Load extras
+        if (editData.extras && editData.extras.length > 0) {
+          setExtras(editData.extras.map(e => ({
+            id: generateId(),
+            description: e.description,
+            price: e.price
+          })));
+        } else {
+          setExtras([]);
+        }
+      } else if (productRows.length === 0) {
         setProductRows([createEmptyRow()]);
       }
     }
-  }, [isOpen]);
+  }, [isOpen, editData]);
 
   const createEmptyRow = (): ProductRow => ({
     id: generateId(),
@@ -110,13 +218,14 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
     }
   };
 
-  const loadDimensions = async (productName: string): Promise<{ pricing_type: 'dimension' | 'unit'; dimensions?: ProductDimensions; unit_label?: string; unit_price?: number; description?: string }> => {
+  const loadDimensions = async (productName: string): Promise<{ pricing_type: 'dimension' | 'unit'; dimensions?: ProductDimensions; unit_label?: string; unit_price?: number; description?: string; custom_fields?: CustomField[] }> => {
     try {
       const data = await api.get<Record<string, unknown>>(`/lead-products/${encodeURIComponent(productName)}/dimensions`);
+      const custom_fields = data.custom_fields as CustomField[] | undefined;
       if (data.pricing_type === 'unit') {
-        return { pricing_type: 'unit', unit_label: data.unit_label as string, unit_price: data.unit_price as number, description: data.description as string | undefined };
+        return { pricing_type: 'unit', unit_label: data.unit_label as string, unit_price: data.unit_price as number, description: data.description as string | undefined, custom_fields };
       }
-      return { pricing_type: 'dimension', dimensions: (data.dimensions as ProductDimensions) || data as unknown as ProductDimensions, description: data.description as string | undefined };
+      return { pricing_type: 'dimension', dimensions: (data.dimensions as ProductDimensions) || data as unknown as ProductDimensions, description: data.description as string | undefined, custom_fields };
     } catch (err) {
       console.error('Failed to load dimensions:', err);
       return { pricing_type: 'dimension', dimensions: {} };
@@ -145,9 +254,9 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
             setProductRows(prev => prev.map(r => {
               if (r.id !== rowId) return r;
               if (result.pricing_type === 'unit') {
-                return { ...r, pricing_type: 'unit', unit_label: result.unit_label, price: result.unit_price || 0, dimensions: {}, description: result.description };
+                return { ...r, pricing_type: 'unit', unit_label: result.unit_label, price: result.unit_price || 0, dimensions: {}, description: result.description, custom_fields: result.custom_fields, custom_field_values: {} };
               }
-              return { ...r, pricing_type: 'dimension', dimensions: result.dimensions || {}, description: result.description };
+              return { ...r, pricing_type: 'dimension', dimensions: result.dimensions || {}, description: result.description, custom_fields: result.custom_fields, custom_field_values: {} };
             }));
           });
         }
@@ -193,6 +302,12 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
       // Always keep at least one row
       return filtered.length === 0 ? [createEmptyRow()] : filtered;
     });
+  };
+
+  const updateCustomFieldValue = (rowId: string, fieldId: string, value: string) => {
+    setProductRows(prev => prev.map(r =>
+      r.id === rowId ? { ...r, custom_field_values: { ...(r.custom_field_values || {}), [fieldId]: value } } : r
+    ));
   };
 
   const updateRowDiscount = (rowId: string, discount: number) => {
@@ -290,80 +405,142 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
     setLoading(true);
     setError('');
 
+    // Helper to build item payload for a single product row
+    const buildItemPayload = (r: ProductRow) => ({
+      product_name: r.product_name,
+      breite: r.pricing_type === 'unit' ? 0 : r.breite,
+      tiefe: r.pricing_type === 'unit' ? 0 : r.tiefe,
+      quantity: r.quantity,
+      unit_price: r.price,
+      discount: r.discount || 0,
+      pricing_type: r.pricing_type,
+      unit_label: r.unit_label || null,
+      custom_field_values: r.custom_field_values && Object.keys(r.custom_field_values).length > 0 ? r.custom_field_values : null
+    });
+
+    // Helper to build PDF item for a single product row
+    const buildPdfItem = (r: ProductRow) => ({
+      product_name: r.product_name,
+      breite: r.pricing_type === 'unit' ? 0 : (r.breite as number),
+      tiefe: r.pricing_type === 'unit' ? 0 : (r.tiefe as number),
+      quantity: r.quantity,
+      unit_price: r.price,
+      discount: r.discount || 0,
+      discount_percent: getRowDiscountPercent(r),
+      total_price: (r.price * r.quantity) - (r.discount || 0),
+      pricing_type: r.pricing_type,
+      unit_label: r.unit_label || undefined,
+      description: r.description || undefined,
+      custom_fields: r.custom_fields || undefined,
+      custom_field_values: r.custom_field_values && Object.keys(r.custom_field_values).length > 0 ? r.custom_field_values : undefined
+    });
+
+    const customerBase = {
+      customer_firstname: firstname.trim(),
+      customer_lastname: lastname.trim(),
+      customer_email: email.trim(),
+      customer_phone: phone.trim() || null,
+      customer_address: address.trim() || null,
+      notes: notes.trim() || null,
+    };
+
     try {
-      const result = await api.post<{ id: number }>('/leads', {
-        customer_firstname: firstname.trim(),
-        customer_lastname: lastname.trim(),
-        customer_email: email.trim(),
-        customer_phone: phone.trim() || null,
-        customer_address: address.trim() || null,
-        notes: notes.trim() || null,
-        items: validItems.map(r => ({
-          product_name: r.product_name,
-          breite: r.pricing_type === 'unit' ? 0 : r.breite,
-          tiefe: r.pricing_type === 'unit' ? 0 : r.tiefe,
-          quantity: r.quantity,
-          unit_price: r.price,
-          discount: r.discount || 0,
-          pricing_type: r.pricing_type,
-          unit_label: r.unit_label || null
-        })),
-        extras: validExtras.map(e => ({
-          description: e.description.trim(),
-          price: Number(e.price)
-        })),
-        total_discount: totalDiscount || 0,
-        subtotal: calculateSubtotal(),
-        total_price: calculateTotal()
-      });
+      if (einzelAngebote && !isEditMode) {
+        // === EINZELANGEBOTE MODE: Each product becomes a separate lead ===
+        for (const item of validItems) {
+          // Find extras assigned to this item or to 'all'
+          const itemExtras = validExtras.filter(e => {
+            const assign = e.assignTo || 'all';
+            return assign === 'all' || assign === item.id;
+          });
 
-      // Generate and save Angebot PDF
-      try {
-        const itemDiscountsTotal = calculateItemDiscounts();
-        const pdfResult = await generateAngebotPDF({
-          customer_firstname: firstname.trim(),
-          customer_lastname: lastname.trim(),
-          customer_email: email.trim(),
-          customer_phone: phone.trim() || undefined,
-          customer_address: address.trim() || undefined,
-          notes: notes.trim() || undefined,
-          items: validItems.map(r => ({
-            product_name: r.product_name,
-            breite: r.pricing_type === 'unit' ? 0 : (r.breite as number),
-            tiefe: r.pricing_type === 'unit' ? 0 : (r.tiefe as number),
-            quantity: r.quantity,
-            unit_price: r.price,
-            discount: r.discount || 0,
-            discount_percent: getRowDiscountPercent(r),
-            total_price: (r.price * r.quantity) - (r.discount || 0),
-            pricing_type: r.pricing_type,
-            unit_label: r.unit_label || undefined,
-            description: r.description || undefined
-          })),
-          extras: validExtras.map(e => ({
-            description: e.description.trim(),
-            price: Number(e.price)
-          })),
-          subtotal: calculateSubtotal(),
-          item_discounts: itemDiscountsTotal,
-          total_discount: totalDiscount || 0,
-          total_discount_percent: getTotalDiscountPercent(),
-          total_price: calculateTotal()
-        }, { returnBlob: true });
+          const itemTotal = (item.price * item.quantity) - (item.discount || 0);
+          const extrasTotal = itemExtras.reduce((s, e) => s + Number(e.price), 0);
 
-        if (pdfResult?.blob) {
-          await saveLeadPdf(result.id, pdfResult.blob);
-          console.log('Angebot PDF generated and saved');
+          const payload = {
+            ...customerBase,
+            items: [buildItemPayload(item)],
+            extras: itemExtras.map(e => ({ description: e.description.trim(), price: Number(e.price) })),
+            total_discount: 0,
+            subtotal: itemTotal + extrasTotal,
+            total_price: itemTotal + extrasTotal
+          };
+
+          const result = await api.post<{ id: number }>('/leads', payload);
+
+          // Generate PDF for this single-item lead
+          try {
+            const pdfResult = await generateAngebotPDF({
+              customer_firstname: firstname.trim(),
+              customer_lastname: lastname.trim(),
+              customer_email: email.trim(),
+              customer_phone: phone.trim() || undefined,
+              customer_address: address.trim() || undefined,
+              notes: notes.trim() || undefined,
+              items: [buildPdfItem(item)],
+              extras: itemExtras.map(e => ({ description: e.description.trim(), price: Number(e.price) })),
+              subtotal: itemTotal + extrasTotal,
+              item_discounts: item.discount || 0,
+              total_discount: 0,
+              total_discount_percent: 0,
+              total_price: itemTotal + extrasTotal
+            }, { returnBlob: true });
+
+            if (pdfResult?.blob) {
+              await saveLeadPdf(result.id, pdfResult.blob);
+            }
+          } catch (pdfErr) {
+            console.error('Einzelangebot PDF failed:', pdfErr);
+          }
         }
-      } catch (pdfErr) {
-        console.error('Angebot PDF generation failed:', pdfErr);
+      } else {
+        // === NORMAL MODE: Single lead with all products ===
+        const payload = {
+          ...customerBase,
+          items: validItems.map(buildItemPayload),
+          extras: validExtras.map(e => ({ description: e.description.trim(), price: Number(e.price) })),
+          total_discount: totalDiscount || 0,
+          subtotal: calculateSubtotal(),
+          total_price: calculateTotal()
+        };
+
+        const result = isEditMode
+          ? await api.put<{ id: number }>(`/leads/${editData!.id}`, payload)
+          : await api.post<{ id: number }>('/leads', payload);
+        const leadId = isEditMode ? editData!.id : result.id;
+
+        // Generate and save Angebot PDF
+        try {
+          const itemDiscountsTotal = calculateItemDiscounts();
+          const pdfResult = await generateAngebotPDF({
+            customer_firstname: firstname.trim(),
+            customer_lastname: lastname.trim(),
+            customer_email: email.trim(),
+            customer_phone: phone.trim() || undefined,
+            customer_address: address.trim() || undefined,
+            notes: notes.trim() || undefined,
+            items: validItems.map(buildPdfItem),
+            extras: validExtras.map(e => ({ description: e.description.trim(), price: Number(e.price) })),
+            subtotal: calculateSubtotal(),
+            item_discounts: itemDiscountsTotal,
+            total_discount: totalDiscount || 0,
+            total_discount_percent: getTotalDiscountPercent(),
+            total_price: calculateTotal()
+          }, { returnBlob: true });
+
+          if (pdfResult?.blob) {
+            await saveLeadPdf(leadId, pdfResult.blob);
+          }
+        } catch (pdfErr) {
+          console.error('Angebot PDF generation failed:', pdfErr);
+        }
       }
 
       onSuccess();
       resetForm();
       onClose();
     } catch (err) {
-      setError('Fehler beim Erstellen des Angebots');
+      setError(isEditMode ? 'Fehler beim Aktualisieren des Angebots' : 'Fehler beim Erstellen des Angebots');
       console.error(err);
     } finally {
       setLoading(false);
@@ -380,6 +557,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
     setProductRows([createEmptyRow()]);
     setExtras([]);
     setTotalDiscount(0);
+    setEinzelAngebote(false);
     setError('');
   };
 
@@ -406,7 +584,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
           onClick={e => e.stopPropagation()}
         >
           <div className="lead-modal-header">
-            <h2>Neues Angebot erstellen</h2>
+            <h2>{isEditMode ? 'Angebot bearbeiten' : 'Neues Angebot erstellen'}</h2>
             <button className="close-btn" onClick={onClose}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
@@ -610,6 +788,50 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
                         Keine Preisdaten für diese Größe verfügbar
                       </div>
                     )}
+
+                    {/* Custom Fields */}
+                    {row.custom_fields && row.custom_fields.length > 0 && (
+                      <div className="custom-fields-fill">
+                        <div className="cf-fill-title">Produktdetails</div>
+                        <div className="cf-fill-grid">
+                          {row.custom_fields.map(field => (
+                            <div key={field.id} className="cf-fill-field">
+                              <label>{field.label}{field.required && <span className="cf-required">*</span>}</label>
+                              {field.type === 'select' ? (
+                                <select
+                                  value={(row.custom_field_values || {})[field.id] || ''}
+                                  onChange={e => updateCustomFieldValue(row.id, field.id, e.target.value)}
+                                >
+                                  <option value="">Bitte wählen...</option>
+                                  {(field.options || []).map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              ) : field.type === 'text' ? (
+                                <textarea
+                                  value={(row.custom_field_values || {})[field.id] || ''}
+                                  onChange={e => updateCustomFieldValue(row.id, field.id, e.target.value)}
+                                  placeholder={field.label}
+                                  rows={1}
+                                />
+                              ) : (
+                                <div className="cf-input-wrapper">
+                                  <input
+                                    type="number"
+                                    value={(row.custom_field_values || {})[field.id] || ''}
+                                    onChange={e => updateCustomFieldValue(row.id, field.id, e.target.value)}
+                                    placeholder={field.label}
+                                  />
+                                  {field.unit && (
+                                    <span className="cf-unit">{field.unit}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -636,6 +858,20 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
                 />
                 <span>Artikel-Rabatte aktivieren</span>
               </label>
+
+              {!isEditMode && (
+                <label className="discount-toggle-label product-discount-toggle einzelangebote-toggle">
+                  <input
+                    type="checkbox"
+                    checked={einzelAngebote}
+                    onChange={e => setEinzelAngebote(e.target.checked)}
+                  />
+                  <span>Einzelangebote erstellen</span>
+                  {einzelAngebote && (
+                    <span className="einzelangebote-hint">Jedes Produkt wird als separates Angebot gespeichert</span>
+                  )}
+                </label>
+              )}
             </section>
 
             {/* Extras Section */}
@@ -662,6 +898,18 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
                         placeholder="Preis €"
                         className="extra-price"
                       />
+                      {einzelAngebote && (
+                        <select
+                          className="extra-assign"
+                          value={extra.assignTo || 'all'}
+                          onChange={e => setExtras(prev => prev.map(ex => ex.id === extra.id ? { ...ex, assignTo: e.target.value } : ex))}
+                        >
+                          <option value="all">Alle Angebote</option>
+                          {productRows.filter(r => r.product_name).map((r, i) => (
+                            <option key={r.id} value={r.id}>Produkt {i + 1}: {r.product_name}</option>
+                          ))}
+                        </select>
+                      )}
                       <button className="btn-remove-extra" onClick={() => removeExtra(extra.id)}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M18 6L6 18M6 6l12 12" />
@@ -707,8 +955,8 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
                 </div>
               )}
 
-              {/* Total discount input */}
-              <div className="pricing-row total-discount-row">
+              {/* Total discount input — hidden in Einzelangebote mode */}
+              <div className="pricing-row total-discount-row" style={einzelAngebote ? { display: 'none' } : undefined}>
                 <div className="total-discount-label">
                   <span>Gesamtrabatt (€):</span>
                   {totalDiscount > 0 && (
@@ -746,7 +994,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess }: LeadFormMo
           <div className="lead-modal-footer">
             <button className="btn-cancel" onClick={onClose}>Abbrechen</button>
             <button className="btn-save" onClick={handleSubmit} disabled={loading}>
-              {loading ? 'Speichern...' : 'Angebot speichern'}
+              {loading ? 'Speichern...' : (isEditMode ? 'Angebot aktualisieren' : (einzelAngebote ? `${getValidItems().length} Einzelangebote erstellen` : 'Angebot speichern'))}
             </button>
           </div>
         </motion.div>

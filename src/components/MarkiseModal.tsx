@@ -28,7 +28,7 @@ interface MarkiseModalProps {
 const markiseTypes = [
   { value: 'AUFGLAS', label: 'Aufglas Markise', models: ['W350', 'ANCONA AG'] },
   { value: 'UNTERGLAS', label: 'Unterglas Markise', models: ['T350', 'ANCONA UG'] },
-  { value: 'SENKRECHT', label: 'Senkrecht Markise', models: ['2020Z', '1616Z'] },
+  // { value: 'SENKRECHT', label: 'Senkrecht Markise', models: ['2020Z', '1616Z'] }, // ARCHIVED: Senkrecht now handled as JA/KEINE module
   { value: 'VOLKASSETTE', label: 'Volkassette', models: ['TRENTINO'] },
   { value: 'HALBEKASSETTE', label: 'Halbekassette', models: ['AGUERO'] }
 ];
@@ -159,8 +159,8 @@ const MarkiseModal = ({ isOpen, onClose, onSave, initialData }: MarkiseModalProp
               </div>
             )}
 
-            {/* Position for SENKRECHT */}
-            {formData.typ === 'SENKRECHT' && (
+            {/* ARCHIVED: Position for SENKRECHT — now handled as JA/KEINE module in specification form */}
+            {/* {formData.typ === 'SENKRECHT' && (
               <>
                 <div className="form-field">
                   <label>Befestigungsart <span className="required">*</span></label>
@@ -190,7 +190,7 @@ const MarkiseModal = ({ isOpen, onClose, onSave, initialData }: MarkiseModalProp
                   </select>
                 </div>
               </>
-            )}
+            )} */}
 
             {/* Dimensions */}
             <div className="form-field">
@@ -217,7 +217,7 @@ const MarkiseModal = ({ isOpen, onClose, onSave, initialData }: MarkiseModalProp
               />
             </div>
 
-            {(formData.typ === 'AUFGLAS' || formData.typ === 'UNTERGLAS' || formData.typ === 'VOLKASSETTE' || formData.typ === 'HALBEKASSETTE') && (
+            {(formData.typ === 'AUFGLAS' || formData.typ === 'UNTERGLAS') && (
               <div className="form-field">
                 <label>Markisenhöhe (mm) <span className="required">*</span></label>
                 <input

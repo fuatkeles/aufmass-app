@@ -1300,7 +1300,68 @@
 }
 
 /* ===== SENKRECHT SECTION STYLES ===== */
+/* Senkrecht Section — now a simple JA/KEINE + position chips module */
 .senkrecht-section {
+  position: relative;
+}
+
+.senkrecht-section::before {
+  display: none;
+}
+
+.senkrecht-positions {
+  margin-top: 0.75rem;
+}
+
+.senkrecht-positions-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.senkrecht-positions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.senkrecht-position-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.senkrecht-position-chip input[type="checkbox"] {
+  display: none;
+}
+
+.senkrecht-position-chip:hover {
+  border-color: var(--primary-color);
+  background: rgba(127, 169, 61, 0.05);
+}
+
+.senkrecht-position-chip.selected {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+  font-weight: 600;
+}
+
+/* === ARCHIVED: Original senkrecht section styles (kept for potential rollback) === */
+/*
+.senkrecht-section-old {
   margin-top: 2.5rem;
   padding: 1.5rem;
   background: linear-gradient(135deg, rgba(127, 169, 61, 0.08) 0%, rgba(127, 169, 61, 0.02) 100%);
@@ -1308,17 +1369,7 @@
   border-radius: 16px;
   position: relative;
 }
-
-.senkrecht-section::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 1.5rem;
-  right: 1.5rem;
-  height: 3px;
-  background: linear-gradient(90deg, #7FA93D, #5a8a1a);
-  border-radius: 0 0 4px 4px;
-}
+*/
 
 .senkrecht-section .section-divider {
   margin-bottom: 1.5rem;

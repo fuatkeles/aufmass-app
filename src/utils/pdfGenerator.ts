@@ -644,11 +644,14 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     ? formData.productSelection.model.join(', ')
     : formData.productSelection.model;
 
-  const produktauswahl = [
+  const produktauswahl: string[][] = [
     ['Kategorie:', formData.productSelection.category || '-'],
     ['Produkttyp:', formData.productSelection.productType || '-'],
-    ['Modell:', modelValue || '-'],
   ];
+  // Only show model row if model was selected
+  if (modelValue) {
+    produktauswahl.push(['Modell:', modelValue]);
+  }
 
   produktauswahl.forEach(([label, value]) => {
     checkNewPage();
@@ -749,8 +752,8 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
             displayValue = String(value);
           }
 
-          // For fundament field, append the additional details if available
-          if (field.type === 'fundament' && formData.specifications[`${field.name}Value`]) {
+          // For fundament field, append the additional details if Aylux selected
+          if (field.type === 'fundament' && value === 'Aylux' && formData.specifications[`${field.name}Value`]) {
             displayValue += ` - ${formData.specifications[`${field.name}Value`]}`;
           }
 
@@ -941,9 +944,19 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
       const senkrechtActive = formData.specifications.senkrechtMarkiseActive as string;
       if (senkrechtActive === 'Ja' && formData.specifications.senkrechtMarkiseData) {
         try {
-          const senkrechtData = JSON.parse(formData.specifications.senkrechtMarkiseData as string);
-          if (Array.isArray(senkrechtData) && senkrechtData.length > 0) {
-            checkNewPage(30);
+          const rawData = JSON.parse(formData.specifications.senkrechtMarkiseData as string);
+          // Support both new format (string[] of positions) and old format (object[] with full details)
+          let positions: string[] = [];
+          if (Array.isArray(rawData) && rawData.length > 0) {
+            if (typeof rawData[0] === 'string') {
+              positions = rawData;
+            } else if (typeof rawData[0] === 'object' && rawData[0].position) {
+              positions = rawData.map((item: Record<string, unknown>) => String(item.position)).filter(Boolean);
+            }
+          }
+
+          if (positions.length > 0) {
+            checkNewPage(25);
             yPos += 5;
 
             // Section header
@@ -952,49 +965,66 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
             pdf.setFillColor(127, 169, 61);
             pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
             pdf.setTextColor(255, 255, 255);
-            pdf.text(`SENKRECHT MARKISE (${senkrechtData.length} Stück)`, margin + 2, yPos);
+            pdf.text('SENKRECHT MARKISE', margin + 2, yPos);
             pdf.setTextColor(0, 0, 0);
             yPos += 10;
 
             pdf.setFontSize(10);
-
-            senkrechtData.forEach((senkrecht: Record<string, unknown>, index: number) => {
-              checkNewPage(25);
-
-              // Item header
-              pdf.setFont('helvetica', 'bold');
-              pdf.text(`Senkrecht ${index + 1}${senkrecht.position ? ` - ${senkrecht.position}` : ''}:`, margin + 5, yPos);
-              yPos += 7;
-              pdf.setFont('helvetica', 'normal');
-
-              const senkrechtFields: [string, string][] = [];
-
-              if (senkrecht.position) senkrechtFields.push(['Position:', String(senkrecht.position)]);
-              if (senkrecht.modell) senkrechtFields.push(['Modell:', String(senkrecht.modell)]);
-              if (senkrecht.befestigungsart) senkrechtFields.push(['Befestigungsart:', String(senkrecht.befestigungsart)]);
-              if (senkrecht.breite) senkrechtFields.push(['Breite:', `${senkrecht.breite} mm`]);
-              if (senkrecht.hoehe) senkrechtFields.push(['Höhe:', `${senkrecht.hoehe} mm`]);
-              if (senkrecht.zip) senkrechtFields.push(['ZIP:', String(senkrecht.zip)]);
-              if (senkrecht.antrieb) senkrechtFields.push(['Antrieb:', String(senkrecht.antrieb)]);
-              if (senkrecht.antriebseite) senkrechtFields.push(['Antriebseite:', String(senkrecht.antriebseite)]);
-              if (senkrecht.anschlussseite) senkrechtFields.push(['Anschlussseite:', String(senkrecht.anschlussseite)]);
-              if (senkrecht.gestellfarbe) senkrechtFields.push(['Gestellfarbe:', String(senkrecht.gestellfarbe)]);
-              if (senkrecht.stoffNummer) senkrechtFields.push(['Stoff Nummer:', String(senkrecht.stoffNummer)]);
-
-              senkrechtFields.forEach(([label, value]) => {
-                checkNewPage();
-                pdf.setFont('helvetica', 'bold');
-                pdf.text(label, margin + 10, yPos);
-                pdf.setFont('helvetica', 'normal');
-                pdf.text(value, margin + 55, yPos);
-                yPos += 6;
-              });
-
-              yPos += 5;
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('Positionen:', margin + 5, yPos);
+            pdf.setFont('helvetica', 'normal');
+            const posText = positions.join(', ');
+            const posMaxWidth = pageWidth - margin - 60;
+            const posLines = pdf.splitTextToSize(posText, posMaxWidth);
+            posLines.forEach((line: string, i: number) => {
+              if (i > 0) checkNewPage();
+              pdf.text(line, margin + 40, yPos);
+              yPos += 6;
             });
+            yPos += 4;
           }
         } catch (e) {
           // Skip senkrecht data if parsing fails
+        }
+      }
+
+      // ============ INTEGRATED FESTES ELEMENT (for ÜBERDACHUNG) ============
+      const festesActive = formData.specifications.festesElementActive as string;
+      if (festesActive === 'Ja' && formData.specifications.festesElementData) {
+        try {
+          const rawFestes = JSON.parse(formData.specifications.festesElementData as string);
+          const fPositions: string[] = Array.isArray(rawFestes) ? rawFestes.filter((item: unknown) => typeof item === 'string') : [];
+
+          if (fPositions.length > 0) {
+            checkNewPage(25);
+            yPos += 5;
+
+            // Section header
+            pdf.setFontSize(12);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFillColor(127, 169, 61);
+            pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.text('FESTES ELEMENT', margin + 2, yPos);
+            pdf.setTextColor(0, 0, 0);
+            yPos += 10;
+
+            pdf.setFontSize(10);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('Positionen:', margin + 5, yPos);
+            pdf.setFont('helvetica', 'normal');
+            const fPosText = fPositions.join(', ');
+            const fPosMaxWidth = pageWidth - margin - 60;
+            const fPosLines = pdf.splitTextToSize(fPosText, fPosMaxWidth);
+            fPosLines.forEach((line: string, i: number) => {
+              if (i > 0) checkNewPage();
+              pdf.text(line, margin + 40, yPos);
+              yPos += 6;
+            });
+            yPos += 4;
+          }
+        } catch (e) {
+          // Skip festes element data if parsing fails
         }
       }
 
@@ -1191,6 +1221,40 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
 
         const value = produkt.specifications[field.name];
 
+        // Handle senkrecht_section field type for Weitere Produkte
+        if (field.type === 'senkrecht_section') {
+          const activeVal = produkt.specifications[`${field.name}Active`];
+          if (activeVal === 'Ja') {
+            const posData = produkt.specifications[`${field.name}Data`];
+            let positions: string[] = [];
+            try {
+              positions = typeof posData === 'string' ? JSON.parse(posData) : (Array.isArray(posData) ? posData : []);
+            } catch (e) { /* ignore */ }
+            const posText = positions.length > 0 ? positions.join(', ') : 'Keine Positionen';
+            displayFields.push({ label: 'Senkrecht Markise:', value: `Ja - ${posText}`, isConditional: false });
+          } else if (activeVal === 'Keine') {
+            displayFields.push({ label: 'Senkrecht Markise:', value: 'Keine', isConditional: false });
+          }
+          return;
+        }
+
+        // Handle festes_element_section field type for Weitere Produkte
+        if (field.type === 'festes_element_section') {
+          const activeVal = produkt.specifications[`${field.name}Active`];
+          if (activeVal === 'Ja') {
+            const posData = produkt.specifications[`${field.name}Data`];
+            let positions: string[] = [];
+            try {
+              positions = typeof posData === 'string' ? JSON.parse(posData) : (Array.isArray(posData) ? posData : []);
+            } catch (e) { /* ignore */ }
+            const posText = positions.length > 0 ? positions.join(', ') : 'Keine Positionen';
+            displayFields.push({ label: 'Festes Element:', value: `Ja - ${posText}`, isConditional: false });
+          } else if (activeVal === 'Keine') {
+            displayFields.push({ label: 'Festes Element:', value: 'Keine', isConditional: false });
+          }
+          return;
+        }
+
         // Handle seitenmarkise field type separately for Weitere Produkte
         if (field.type === 'seitenmarkise' && value) {
           try {
@@ -1233,8 +1297,8 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
             displayValue = String(value);
           }
 
-          // For fundament field, append the additional details if available
-          if (field.type === 'fundament' && produkt.specifications[`${field.name}Value`]) {
+          // For fundament field, append the additional details if Aylux selected
+          if (field.type === 'fundament' && value === 'Aylux' && produkt.specifications[`${field.name}Value`]) {
             displayValue += ` - ${produkt.specifications[`${field.name}Value`]}`;
           }
 

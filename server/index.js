@@ -586,6 +586,15 @@ async function initializeTables() {
     `);
     console.log('✅ aufmass_lead_products.description column ready');
 
+    // Add custom_fields column to lead_products (form builder field definitions)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_lead_products') AND name = 'custom_fields')
+      BEGIN
+        ALTER TABLE aufmass_lead_products ADD custom_fields NVARCHAR(MAX)
+      END
+    `);
+    console.log('✅ aufmass_lead_products.custom_fields column ready');
+
     // Leads table (customer quotes/angebote)
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='aufmass_leads' AND xtype='U')
@@ -687,6 +696,15 @@ async function initializeTables() {
       `);
     }
     console.log('✅ aufmass_lead_items pricing columns ready');
+
+    // Add custom_field_values column to lead_items (filled form data)
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('aufmass_lead_items') AND name = 'custom_field_values')
+      BEGIN
+        ALTER TABLE aufmass_lead_items ADD custom_field_values NVARCHAR(MAX)
+      END
+    `);
+    console.log('✅ aufmass_lead_items.custom_field_values column ready');
 
     // Check if admin exists, create default admin if not
     const adminCheck = await pool.request().query(
@@ -4234,6 +4252,12 @@ app.post('/api/lead-products', authenticateToken, async (req, res) => {
       columns += ', description';
       values += ', @description';
     }
+    if (req.body.custom_fields) {
+      const cfJson = typeof req.body.custom_fields === 'string' ? req.body.custom_fields : JSON.stringify(req.body.custom_fields);
+      insertRequest.input('custom_fields', sql.NVarChar, cfJson);
+      columns += ', custom_fields';
+      values += ', @custom_fields';
+    }
 
     const result = await insertRequest.query(`
       INSERT INTO aufmass_lead_products (${columns})
@@ -4307,6 +4331,11 @@ app.put('/api/lead-products/:id', authenticateToken, async (req, res) => {
     if (req.body.description !== undefined) {
       updates.push('description = @description');
       updateRequest.input('description', sql.NVarChar, req.body.description);
+    }
+    if (req.body.custom_fields !== undefined) {
+      const cfJson = typeof req.body.custom_fields === 'string' ? req.body.custom_fields : JSON.stringify(req.body.custom_fields);
+      updates.push('custom_fields = @custom_fields');
+      updateRequest.input('custom_fields', sql.NVarChar, cfJson);
     }
 
     if (updates.length === 0) {
@@ -4425,12 +4454,15 @@ app.get('/api/lead-products/:productName/dimensions', authenticateToken, async (
     }
 
     const result = await request.query(`
-      SELECT breite, tiefe, price, pricing_type, unit_label, description FROM aufmass_lead_products
+      SELECT breite, tiefe, price, pricing_type, unit_label, description, custom_fields FROM aufmass_lead_products
       WHERE product_name = @product_name ${branchFilter}
       ORDER BY breite, tiefe
     `);
 
     const rows = result.recordset;
+    // Find custom_fields from any row (not just first)
+    const cfRow = rows.find(r => r.custom_fields);
+    const custom_fields = cfRow ? JSON.parse(cfRow.custom_fields) : null;
 
     // Check if this is a unit-based product
     if (rows.length > 0 && rows[0].pricing_type === 'unit') {
@@ -4438,7 +4470,8 @@ app.get('/api/lead-products/:productName/dimensions', authenticateToken, async (
         pricing_type: 'unit',
         unit_label: rows[0].unit_label || '',
         unit_price: rows[0].price,
-        description: rows[0].description || null
+        description: rows[0].description || null,
+        custom_fields
       });
     } else {
       // Dimension-based: group by breite, return available tiefe values
@@ -4451,7 +4484,7 @@ app.get('/api/lead-products/:productName/dimensions', authenticateToken, async (
       });
 
       const description = rows.length > 0 ? (rows[0].description || null) : null;
-      res.json({ pricing_type: 'dimension', dimensions, description });
+      res.json({ pricing_type: 'dimension', dimensions, description, custom_fields });
     }
   } catch (err) {
     console.error('Get dimensions error:', err);
@@ -4513,9 +4546,10 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
           .input('total_price', sql.Decimal(10, 2), itemTotal)
           .input('pricing_type', sql.NVarChar, item.pricing_type || 'dimension')
           .input('unit_label', sql.NVarChar, item.unit_label || null)
+          .input('custom_field_values', sql.NVarChar, item.custom_field_values ? (typeof item.custom_field_values === 'string' ? item.custom_field_values : JSON.stringify(item.custom_field_values)) : null)
           .query(`
-            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label)
-            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @discount, @total_price, @pricing_type, @unit_label)
+            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label, custom_field_values)
+            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @discount, @total_price, @pricing_type, @unit_label, @custom_field_values)
           `);
       }
     }
@@ -4598,6 +4632,94 @@ app.get('/api/leads/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Get lead error:', err);
     res.status(500).json({ error: 'Failed to fetch lead' });
+  }
+});
+
+// Update lead (full edit)
+app.put('/api/leads/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, items, extras, subtotal, total_discount, total_price } = req.body;
+
+    const branchFilter = req.branchId ? 'AND branch_id = @branch_id' : '';
+
+    // Update lead record
+    const updateRequest = pool.request()
+      .input('id', sql.Int, id)
+      .input('customer_firstname', sql.NVarChar, customer_firstname)
+      .input('customer_lastname', sql.NVarChar, customer_lastname)
+      .input('customer_email', sql.NVarChar, customer_email || null)
+      .input('customer_phone', sql.NVarChar, customer_phone || null)
+      .input('customer_address', sql.NVarChar, customer_address || null)
+      .input('notes', sql.NVarChar, notes || null)
+      .input('subtotal', sql.Decimal(10, 2), subtotal || 0)
+      .input('total_discount', sql.Decimal(10, 2), total_discount || 0)
+      .input('total_price', sql.Decimal(10, 2), total_price);
+    if (req.branchId) {
+      updateRequest.input('branch_id', sql.NVarChar, req.branchId);
+    }
+
+    const result = await updateRequest.query(`
+      UPDATE aufmass_leads
+      SET customer_firstname = @customer_firstname, customer_lastname = @customer_lastname,
+          customer_email = @customer_email, customer_phone = @customer_phone,
+          customer_address = @customer_address, notes = @notes,
+          subtotal = @subtotal, total_discount = @total_discount, total_price = @total_price,
+          updated_at = GETDATE()
+      WHERE id = @id ${branchFilter}
+    `);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+
+    // Delete old items and extras, then re-insert
+    await pool.request().input('lead_id', sql.Int, id).query('DELETE FROM aufmass_lead_items WHERE lead_id = @lead_id');
+    await pool.request().input('lead_id', sql.Int, id).query('DELETE FROM aufmass_lead_extras WHERE lead_id = @lead_id');
+
+    // Insert updated items
+    if (items && items.length > 0) {
+      for (const item of items) {
+        const itemDiscount = item.discount || 0;
+        const itemTotal = (item.unit_price * (item.quantity || 1)) - itemDiscount;
+        await pool.request()
+          .input('lead_id', sql.Int, id)
+          .input('product_id', sql.Int, item.product_id || null)
+          .input('product_name', sql.NVarChar, item.product_name)
+          .input('breite', sql.Int, item.breite || null)
+          .input('tiefe', sql.Int, item.tiefe || null)
+          .input('quantity', sql.Int, item.quantity || 1)
+          .input('unit_price', sql.Decimal(10, 2), item.unit_price)
+          .input('discount', sql.Decimal(10, 2), itemDiscount)
+          .input('total_price', sql.Decimal(10, 2), itemTotal)
+          .input('pricing_type', sql.NVarChar, item.pricing_type || 'dimension')
+          .input('unit_label', sql.NVarChar, item.unit_label || null)
+          .input('custom_field_values', sql.NVarChar, item.custom_field_values ? (typeof item.custom_field_values === 'string' ? item.custom_field_values : JSON.stringify(item.custom_field_values)) : null)
+          .query(`
+            INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label, custom_field_values)
+            VALUES (@lead_id, @product_id, @product_name, @breite, @tiefe, @quantity, @unit_price, @discount, @total_price, @pricing_type, @unit_label, @custom_field_values)
+          `);
+      }
+    }
+
+    // Insert updated extras
+    if (extras && extras.length > 0) {
+      for (const extra of extras) {
+        await pool.request()
+          .input('lead_id', sql.Int, id)
+          .input('description', sql.NVarChar, extra.description)
+          .input('price', sql.Decimal(10, 2), extra.price)
+          .query(`
+            INSERT INTO aufmass_lead_extras (lead_id, description, price)
+            VALUES (@lead_id, @description, @price)
+          `);
+      }
+    }
+
+    res.json({ id: parseInt(id), message: 'Lead updated successfully' });
+  } catch (err) {
+    console.error('Update lead error:', err);
+    res.status(500).json({ error: 'Failed to update lead', details: err.message });
   }
 });
 

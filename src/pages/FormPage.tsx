@@ -196,8 +196,10 @@ const FormPage = () => {
         bemerkungen: data.bemerkungen || ''
       };
 
-      // Only set status to 'neu' for new forms, preserve existing status for updates
+      // Only set status to 'neu' for new forms, promote drafts on full save
       if (id === 'new') {
+        apiData.status = 'neu';
+      } else if (formStatus === 'entwurf') {
         apiData.status = 'neu';
       }
 
@@ -275,6 +277,44 @@ const FormPage = () => {
     }
   };
 
+  const handleDraftSave = async (data: FormData): Promise<void> => {
+    try {
+      const apiData: Omit<ApiFormData, 'id'> & { status?: string } = {
+        datum: data.datum,
+        aufmasser: data.aufmasser,
+        kundeVorname: data.kundeVorname,
+        kundeNachname: data.kundeNachname,
+        kundeEmail: data.kundeEmail || '',
+        kundeTelefon: data.kundeTelefon || '',
+        kundenlokation: data.kundenlokation,
+        category: data.productSelection?.category || '',
+        productType: data.productSelection?.productType || '',
+        model: Array.isArray(data.productSelection?.model)
+          ? JSON.stringify(data.productSelection.model)
+          : (data.productSelection?.model || ''),
+        specifications: data.specifications || {},
+        markiseData: (data.specifications as Record<string, unknown>)?.markiseData,
+        weitereProdukte: data.weitereProdukte || [],
+        bemerkungen: data.bemerkungen || ''
+      };
+
+      apiData.status = 'entwurf';
+
+      if (id === 'new') {
+        await createForm(apiData);
+      } else {
+        const formId = parseInt(id!);
+        await updateForm(formId, apiData);
+      }
+
+      toast.success('Gespeichert', 'Entwurf wurde gespeichert.');
+      navigate('/');
+    } catch (err) {
+      console.error('Error saving draft:', err);
+      toast.error('Fehler', 'Entwurf konnte nicht gespeichert werden.');
+    }
+  };
+
   const handleCancel = () => {
     navigate('/');
   };
@@ -333,6 +373,7 @@ const FormPage = () => {
     <AufmassForm
       initialData={initialData}
       onSave={handleSave}
+      onDraftSave={handleDraftSave}
       onCancel={handleCancel}
       formStatus={formStatus}
       onStatusChange={handleStatusChange}

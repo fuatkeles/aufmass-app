@@ -17,6 +17,7 @@ import { getStoredUser, getPdfBlob, getPdfStatus, getAbnahme, getAbnahmeImages }
 
 // Status options for breadcrumb - matches Dashboard STATUS_OPTIONS
 const STATUS_STEPS = [
+  { value: 'entwurf', label: 'Entwurf', color: '#f97316' },
   { value: 'neu', label: 'Aufmaß Genommen', color: '#8b5cf6' },
   { value: 'angebot_versendet', label: 'Angebot Versendet', color: '#a78bfa' },
   { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
@@ -38,13 +39,14 @@ const isAdminOrOffice = () => {
 interface AufmassFormProps {
   initialData?: FormData | null;
   onSave?: (data: FormData) => Promise<number | void> | void;
+  onDraftSave?: (data: FormData) => Promise<void>;
   onCancel?: () => void;
   formStatus?: string;
   onStatusChange?: (status: string) => void;
   isExistingForm?: boolean;
 }
 
-function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange, isExistingForm }: AufmassFormProps) {
+function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, onStatusChange, isExistingForm }: AufmassFormProps) {
   const [formData, setFormData] = useState<FormData>(initialData || {
     datum: new Date().toISOString().split('T')[0],
     aufmasser: '',
@@ -132,13 +134,14 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     for (const wp of formData.weitereProdukte) {
       if (!wp.category) return false;
       if (!wp.productType) return false;
-      if (!wp.model) return false;
+      // ARCHIVED: Model selection no longer required
+      // if (!wp.model) return false;
 
       const wpConfig = productConfig[wp.category]?.[wp.productType];
       if (wpConfig?.fields) {
         for (const field of wpConfig.fields as ProductField[]) {
           if (excludedFields.includes(field.name)) continue;
-          if (field.type === 'markise_trigger' || field.type === 'senkrecht_section') continue;
+          if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section') continue;
 
           if (field.showWhen) {
             const dependentValue = wp.specifications[field.showWhen.field];
@@ -223,7 +226,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       if (excludedFields.includes(field.name)) continue;
 
       // Skip markise_trigger and senkrecht_section (handled separately)
-      if (field.type === 'markise_trigger' || field.type === 'senkrecht_section') continue;
+      if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section') continue;
 
       // Handle showWhen conditions - skip if condition not met
       if (field.showWhen) {
@@ -325,36 +328,57 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     }
 
     // ============ VALIDATE SENKRECHT MARKISE FIELDS ============
-    // When senkrechtMarkiseActive is "Ja", all senkrecht fields are required
-    const senkrechtActive = formData.specifications['senkrechtMarkiseActive'] === 'Ja';
-    if (senkrechtActive) {
-      let senkrechtData: Array<Record<string, unknown>> = [];
-      try {
-        const rawData = formData.specifications['senkrechtMarkiseData'];
-        if (typeof rawData === 'string') {
-          const parsed = JSON.parse(rawData);
-          if (Array.isArray(parsed)) senkrechtData = parsed as Array<Record<string, unknown>>;
-        } else if (Array.isArray(rawData)) {
-          senkrechtData = rawData as unknown as Array<Record<string, unknown>>;
-        }
-      } catch { senkrechtData = []; }
-
-      if (senkrechtData.length === 0) {
+    // Check if this product has a senkrecht_section field
+    const hasSenkrechtField = (productTypeConfig.fields as ProductField[]).some(f => f.type === 'senkrecht_section');
+    if (hasSenkrechtField) {
+      const senkrechtValue = formData.specifications['senkrechtMarkiseActive'];
+      // Must select Ja or Keine (not empty/Bitte wählen)
+      if (!senkrechtValue || (senkrechtValue !== 'Ja' && senkrechtValue !== 'Keine')) {
         return false;
       }
+      // When "Ja", at least one position must be selected
+      if (senkrechtValue === 'Ja') {
+        let senkrechtPositions: string[] = [];
+        try {
+          const rawData = formData.specifications['senkrechtMarkiseData'];
+          if (typeof rawData === 'string') {
+            const parsed = JSON.parse(rawData);
+            if (Array.isArray(parsed)) {
+              if (parsed.length > 0 && typeof parsed[0] === 'string') {
+                senkrechtPositions = parsed;
+              } else if (parsed.length > 0 && typeof parsed[0] === 'object') {
+                senkrechtPositions = parsed.map((item: Record<string, unknown>) => String(item.position)).filter(Boolean);
+              }
+            }
+          }
+        } catch { senkrechtPositions = []; }
 
-      for (const senkrecht of senkrechtData) {
-        if (!senkrecht.position) return false;
-        if (!senkrecht.modell) return false;
-        if (!senkrecht.befestigungsart) return false;
-        if (!senkrecht.breite || Number(senkrecht.breite) <= 0) return false;
-        if (!senkrecht.hoehe || Number(senkrecht.hoehe) <= 0) return false;
-        if (!senkrecht.zip) return false;
-        if (!senkrecht.antrieb) return false;
-        if (!senkrecht.antriebseite) return false;
-        if (!senkrecht.anschlussseite) return false;
-        if (!senkrecht.gestellfarbe) return false;
-        if (!senkrecht.stoffNummer) return false;
+        if (senkrechtPositions.length === 0) {
+          return false;
+        }
+      }
+    }
+
+    // ============ VALIDATE FESTES ELEMENT FIELDS ============
+    const hasFestesField = (productTypeConfig.fields as ProductField[]).some(f => f.type === 'festes_element_section');
+    if (hasFestesField) {
+      const festesValue = formData.specifications['festesElementActive'];
+      if (!festesValue || (festesValue !== 'Ja' && festesValue !== 'Keine')) {
+        return false;
+      }
+      if (festesValue === 'Ja') {
+        let festesPositions: string[] = [];
+        try {
+          const rawData = formData.specifications['festesElementData'];
+          if (typeof rawData === 'string') {
+            const parsed = JSON.parse(rawData);
+            if (Array.isArray(parsed)) festesPositions = parsed.filter((item): item is string => typeof item === 'string');
+          }
+        } catch { festesPositions = []; }
+
+        if (festesPositions.length === 0) {
+          return false;
+        }
       }
     }
 
@@ -401,7 +425,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
       if (excludedFields.includes(field.name)) continue;
 
       // Skip markise_trigger and senkrecht_section (handled separately)
-      if (field.type === 'markise_trigger' || field.type === 'senkrecht_section') continue;
+      if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section') continue;
 
       // Handle showWhen conditions - skip if condition not met
       if (field.showWhen) {
@@ -515,37 +539,52 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
     }
 
     // ============ VALIDATE SENKRECHT MARKISE FIELDS ============
-    // When senkrechtMarkiseActive is "Ja", all senkrecht fields are required
-    const senkrechtActive = formData.specifications['senkrechtMarkiseActive'] === 'Ja';
-    if (senkrechtActive) {
-      let senkrechtData: Array<Record<string, unknown>> = [];
-      try {
-        const rawData = formData.specifications['senkrechtMarkiseData'];
-        if (typeof rawData === 'string') {
-          const parsed = JSON.parse(rawData);
-          if (Array.isArray(parsed)) senkrechtData = parsed as Array<Record<string, unknown>>;
-        } else if (Array.isArray(rawData)) {
-          senkrechtData = rawData as unknown as Array<Record<string, unknown>>;
-        }
-      } catch { senkrechtData = []; }
+    const hasSenkrechtFieldMissing = (productTypeConfig.fields as ProductField[]).some(f => f.type === 'senkrecht_section');
+    if (hasSenkrechtFieldMissing) {
+      const senkrechtValue = formData.specifications['senkrechtMarkiseActive'];
+      if (!senkrechtValue || (senkrechtValue !== 'Ja' && senkrechtValue !== 'Keine')) {
+        missingFields.push({ name: 'senkrechtMarkise', label: 'Senkrecht Markise' });
+      } else if (senkrechtValue === 'Ja') {
+        let senkrechtPositions: string[] = [];
+        try {
+          const rawData = formData.specifications['senkrechtMarkiseData'];
+          if (typeof rawData === 'string') {
+            const parsed = JSON.parse(rawData);
+            if (Array.isArray(parsed)) {
+              if (parsed.length > 0 && typeof parsed[0] === 'string') {
+                senkrechtPositions = parsed;
+              } else if (parsed.length > 0 && typeof parsed[0] === 'object') {
+                senkrechtPositions = parsed.map((item: Record<string, unknown>) => String(item.position)).filter(Boolean);
+              }
+            }
+          }
+        } catch { senkrechtPositions = []; }
 
-      if (senkrechtData.length === 0) {
-        missingFields.push({ name: 'senkrechtMarkise', label: 'Senkrecht Markise (mindestens eine)' });
-      } else {
-        senkrechtData.forEach((senkrecht, idx) => {
-          const prefix = `Senkrecht ${idx + 1}`;
-          if (!senkrecht.position) missingFields.push({ name: `senkrecht_${idx}_position`, label: `${prefix} Position` });
-          if (!senkrecht.modell) missingFields.push({ name: `senkrecht_${idx}_modell`, label: `${prefix} Modell` });
-          if (!senkrecht.befestigungsart) missingFields.push({ name: `senkrecht_${idx}_befestigungsart`, label: `${prefix} Befestigungsart` });
-          if (!senkrecht.breite || Number(senkrecht.breite) <= 0) missingFields.push({ name: `senkrecht_${idx}_breite`, label: `${prefix} Breite` });
-          if (!senkrecht.hoehe || Number(senkrecht.hoehe) <= 0) missingFields.push({ name: `senkrecht_${idx}_hoehe`, label: `${prefix} Höhe` });
-          if (!senkrecht.zip) missingFields.push({ name: `senkrecht_${idx}_zip`, label: `${prefix} ZIP` });
-          if (!senkrecht.antrieb) missingFields.push({ name: `senkrecht_${idx}_antrieb`, label: `${prefix} Antrieb` });
-          if (!senkrecht.antriebseite) missingFields.push({ name: `senkrecht_${idx}_antriebseite`, label: `${prefix} Antriebseite` });
-          if (!senkrecht.anschlussseite) missingFields.push({ name: `senkrecht_${idx}_anschlussseite`, label: `${prefix} Anschlussseite` });
-          if (!senkrecht.gestellfarbe) missingFields.push({ name: `senkrecht_${idx}_gestellfarbe`, label: `${prefix} Gestellfarbe` });
-          if (!senkrecht.stoffNummer) missingFields.push({ name: `senkrecht_${idx}_stoffNummer`, label: `${prefix} Stoff Nummer` });
-        });
+        if (senkrechtPositions.length === 0) {
+          missingFields.push({ name: 'senkrechtMarkise', label: 'Senkrecht Markise Position(en)' });
+        }
+      }
+    }
+
+    // ============ VALIDATE FESTES ELEMENT FIELDS ============
+    const hasFestesFieldMissing = (productTypeConfig.fields as ProductField[]).some(f => f.type === 'festes_element_section');
+    if (hasFestesFieldMissing) {
+      const festesValue = formData.specifications['festesElementActive'];
+      if (!festesValue || (festesValue !== 'Ja' && festesValue !== 'Keine')) {
+        missingFields.push({ name: 'festesElement', label: 'Festes Element' });
+      } else if (festesValue === 'Ja') {
+        let festesPositions: string[] = [];
+        try {
+          const rawData = formData.specifications['festesElementData'];
+          if (typeof rawData === 'string') {
+            const parsed = JSON.parse(rawData);
+            if (Array.isArray(parsed)) festesPositions = parsed.filter((item): item is string => typeof item === 'string');
+          }
+        } catch { festesPositions = []; }
+
+        if (festesPositions.length === 0) {
+          missingFields.push({ name: 'festesElement', label: 'Festes Element Position(en)' });
+        }
       }
     }
 
@@ -629,15 +668,16 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
         if (!wp.productType) {
           missingFields.push({ name: `wp_${wpIdx}_productType`, label: `${wpPrefix} Produkt Typ` });
         }
-        if (!wp.model) {
-          missingFields.push({ name: `wp_${wpIdx}_model`, label: `${wpPrefix} Modell` });
-        }
+        // ARCHIVED: Model selection no longer required
+        // if (!wp.model) {
+        //   missingFields.push({ name: `wp_${wpIdx}_model`, label: `${wpPrefix} Modell` });
+        // }
 
         if (wpConfig?.fields) {
           for (const field of wpConfig.fields as ProductField[]) {
             // Skip excluded fields
             if (excludedFields.includes(field.name)) continue;
-            if (field.type === 'markise_trigger' || field.type === 'senkrecht_section') continue;
+            if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section') continue;
 
             // Handle showWhen conditions
             if (field.showWhen) {
@@ -808,11 +848,11 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
         title: 'Produktauswahl',
         icon: '2',
         canProceed: () => {
-          const models = formData.productSelection.model;
-          const hasModels = Array.isArray(models) ? models.length > 0 : !!models;
+          // ARCHIVED: Model selection no longer required
+          // const models = formData.productSelection.model;
+          // const hasModels = Array.isArray(models) ? models.length > 0 : !!models;
           return !!(formData.productSelection.category &&
-                 formData.productSelection.productType &&
-                 hasModels);
+                 formData.productSelection.productType);
         }
       }
     ];
@@ -905,7 +945,7 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
               const markiseTypes: Record<string, { showHeight?: boolean; showPosition?: boolean; showZip?: boolean; showVolanTyp?: boolean; befestigungsOptions: string[] }> = {
                 'AUFGLAS': { showZip: true, befestigungsOptions: [] },
                 'UNTERGLAS': { showZip: true, befestigungsOptions: ['Innen Sparren', 'Unten Sparren'] },
-                'SENKRECHT': { showHeight: true, showZip: true, showPosition: true, befestigungsOptions: ['Zwischen Pfosten', 'Vor Pfosten'] },
+                // 'SENKRECHT': { showHeight: true, showZip: true, showPosition: true, befestigungsOptions: ['Zwischen Pfosten', 'Vor Pfosten'] }, // ARCHIVED: Senkrecht now handled as JA/KEINE module
                 'VOLKASSETTE': { showVolanTyp: true, befestigungsOptions: ['Wand', 'Decke', 'Untenbalkon'] },
                 'HALBEKASSETTE': { showVolanTyp: true, befestigungsOptions: ['Wand', 'Decke', 'Untenbalkon'] }
               };
@@ -1309,6 +1349,19 @@ function AufmassForm({ initialData, onSave, onCancel, formStatus, onStatusChange
               onClick={onCancel}
             >
               Abbrechen
+            </motion.button>
+          )}
+
+          {onDraftSave && currentStep === 0 && canProceed && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="btn btn-draft-save"
+              onClick={async () => {
+                await onDraftSave(formData);
+              }}
+            >
+              Speichern & Schließen
             </motion.button>
           )}
 

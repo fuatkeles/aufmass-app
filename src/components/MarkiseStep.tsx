@@ -47,15 +47,16 @@ const markiseTypes = [
     showZip: true,
     befestigungsOptions: ['Innen Sparren', 'Unten Sparren']
   },
-  {
-    value: 'SENKRECHT',
-    label: 'Senkrecht Markise',
-    models: ['2020Z', '1616Z'],
-    showHeight: true,
-    showZip: true,
-    befestigungsOptions: ['Zwischen Pfosten', 'Vor Pfosten'],
-    showPosition: true
-  },
+  // ARCHIVED: Senkrecht now handled as JA/KEINE module in specification form
+  // {
+  //   value: 'SENKRECHT',
+  //   label: 'Senkrecht Markise',
+  //   models: ['2020Z', '1616Z'],
+  //   showHeight: true,
+  //   showZip: true,
+  //   befestigungsOptions: ['Zwischen Pfosten', 'Vor Pfosten'],
+  //   showPosition: true
+  // },
   {
     value: 'VOLKASSETTE',
     label: 'Volkassette',
@@ -76,7 +77,8 @@ const markiseTypes = [
   }
 ];
 
-const positionOptions = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS', 'HINTEN LINKS', 'HINTEN RECHTS'];
+// ARCHIVED: positionOptions was used for SENKRECHT markise type (now handled as JA/KEINE module)
+// const positionOptions = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS', 'HINTEN LINKS', 'HINTEN RECHTS'];
 
 const emptyMarkise: MarkiseData = {
   typ: '',

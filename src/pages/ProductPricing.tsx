@@ -7,6 +7,15 @@ import './ProductPricing.css';
 
 const productConfig = productConfigData as ProductConfig;
 
+interface CustomField {
+  id: string;
+  label: string;
+  type: 'text' | 'number' | 'select';
+  unit?: string;
+  options?: string[];
+  required?: boolean;
+}
+
 interface Product {
   id: number;
   product_name: string;
@@ -19,6 +28,7 @@ interface Product {
   pricing_type?: 'dimension' | 'unit';
   unit_label?: string;
   description?: string;
+  custom_fields?: string;
 }
 
 interface PendingColumn {
@@ -82,6 +92,13 @@ export default function ProductPricing() {
   const [editingDescription, setEditingDescription] = useState<string | null>(null);
   const [editDescriptionValue, setEditDescriptionValue] = useState('');
 
+  // Custom fields editing for existing products
+  const [editingCustomFields, setEditingCustomFields] = useState<string | null>(null);
+  const [customFieldsDraft, setCustomFieldsDraft] = useState<CustomField[]>([]);
+
+  // Custom fields for new product modal
+  const [newProductCustomFields, setNewProductCustomFields] = useState<CustomField[]>([]);
+
   useEffect(() => {
     loadProducts();
   }, []);
@@ -110,6 +127,7 @@ export default function ProductPricing() {
       pricing_type: 'dimension' | 'unit';
       unit_label?: string;
       description?: string;
+      custom_fields?: CustomField[];
       breiteValues: number[];
       tiefeValues: number[];
       matrix: Record<string, Record<string, Product>>;
@@ -117,15 +135,25 @@ export default function ProductPricing() {
 
     products.forEach(p => {
       if (!grouped[p.product_name]) {
+        let parsedCustomFields: CustomField[] | undefined;
+        try {
+          parsedCustomFields = p.custom_fields ? JSON.parse(p.custom_fields) : undefined;
+        } catch { parsedCustomFields = undefined; }
         grouped[p.product_name] = {
           products: [],
           pricing_type: (p.pricing_type as 'dimension' | 'unit') || 'dimension',
           unit_label: p.unit_label,
           description: p.description,
+          custom_fields: parsedCustomFields,
           breiteValues: [],
           tiefeValues: [],
           matrix: {}
         };
+      } else if (!grouped[p.product_name].custom_fields && p.custom_fields) {
+        // Pick custom_fields from any row that has it
+        try {
+          grouped[p.product_name].custom_fields = JSON.parse(p.custom_fields);
+        } catch { /* ignore */ }
       }
       grouped[p.product_name].products.push(p);
 
@@ -483,6 +511,7 @@ export default function ProductPricing() {
     setNewProductUnitLabel('');
     setNewProductUnitPrice('');
     setNewProductDescription('');
+    setNewProductCustomFields([]);
     setCustomCategoryMode(false);
     setCustomProductTypeMode(false);
     setCustomModelMode(false);
@@ -548,6 +577,7 @@ export default function ProductPricing() {
           pricing_type: 'unit',
           unit_label: newProductUnitLabel.trim() || null,
           description: newProductDescription.trim() || null,
+          custom_fields: newProductCustomFields.filter(f => f.label.trim()).length > 0 ? newProductCustomFields.filter(f => f.label.trim()).map(f => ({ ...f, options: f.options?.map(o => o.trim()).filter(Boolean) })) : null,
           breite: 0,
           tiefe: 0,
           price: parseFloat(newProductUnitPrice)
@@ -574,6 +604,7 @@ export default function ProductPricing() {
               product_type: newProductType,
               pricing_type: 'dimension',
               description: newProductDescription.trim() || null,
+              custom_fields: newProductCustomFields.filter(f => f.label.trim()).length > 0 ? newProductCustomFields.filter(f => f.label.trim()).map(f => ({ ...f, options: f.options?.map(o => o.trim()).filter(Boolean) })) : null,
               breite: parseInt(entry.breite),
               tiefe: parseInt(entry.tiefe),
               price: parseFloat(entry.price)
@@ -648,6 +679,111 @@ export default function ProductPricing() {
       console.error('Failed to update description:', err);
     }
   };
+
+  // ========== CUSTOM FIELDS EDITING ==========
+  const addCustomField = (fields: CustomField[], setFields: (f: CustomField[]) => void) => {
+    setFields([...fields, { id: `f${Date.now()}`, label: '', type: 'text', required: false }]);
+  };
+
+  const updateCustomField = (fields: CustomField[], setFields: (f: CustomField[]) => void, index: number, updates: Partial<CustomField>) => {
+    const updated = [...fields];
+    updated[index] = { ...updated[index], ...updates };
+    setFields(updated);
+  };
+
+  const removeCustomField = (fields: CustomField[], setFields: (f: CustomField[]) => void, index: number) => {
+    setFields(fields.filter((_, i) => i !== index));
+  };
+
+  const saveCustomFields = async (productName: string) => {
+    const productsToUpdate = products.filter(p => p.product_name === productName);
+    if (productsToUpdate.length === 0) return;
+
+    // Filter out fields with empty labels
+    const validFields = customFieldsDraft
+      .filter(f => f.label.trim())
+      .map(f => ({ ...f, options: f.options?.map(o => o.trim()).filter(Boolean) }));
+    const cfPayload = validFields.length > 0 ? validFields : null;
+
+    try {
+      setSaving(true);
+      // Only update first row — custom_fields is product-level, not per-variant
+      await api.put(`/lead-products/${productsToUpdate[0].id}`, { custom_fields: cfPayload });
+      await loadProducts();
+      setEditingCustomFields(null);
+      setCustomFieldsDraft([]);
+    } catch (err) {
+      console.error('Failed to update custom fields:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderCustomFieldsEditor = (fields: CustomField[], setFields: (f: CustomField[]) => void) => (
+    <div className="custom-fields-editor">
+      {fields.map((field, idx) => (
+        <div key={field.id} className="custom-field-row">
+          <input
+            type="text"
+            value={field.label}
+            onChange={(e) => updateCustomField(fields, setFields, idx, { label: e.target.value })}
+            placeholder="Feldname..."
+            className="cf-label-input"
+          />
+          <select
+            value={field.type}
+            onChange={(e) => updateCustomField(fields, setFields, idx, { type: e.target.value as CustomField['type'], options: e.target.value === 'select' ? [''] : undefined, unit: e.target.value === 'number' ? '' : undefined })}
+            className="cf-type-select"
+          >
+            <option value="text">Text</option>
+            <option value="number">Zahl</option>
+            <option value="select">Auswahl</option>
+          </select>
+          {field.type === 'number' && (
+            <input
+              type="text"
+              value={field.unit || ''}
+              onChange={(e) => updateCustomField(fields, setFields, idx, { unit: e.target.value })}
+              placeholder="Einheit (mm, cm...)"
+              className="cf-unit-input"
+            />
+          )}
+          {field.type === 'select' && (
+            <input
+              type="text"
+              value={(field.options || []).join(',')}
+              onChange={(e) => updateCustomField(fields, setFields, idx, { options: e.target.value.split(',') })}
+              placeholder="Optionen (kommagetrennt)"
+              className="cf-options-input"
+            />
+          )}
+          <label className="cf-required-label">
+            <input
+              type="checkbox"
+              checked={field.required || false}
+              onChange={(e) => updateCustomField(fields, setFields, idx, { required: e.target.checked })}
+            />
+            Pflicht
+          </label>
+          <button
+            type="button"
+            className="cf-remove-btn"
+            onClick={() => removeCustomField(fields, setFields, idx)}
+            title="Feld entfernen"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="cf-add-btn"
+        onClick={() => addCustomField(fields, setFields)}
+      >
+        + Feld hinzufügen
+      </button>
+    </div>
+  );
 
   // ========== ADD PRICE TO EMPTY CELL ==========
   const startAddingPrice = (productName: string, breite: number, tiefe: number) => {
@@ -1229,6 +1365,50 @@ export default function ProductPricing() {
                           </button>
                         )}
                       </div>
+
+                      {/* Custom Fields (Form Builder) Section */}
+                      <div className="custom-fields-section">
+                        {editingCustomFields === productName ? (
+                          <div className="custom-fields-editor-wrapper">
+                            <h4 className="cf-section-title">Formularfelder</h4>
+                            {renderCustomFieldsEditor(customFieldsDraft, setCustomFieldsDraft)}
+                            <div className="cf-editor-actions">
+                              <button
+                                className="btn-desc-save"
+                                onClick={() => saveCustomFields(productName)}
+                                disabled={saving}
+                              >
+                                {saving ? 'Speichern...' : 'Speichern'}
+                              </button>
+                              <button
+                                className="btn-desc-cancel"
+                                onClick={() => { setEditingCustomFields(null); setCustomFieldsDraft([]); }}
+                              >
+                                Abbrechen
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            className={`description-toggle ${data.custom_fields && data.custom_fields.length > 0 ? 'has-content' : ''}`}
+                            onClick={() => {
+                              setEditingCustomFields(productName);
+                              setCustomFieldsDraft(data.custom_fields ? [...data.custom_fields] : []);
+                            }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="desc-icon">
+                              <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+                              <rect x="9" y="3" width="6" height="4" rx="1" />
+                              <path d="M9 12h6M9 16h6" />
+                            </svg>
+                            {data.custom_fields && data.custom_fields.length > 0 ? (
+                              <span className="desc-content">{data.custom_fields.length} Formularfeld{data.custom_fields.length > 1 ? 'er' : ''}</span>
+                            ) : (
+                              <span className="desc-placeholder">Formularfelder hinzufügen</span>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1460,6 +1640,14 @@ export default function ProductPricing() {
                       rows={3}
                       className="description-textarea"
                     />
+                  </div>
+                )}
+
+                {/* Custom Fields Builder for new product */}
+                {newProductName && (
+                  <div className="form-group">
+                    <label>Formularfelder (optional)</label>
+                    {renderCustomFieldsEditor(newProductCustomFields, setNewProductCustomFields)}
                   </div>
                 )}
 

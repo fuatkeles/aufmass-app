@@ -839,7 +839,7 @@ const DynamicSpecificationForm = ({
 
       case 'fundament':
         const fundamentValue = value as string;
-        const showFundamentInput = fundamentValue === 'Aylux' || fundamentValue === 'Kunde';
+        const showFundamentInput = fundamentValue === 'Aylux';
 
         return (
           <motion.div
@@ -859,7 +859,7 @@ const DynamicSpecificationForm = ({
               value={fundamentValue}
               onChange={(e) => {
                 updateField(field.name, e.target.value);
-                if (e.target.value !== 'Aylux' && e.target.value !== 'Kunde') {
+                if (e.target.value !== 'Aylux') {
                   updateField(`${field.name}Value`, '');
                 }
               }}
@@ -940,247 +940,169 @@ const DynamicSpecificationForm = ({
 
       case 'senkrecht_section':
         const senkrechtActive = formData['senkrechtMarkiseActive'] === 'Ja';
-        const senkrechtData = (() => {
+        const senkrechtPositions: string[] = (() => {
           try {
             const data = formData['senkrechtMarkiseData'];
-            if (typeof data === 'string') return JSON.parse(data);
-            if (Array.isArray(data)) return data;
+            if (typeof data === 'string') {
+              const parsed = JSON.parse(data);
+              if (Array.isArray(parsed)) {
+                // Support both new format (string[]) and old format (object[])
+                if (parsed.length > 0 && typeof parsed[0] === 'string') return parsed;
+                if (parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0].position) {
+                  return parsed.map((item: Record<string, unknown>) => String(item.position)).filter(Boolean);
+                }
+              }
+            }
+            if (Array.isArray(data)) return data.filter((item): item is string => typeof item === 'string');
             return [];
           } catch { return []; }
         })();
 
-        const emptySenkrecht = {
-          position: '',
-          modell: '',
-          befestigungsart: '',
-          breite: '',
-          hoehe: '',
-          zip: '',
-          antrieb: '',
-          antriebseite: '',
-          anschlussseite: '',
-          gestellfarbe: '',
-          stoffNummer: ''
-        };
+        const allPositionOptions = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS', 'HINTEN LINKS', 'HINTEN RECHTS'];
 
-        const updateSenkrechtData = (newData: typeof senkrechtData) => {
-          updateField('senkrechtMarkiseData', JSON.stringify(newData));
-        };
-
-        const addSenkrecht = () => {
-          updateSenkrechtData([...senkrechtData, { ...emptySenkrecht }]);
-        };
-
-        const removeSenkrecht = (idx: number) => {
-          const newData = senkrechtData.filter((_: unknown, i: number) => i !== idx);
-          updateSenkrechtData(newData);
-        };
-
-        const updateSenkrechtField = (idx: number, fieldName: string, fieldValue: string | number) => {
-          const newData = [...senkrechtData];
-          newData[idx] = { ...newData[idx], [fieldName]: fieldValue };
-          updateSenkrechtData(newData);
+        const togglePosition = (pos: string) => {
+          const newPositions = senkrechtPositions.includes(pos)
+            ? senkrechtPositions.filter(p => p !== pos)
+            : [...senkrechtPositions, pos];
+          updateField('senkrechtMarkiseData', JSON.stringify(newPositions));
         };
 
         return (
           <motion.div
             key={field.name}
             id={field.name}
-            className="form-field senkrecht-section full-width"
+            className="form-field senkrecht-section"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: index * 0.03 }}
           >
-            <div className="section-divider">
-              <h3>SENKRECHT MARKISE</h3>
-            </div>
-            <div className="senkrecht-active-toggle">
-              <label>Senkrecht Markise hinzufügen?</label>
-              <div className="senkrecht-toggle-buttons">
-                <button
-                  type="button"
-                  className={`senkrecht-toggle-btn ${senkrechtActive ? 'active' : ''}`}
-                  onClick={() => {
-                    updateField('senkrechtMarkiseActive', 'Ja');
-                    if (senkrechtData.length === 0) {
-                      updateSenkrechtData([{ ...emptySenkrecht }]);
-                    }
-                  }}
-                >
-                  Ja
-                </button>
-                <button
-                  type="button"
-                  className={`senkrecht-toggle-btn ${!senkrechtActive && formData['senkrechtMarkiseActive'] !== undefined ? 'active' : ''}`}
-                  onClick={() => {
-                    updateField('senkrechtMarkiseActive', 'Keine');
-                    updateField('senkrechtMarkiseData', '[]');
-                  }}
-                >
-                  Keine
-                </button>
-              </div>
-            </div>
+            <label>
+              Senkrecht Markise <span className="required">*</span>
+            </label>
+            <select
+              value={formData['senkrechtMarkiseActive'] === 'Ja' ? 'Ja' : (formData['senkrechtMarkiseActive'] === 'Keine' ? 'Keine' : '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateField('senkrechtMarkiseActive', val);
+                if (val === 'Keine') {
+                  updateField('senkrechtMarkiseData', '[]');
+                }
+              }}
+            >
+              <option value="">Bitte wählen...</option>
+              <option value="Keine">Keine</option>
+              <option value="Ja">Ja</option>
+            </select>
 
             <AnimatePresence>
-              {senkrechtActive && senkrechtData.length > 0 && (
+              {senkrechtActive && (
                 <motion.div
-                  className="senkrecht-items"
+                  className="senkrecht-positions"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
                 >
-                  {senkrechtData.map((senkrecht: typeof emptySenkrecht, idx: number) => (
-                    <div key={idx} className="senkrecht-item-card">
-                      <div className="senkrecht-item-header">
-                        <span>Senkrecht Markise {idx + 1}</span>
-                        {senkrechtData.length > 1 && (
-                          <button
-                            type="button"
-                            className="remove-senkrecht-btn"
-                            onClick={() => removeSenkrecht(idx)}
-                          >
-                            ×
-                          </button>
-                        )}
-                      </div>
-                      <div className="senkrecht-fields-grid">
-                        {/* Row 1: Position, Modell, Befestigungsart */}
-                        <div className="form-field">
-                          <label>Position <span className="required">*</span></label>
-                          <select
-                            value={senkrecht.position || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'position', e.target.value)}
-                          >
-                            <option value="">Bitte wählen</option>
-                            <option value="LINKS">LINKS</option>
-                            <option value="RECHTS">RECHTS</option>
-                            <option value="FRONT">FRONT</option>
-                            <option value="FRONT LINKS">FRONT LINKS</option>
-                            <option value="FRONT RECHTS">FRONT RECHTS</option>
-                            <option value="HINTEN LINKS">HINTEN LINKS</option>
-                            <option value="HINTEN RECHTS">HINTEN RECHTS</option>
-                          </select>
-                        </div>
-                        <div className="form-field">
-                          <label>Modell <span className="required">*</span></label>
-                          <select
-                            value={senkrecht.modell || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'modell', e.target.value)}
-                          >
-                            <option value="">Bitte wählen</option>
-                            <option value="2020Z">2020Z</option>
-                            <option value="1616Z">1616Z</option>
-                          </select>
-                        </div>
-                        <div className="form-field">
-                          <label>Befestigungsart <span className="required">*</span></label>
-                          <select
-                            value={senkrecht.befestigungsart || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'befestigungsart', e.target.value)}
-                          >
-                            <option value="">Bitte wählen</option>
-                            <option value="Zwischen Pfosten">Zwischen Pfosten</option>
-                            <option value="Vor Pfosten">Vor Pfosten</option>
-                          </select>
-                        </div>
-                        {/* Row 2: Breite, Höhe, ZIP */}
-                        <div className="form-field">
-                          <label>Breite <span className="unit-label">(mm)</span> <span className="required">*</span></label>
-                          <input
-                            type="number"
-                            value={senkrecht.breite || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'breite', e.target.value)}
-                            placeholder="0"
-                            min="0"
-                          />
-                        </div>
-                        <div className="form-field">
-                          <label>Höhe <span className="unit-label">(mm)</span> <span className="required">*</span></label>
-                          <input
-                            type="number"
-                            value={senkrecht.hoehe || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'hoehe', e.target.value)}
-                            placeholder="0"
-                            min="0"
-                          />
-                        </div>
-                        <div className="form-field">
-                          <label>ZIP <span className="required">*</span></label>
-                          <select
-                            value={senkrecht.zip || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'zip', e.target.value)}
-                          >
-                            <option value="">Bitte wählen</option>
-                            <option value="Ja">Ja</option>
-                            <option value="Nein">Nein</option>
-                          </select>
-                        </div>
-                        {/* Row 3: Antrieb, Antriebseite, Anschlussseite */}
-                        <div className="form-field">
-                          <label>Antrieb <span className="required">*</span></label>
-                          <select
-                            value={senkrecht.antrieb || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'antrieb', e.target.value)}
-                          >
-                            <option value="">Bitte wählen</option>
-                            <option value="Funk">Funk</option>
-                            <option value="E-Motor">E-Motor</option>
-                          </select>
-                        </div>
-                        <div className="form-field">
-                          <label>Antriebseite <span className="required">*</span></label>
-                          <select
-                            value={senkrecht.antriebseite || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'antriebseite', e.target.value)}
-                          >
-                            <option value="">Bitte wählen</option>
-                            <option value="Links">Links</option>
-                            <option value="Rechts">Rechts</option>
-                          </select>
-                        </div>
-                        <div className="form-field">
-                          <label>Anschlussseite <span className="required">*</span></label>
-                          <select
-                            value={senkrecht.anschlussseite || ''}
-                            onChange={(e) => updateSenkrechtField(idx, 'anschlussseite', e.target.value)}
-                          >
-                            <option value="">Bitte wählen</option>
-                            <option value="Links">Links</option>
-                            <option value="Rechts">Rechts</option>
-                          </select>
-                        </div>
-                        {/* Row 4: Gestellfarbe, Stoff Nummer */}
-                        <div className="senkrecht-bottom-row">
-                          <div className="form-field">
-                            <label>Gestellfarbe <span className="required">*</span></label>
-                            <input
-                              type="text"
-                              value={senkrecht.gestellfarbe || ''}
-                              onChange={(e) => updateSenkrechtField(idx, 'gestellfarbe', e.target.value)}
-                              placeholder="z.B. RAL 7016"
-                            />
-                          </div>
-                          <div className="form-field">
-                            <label>Stoff Nummer <span className="required">*</span></label>
-                            <input
-                              type="text"
-                              value={senkrecht.stoffNummer || ''}
-                              onChange={(e) => updateSenkrechtField(idx, 'stoffNummer', e.target.value)}
-                              placeholder="Stoff Nummer eingeben"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    className="add-senkrecht-btn"
-                    onClick={addSenkrecht}
-                  >
-                    + Weitere Senkrecht Markise hinzufügen
-                  </button>
+                  <label className="senkrecht-positions-label">
+                    Position(en) wählen <span className="required">*</span>
+                  </label>
+                  <div className="senkrecht-positions-grid">
+                    {allPositionOptions.map(pos => (
+                      <label key={pos} className={`senkrecht-position-chip ${senkrechtPositions.includes(pos) ? 'selected' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={senkrechtPositions.includes(pos)}
+                          onChange={() => togglePosition(pos)}
+                        />
+                        <span>{pos}</span>
+                      </label>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        );
+
+        /* === ARCHIVED: Original detailed senkrecht_section (kept for potential rollback) ===
+        // This was the full senkrecht markise form with modell, dimensions, stoff, antrieb etc.
+        // Replaced with simplified JA/KEINE + multi-select positions module.
+        // Old data format: senkrechtMarkiseData = [{position, modell, befestigungsart, breite, hoehe, zip, antrieb, antriebseite, anschlussseite, gestellfarbe, stoffNummer}]
+        // New data format: senkrechtMarkiseData = ["LINKS", "FRONT", ...]
+        === END ARCHIVED === */
+
+      case 'festes_element_section':
+        const festesActive = formData['festesElementActive'] === 'Ja';
+        const festesPositions: string[] = (() => {
+          try {
+            const data = formData['festesElementData'];
+            if (typeof data === 'string') {
+              const parsed = JSON.parse(data);
+              if (Array.isArray(parsed)) return parsed.filter((item): item is string => typeof item === 'string');
+            }
+            if (Array.isArray(data)) return data.filter((item): item is string => typeof item === 'string');
+            return [];
+          } catch { return []; }
+        })();
+
+        const festesPositionOptions = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS', 'HINTEN LINKS', 'HINTEN RECHTS'];
+
+        const toggleFestesPosition = (pos: string) => {
+          const newPositions = festesPositions.includes(pos)
+            ? festesPositions.filter(p => p !== pos)
+            : [...festesPositions, pos];
+          updateField('festesElementData', JSON.stringify(newPositions));
+        };
+
+        return (
+          <motion.div
+            key={field.name}
+            id={field.name}
+            className="form-field senkrecht-section"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.03 }}
+          >
+            <label>
+              Festes Element <span className="required">*</span>
+            </label>
+            <select
+              value={formData['festesElementActive'] === 'Ja' ? 'Ja' : (formData['festesElementActive'] === 'Keine' ? 'Keine' : '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateField('festesElementActive', val);
+                if (val === 'Keine' || val === '') {
+                  updateField('festesElementData', '[]');
+                }
+              }}
+            >
+              <option value="">Bitte wählen...</option>
+              <option value="Keine">Keine</option>
+              <option value="Ja">Ja</option>
+            </select>
+
+            <AnimatePresence>
+              {festesActive && (
+                <motion.div
+                  className="senkrecht-positions"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <label className="senkrecht-positions-label">
+                    Position(en) wählen <span className="required">*</span>
+                  </label>
+                  <div className="senkrecht-positions-grid">
+                    {festesPositionOptions.map(pos => (
+                      <label key={pos} className={`senkrecht-position-chip ${festesPositions.includes(pos) ? 'selected' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={festesPositions.includes(pos)}
+                          onChange={() => toggleFestesPosition(pos)}
+                        />
+                        <span>{pos}</span>
+                      </label>
+                    ))}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1334,8 +1256,8 @@ const DynamicSpecificationForm = ({
 
   const renderWPSpecField = (product: WeiteresProdukt, index: number, field: FieldConfig) => {
     const value = product.specifications[field.name];
-    // Skip montageteam, markise_trigger, and senkrecht_section fields in weitere produkte
-    if (field.name === 'montageteam' || field.type === 'markise_trigger' || field.type === 'senkrecht_section') return null;
+    // Skip montageteam and markise_trigger fields in weitere produkte
+    if (field.name === 'montageteam' || field.type === 'markise_trigger') return null;
 
     // Check showWhen condition for conditional field visibility
     if (field.showWhen) {
@@ -1469,7 +1391,7 @@ const DynamicSpecificationForm = ({
                 <option key={opt} value={opt}>{opt}</option>
               ))}
             </select>
-            {value && (
+            {value === 'Aylux' && (
               <div className="fundament-details">
                 <label>Fundament Anzahl/Details</label>
                 <input
@@ -1729,6 +1651,104 @@ const DynamicSpecificationForm = ({
           </div>
         );
 
+      case 'senkrecht_section': {
+        const wpSenkActive = product.specifications['senkrechtMarkiseActive'] === 'Ja';
+        const wpSenkPositions: string[] = (() => {
+          try {
+            const d = product.specifications['senkrechtMarkiseData'];
+            if (typeof d === 'string') {
+              const p = JSON.parse(d);
+              if (Array.isArray(p)) return p.filter((i: unknown): i is string => typeof i === 'string');
+            }
+            return [];
+          } catch { return []; }
+        })();
+        const senkPosOpts = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS', 'HINTEN LINKS', 'HINTEN RECHTS'];
+        return (
+          <div key={field.name} className="form-field senkrecht-section">
+            <label>Senkrecht Markise <span className="required">*</span></label>
+            <select
+              value={product.specifications['senkrechtMarkiseActive'] === 'Ja' ? 'Ja' : (product.specifications['senkrechtMarkiseActive'] === 'Keine' ? 'Keine' : '')}
+              onChange={(e) => {
+                handleWPSpecChange(index, 'senkrechtMarkiseActive', e.target.value);
+                if (e.target.value === 'Keine' || e.target.value === '') {
+                  handleWPSpecChange(index, 'senkrechtMarkiseData', '[]');
+                }
+              }}
+            >
+              <option value="">Bitte wählen...</option>
+              <option value="Keine">Keine</option>
+              <option value="Ja">Ja</option>
+            </select>
+            {wpSenkActive && (
+              <div className="senkrecht-positions" style={{ marginTop: '0.75rem' }}>
+                <label className="senkrecht-positions-label">Position(en) wählen <span className="required">*</span></label>
+                <div className="senkrecht-positions-grid">
+                  {senkPosOpts.map(pos => (
+                    <label key={pos} className={`senkrecht-position-chip ${wpSenkPositions.includes(pos) ? 'selected' : ''}`}>
+                      <input type="checkbox" checked={wpSenkPositions.includes(pos)} onChange={() => {
+                        const np = wpSenkPositions.includes(pos) ? wpSenkPositions.filter(p => p !== pos) : [...wpSenkPositions, pos];
+                        handleWPSpecChange(index, 'senkrechtMarkiseData', JSON.stringify(np));
+                      }} />
+                      <span>{pos}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      case 'festes_element_section': {
+        const wpFestActive = product.specifications['festesElementActive'] === 'Ja';
+        const wpFestPositions: string[] = (() => {
+          try {
+            const d = product.specifications['festesElementData'];
+            if (typeof d === 'string') {
+              const p = JSON.parse(d);
+              if (Array.isArray(p)) return p.filter((i: unknown): i is string => typeof i === 'string');
+            }
+            return [];
+          } catch { return []; }
+        })();
+        const festPosOpts = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS', 'HINTEN LINKS', 'HINTEN RECHTS'];
+        return (
+          <div key={field.name} className="form-field senkrecht-section">
+            <label>Festes Element <span className="required">*</span></label>
+            <select
+              value={product.specifications['festesElementActive'] === 'Ja' ? 'Ja' : (product.specifications['festesElementActive'] === 'Keine' ? 'Keine' : '')}
+              onChange={(e) => {
+                handleWPSpecChange(index, 'festesElementActive', e.target.value);
+                if (e.target.value === 'Keine' || e.target.value === '') {
+                  handleWPSpecChange(index, 'festesElementData', '[]');
+                }
+              }}
+            >
+              <option value="">Bitte wählen...</option>
+              <option value="Keine">Keine</option>
+              <option value="Ja">Ja</option>
+            </select>
+            {wpFestActive && (
+              <div className="senkrecht-positions" style={{ marginTop: '0.75rem' }}>
+                <label className="senkrecht-positions-label">Position(en) wählen <span className="required">*</span></label>
+                <div className="senkrecht-positions-grid">
+                  {festPosOpts.map(pos => (
+                    <label key={pos} className={`senkrecht-position-chip ${wpFestPositions.includes(pos) ? 'selected' : ''}`}>
+                      <input type="checkbox" checked={wpFestPositions.includes(pos)} onChange={() => {
+                        const np = wpFestPositions.includes(pos) ? wpFestPositions.filter(p => p !== pos) : [...wpFestPositions, pos];
+                        handleWPSpecChange(index, 'festesElementData', JSON.stringify(np));
+                      }} />
+                      <span>{pos}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       case 'text':
         return (
           <div key={field.name} className="form-field">
@@ -1835,8 +1855,8 @@ const DynamicSpecificationForm = ({
           </div>
         )}
 
-        {/* Model select for all products (including Markise) */}
-        {((isMarkise && selectedProductTypes.length > 0) || (!isMarkise && product.productType)) && models.length > 0 && (
+        {/* ARCHIVED: Model selection removed - no longer needed in first measurement */}
+        {/* {((isMarkise && selectedProductTypes.length > 0) || (!isMarkise && product.productType)) && models.length > 0 && (
           <div className="form-field">
             <label>Modell <span className="required">*</span></label>
             <select
@@ -1849,17 +1869,17 @@ const DynamicSpecificationForm = ({
               ))}
             </select>
           </div>
-        )}
+        )} */}
 
         {/* Specs for all products */}
-        {product.model && (
+        {((isMarkise && selectedProductTypes.length > 0) || (!isMarkise && product.productType)) && (
           <div className="specs-grid">
             {wpFields.map(field => renderWPSpecField(product, index, field))}
           </div>
         )}
 
         {/* Markise Bemerkungen (Note field) for MARKISE category */}
-        {isMarkise && product.model && (
+        {isMarkise && selectedProductTypes.length > 0 && (
           <div className="form-field full-width markise-bemerkungen-field">
             <label>Markise Bemerkung</label>
             <textarea

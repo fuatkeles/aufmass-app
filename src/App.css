@@ -546,6 +546,19 @@ body {
   transform: none;
 }
 
+.btn-draft-save {
+  background: transparent;
+  color: #f97316;
+  border: 2px solid #f97316;
+}
+
+.btn-draft-save:hover {
+  background: #f97316;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
+}
+
 .btn-primary.disabled,
 .btn-primary:disabled {
   opacity: 0.5;

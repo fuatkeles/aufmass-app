@@ -12,6 +12,8 @@ export interface AngebotPdfItem {
   pricing_type?: 'dimension' | 'unit';
   unit_label?: string;
   description?: string;
+  custom_fields?: { id: string; label: string; type: string; unit?: string; options?: string[]; required?: boolean }[];
+  custom_field_values?: Record<string, string>;
 }
 
 export interface AngebotPdfExtra {
@@ -224,6 +226,29 @@ export const generateAngebotPDF = async (
         pdf.setFontSize(10);
         pdf.setTextColor(0, 0, 0);
         yPos += 1;
+      }
+
+      // Custom field values (below description)
+      if (item.custom_fields && item.custom_field_values) {
+        const filledFields = item.custom_fields.filter(f => item.custom_field_values![f.id]);
+        if (filledFields.length > 0) {
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(80, 80, 80);
+          filledFields.forEach(field => {
+            checkNewPage(6);
+            const val = item.custom_field_values![field.id];
+            const suffix = field.type === 'number' && field.unit ? ` ${field.unit}` : '';
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(`${field.label}:`, colX.produkt + 3, yPos);
+            const labelWidth = pdf.getTextWidth(`${field.label}:`);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(`${val}${suffix}`, colX.produkt + 3 + labelWidth + 3, yPos);
+            yPos += 5;
+          });
+          pdf.setFontSize(10);
+          pdf.setTextColor(0, 0, 0);
+          yPos += 1;
+        }
       }
 
       // Row separator

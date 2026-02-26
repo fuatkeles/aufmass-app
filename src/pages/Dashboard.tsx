@@ -19,6 +19,7 @@ const isAdminOrOffice = () => {
 // Status options for forms - ordered workflow
 const STATUS_OPTIONS = [
   { value: 'alle', label: 'Alle Aufmaße', color: '#7fa93d' },
+  { value: 'entwurf', label: 'Entwurf', color: '#f97316' },
   { value: 'auftrag_abgelehnt', label: 'Auftrag Abgelehnt', color: '#6b7280' },
   { value: 'neu', label: 'Aufmaß Genommen', color: '#8b5cf6' },
   { value: 'angebot_versendet', label: 'Angebot Versendet', color: '#a78bfa' },
@@ -35,6 +36,7 @@ const STATUS_OPTIONS = [
 
 // Status order for edit lock check (after auftrag_erteilt, editing is locked for non-admins)
 const STATUS_ORDER = [
+  'entwurf',
   'auftrag_abgelehnt',
   'neu',
   'angebot_versendet',

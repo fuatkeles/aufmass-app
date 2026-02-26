@@ -1725,6 +1725,8 @@
   background: rgba(255, 255, 255, 0.02);
   border: 1px dashed rgba(255, 255, 255, 0.1);
   border-radius: 8px;
+  letter-spacing: normal;
+  text-transform: none;
   color: #4b5563;
   font-size: 0.813rem;
   cursor: pointer;
@@ -1758,6 +1760,8 @@
 .desc-content {
   white-space: pre-wrap;
   line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .desc-placeholder {
@@ -1885,6 +1889,236 @@
 .light-theme .btn-desc-cancel:hover {
   border-color: #9ca3af;
   color: #1f2937;
+}
+
+/* Custom Fields Section */
+.custom-fields-section {
+  padding: 0 20px 16px;
+}
+
+.cf-section-title {
+  font-size: 0.875rem;
+  color: #a3e635;
+  margin: 0 0 10px 0;
+  font-weight: 600;
+}
+
+.custom-fields-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.custom-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cf-label-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.813rem;
+}
+
+.cf-type-select {
+  width: 140px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.813rem;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b95a5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  cursor: pointer;
+}
+
+.cf-type-select:focus {
+  border-color: rgba(163, 230, 53, 0.4);
+  outline: none;
+}
+
+.cf-type-select option {
+  background: #1e293b;
+  color: #e0e0e0;
+  padding: 6px;
+}
+
+.cf-unit-input {
+  width: 80px;
+  padding: 7px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.813rem;
+}
+
+.cf-options-input {
+  flex: 1;
+  min-width: 150px;
+  padding: 7px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 0.813rem;
+}
+
+.cf-required-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.813rem;
+  color: #8b95a5;
+  white-space: nowrap;
+  cursor: pointer;
+  min-width: 80px;
+  padding: 4px 0;
+}
+
+.cf-required-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #a3e635;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.cf-required-label input[type="checkbox"]:checked {
+  background: #a3e635;
+  border-color: #a3e635;
+}
+
+.cf-required-label input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.cf-remove-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.cf-remove-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.cf-add-btn {
+  padding: 8px 14px;
+  background: rgba(163, 230, 53, 0.08);
+  border: 1px dashed rgba(163, 230, 53, 0.3);
+  border-radius: 6px;
+  color: #a3e635;
+  font-size: 0.813rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.cf-add-btn:hover {
+  background: rgba(163, 230, 53, 0.15);
+  border-color: rgba(163, 230, 53, 0.5);
+}
+
+.cf-editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.custom-fields-editor-wrapper {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+/* Light theme custom fields */
+.light-theme .cf-section-title {
+  color: #7fa93d;
+}
+
+.light-theme .cf-label-input,
+.light-theme .cf-type-select,
+.light-theme .cf-unit-input,
+.light-theme .cf-options-input {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  color: #1f2937;
+}
+
+.light-theme .cf-required-label {
+  color: #6b7280;
+}
+
+.light-theme .cf-type-select option {
+  background: #ffffff;
+  color: #1f2937;
+}
+
+.light-theme .cf-required-label input[type="checkbox"] {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.light-theme .cf-required-label input[type="checkbox"]:checked {
+  background: #7fa93d;
+  border-color: #7fa93d;
+}
+
+.light-theme .cf-remove-btn {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.light-theme .cf-add-btn {
+  background: rgba(127, 169, 61, 0.06);
+  border-color: rgba(127, 169, 61, 0.3);
+  color: #7fa93d;
+}
+
+.light-theme .cf-add-btn:hover {
+  background: rgba(127, 169, 61, 0.12);
+}
+
+.light-theme .custom-fields-editor-wrapper {
+  background: #f9fafb;
+  border-color: #e5e7eb;
 }
 
 /* Pricing Type Toggle (New Product Modal) */

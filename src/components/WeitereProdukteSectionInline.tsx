@@ -587,6 +587,130 @@ const WeitereProdukteSectionInline = ({
           </div>
         );
 
+      case 'senkrecht_section': {
+        const wpSenkrechtActive = product.specifications['senkrechtMarkiseActive'] === 'Ja';
+        const wpSenkrechtPositions: string[] = (() => {
+          try {
+            const data = product.specifications['senkrechtMarkiseData'];
+            if (typeof data === 'string') {
+              const parsed = JSON.parse(data);
+              if (Array.isArray(parsed)) return parsed.filter((item: unknown): item is string => typeof item === 'string');
+            }
+            if (Array.isArray(data)) return (data as unknown[]).filter((item): item is string => typeof item === 'string');
+            return [];
+          } catch { return []; }
+        })();
+        const senkrechtPosOptions = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS', 'HINTEN LINKS', 'HINTEN RECHTS'];
+
+        return (
+          <div key={field.name} className="form-field senkrecht-section">
+            <label>
+              Senkrecht Markise <span className="required">*</span>
+            </label>
+            <select
+              value={product.specifications['senkrechtMarkiseActive'] === 'Ja' ? 'Ja' : (product.specifications['senkrechtMarkiseActive'] === 'Keine' ? 'Keine' : '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                handleWPSpecChange(index, 'senkrechtMarkiseActive', val);
+                if (val === 'Keine' || val === '') {
+                  handleWPSpecChange(index, 'senkrechtMarkiseData', '[]');
+                }
+              }}
+            >
+              <option value="">Bitte wählen...</option>
+              <option value="Keine">Keine</option>
+              <option value="Ja">Ja</option>
+            </select>
+            {wpSenkrechtActive && (
+              <div className="senkrecht-positions" style={{ marginTop: '0.75rem' }}>
+                <label className="senkrecht-positions-label">
+                  Position(en) wählen <span className="required">*</span>
+                </label>
+                <div className="senkrecht-positions-grid">
+                  {senkrechtPosOptions.map(pos => (
+                    <label key={pos} className={`senkrecht-position-chip ${wpSenkrechtPositions.includes(pos) ? 'selected' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={wpSenkrechtPositions.includes(pos)}
+                        onChange={() => {
+                          const newPositions = wpSenkrechtPositions.includes(pos)
+                            ? wpSenkrechtPositions.filter(p => p !== pos)
+                            : [...wpSenkrechtPositions, pos];
+                          handleWPSpecChange(index, 'senkrechtMarkiseData', JSON.stringify(newPositions));
+                        }}
+                      />
+                      <span>{pos}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      case 'festes_element_section': {
+        const wpFestesActive = product.specifications['festesElementActive'] === 'Ja';
+        const wpFestesPositions: string[] = (() => {
+          try {
+            const data = product.specifications['festesElementData'];
+            if (typeof data === 'string') {
+              const parsed = JSON.parse(data);
+              if (Array.isArray(parsed)) return parsed.filter((item: unknown): item is string => typeof item === 'string');
+            }
+            if (Array.isArray(data)) return (data as unknown[]).filter((item): item is string => typeof item === 'string');
+            return [];
+          } catch { return []; }
+        })();
+        const festesPosOptions = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS', 'HINTEN LINKS', 'HINTEN RECHTS'];
+
+        return (
+          <div key={field.name} className="form-field senkrecht-section">
+            <label>
+              Festes Element <span className="required">*</span>
+            </label>
+            <select
+              value={product.specifications['festesElementActive'] === 'Ja' ? 'Ja' : (product.specifications['festesElementActive'] === 'Keine' ? 'Keine' : '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                handleWPSpecChange(index, 'festesElementActive', val);
+                if (val === 'Keine' || val === '') {
+                  handleWPSpecChange(index, 'festesElementData', '[]');
+                }
+              }}
+            >
+              <option value="">Bitte wählen...</option>
+              <option value="Keine">Keine</option>
+              <option value="Ja">Ja</option>
+            </select>
+            {wpFestesActive && (
+              <div className="senkrecht-positions" style={{ marginTop: '0.75rem' }}>
+                <label className="senkrecht-positions-label">
+                  Position(en) wählen <span className="required">*</span>
+                </label>
+                <div className="senkrecht-positions-grid">
+                  {festesPosOptions.map(pos => (
+                    <label key={pos} className={`senkrecht-position-chip ${wpFestesPositions.includes(pos) ? 'selected' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={wpFestesPositions.includes(pos)}
+                        onChange={() => {
+                          const newPositions = wpFestesPositions.includes(pos)
+                            ? wpFestesPositions.filter(p => p !== pos)
+                            : [...wpFestesPositions, pos];
+                          handleWPSpecChange(index, 'festesElementData', JSON.stringify(newPositions));
+                        }}
+                      />
+                      <span>{pos}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       case 'text':
         return (
           <div key={field.name} className="form-field">
@@ -643,7 +767,8 @@ const WeitereProdukteSectionInline = ({
           </div>
         )}
 
-        {product.productType && models.length > 0 && (
+        {/* ARCHIVED: Model selection removed - no longer needed in first measurement */}
+        {/* {product.productType && models.length > 0 && (
           <div className="form-field">
             <label>Modell <span className="required">*</span></label>
             <select
@@ -656,9 +781,9 @@ const WeitereProdukteSectionInline = ({
               ))}
             </select>
           </div>
-        )}
+        )} */}
 
-        {product.model && (
+        {product.productType && (
           <div className="specs-grid">
             {wpFields.map(field => renderWPSpecField(product, index, field))}
           </div>

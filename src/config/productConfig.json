@@ -134,9 +134,9 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament Vorhanden",
+          "label": "Fundament",
           "type": "fundament",
-          "options": ["Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde", "Fundament Vorhanden"],
           "required": true
         },
         {
@@ -203,6 +203,12 @@
           "name": "senkrechtMarkise",
           "label": "Senkrecht Markise",
           "type": "senkrecht_section",
+          "required": false
+        },
+        {
+          "name": "festesElement",
+          "label": "Festes Element",
+          "type": "festes_element_section",
           "required": false
         }
       ]
@@ -326,9 +332,9 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament Vorhanden",
+          "label": "Fundament",
           "type": "fundament",
-          "options": ["Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde", "Fundament Vorhanden"],
           "required": true
         },
         {
@@ -395,6 +401,12 @@
           "name": "senkrechtMarkise",
           "label": "Senkrecht Markise",
           "type": "senkrecht_section",
+          "required": false
+        },
+        {
+          "name": "festesElement",
+          "label": "Festes Element",
+          "type": "festes_element_section",
           "required": false
         }
       ]
@@ -521,9 +533,9 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament Vorhanden",
+          "label": "Fundament",
           "type": "fundament",
-          "options": ["Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde", "Fundament Vorhanden"],
           "required": true
         },
         {
@@ -590,6 +602,12 @@
           "name": "senkrechtMarkise",
           "label": "Senkrecht Markise",
           "type": "senkrecht_section",
+          "required": false
+        },
+        {
+          "name": "festesElement",
+          "label": "Festes Element",
+          "type": "festes_element_section",
           "required": false
         }
       ]
@@ -716,9 +734,9 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament Vorhanden",
+          "label": "Fundament",
           "type": "fundament",
-          "options": ["Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde", "Fundament Vorhanden"],
           "required": true
         },
         {
@@ -785,6 +803,12 @@
           "name": "senkrechtMarkise",
           "label": "Senkrecht Markise",
           "type": "senkrecht_section",
+          "required": false
+        },
+        {
+          "name": "festesElement",
+          "label": "Festes Element",
+          "type": "festes_element_section",
           "required": false
         }
       ]
@@ -1061,13 +1085,6 @@
           "required": true
         },
         {
-          "name": "markisenhoehe",
-          "label": "Markisenhöhe",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
           "name": "stoffNummer",
           "label": "Stoff Nummer",
           "type": "text",
@@ -1132,13 +1149,6 @@
         {
           "name": "markisenlaenge",
           "label": "Markisenlänge",
-          "type": "number",
-          "unit": "mm",
-          "required": true
-        },
-        {
-          "name": "markisenhoehe",
-          "label": "Markisenhöhe",
           "type": "number",
           "unit": "mm",
           "required": true
@@ -1234,9 +1244,9 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament Vorhanden",
+          "label": "Fundament",
           "type": "fundament",
-          "options": ["Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde", "Fundament Vorhanden"],
           "required": true
         },
         {
@@ -1300,9 +1310,9 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament Vorhanden",
+          "label": "Fundament",
           "type": "fundament",
-          "options": ["Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde", "Fundament Vorhanden"],
           "required": true
         },
         {
@@ -1376,9 +1386,9 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament Vorhanden",
+          "label": "Fundament",
           "type": "fundament",
-          "options": ["Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde", "Fundament Vorhanden"],
           "required": true
         },
         {
@@ -1487,9 +1497,9 @@
         },
         {
           "name": "fundament",
-          "label": "Fundament Vorhanden",
+          "label": "Fundament",
           "type": "fundament",
-          "options": ["Aylux", "Kunde"],
+          "options": ["Aylux", "Kunde", "Fundament Vorhanden"],
           "required": true
         },
         {

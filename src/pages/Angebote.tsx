@@ -66,6 +66,7 @@ export default function Angebote() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
+  const [editLeadData, setEditLeadData] = useState<LeadDetail | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LeadDetail | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -94,6 +95,16 @@ export default function Angebote() {
       setDetailModalOpen(true);
     } catch (err) {
       console.error('Failed to load lead details:', err);
+    }
+  };
+
+  const handleEditLead = async (id: number) => {
+    try {
+      const data = await api.get<LeadDetail>(`/leads/${id}`);
+      setEditLeadData(data);
+      setLeadModalOpen(true);
+    } catch (err) {
+      console.error('Failed to load lead for editing:', err);
     }
   };
 
@@ -317,6 +328,16 @@ export default function Angebote() {
                   </button>
                   <button
                     className="btn-icon"
+                    title="Bearbeiten"
+                    onClick={() => handleEditLead(lead.id)}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                  <button
+                    className="btn-icon"
                     title="Details anzeigen"
                     onClick={() => handleViewDetails(lead.id)}
                   >
@@ -367,11 +388,13 @@ export default function Angebote() {
       {/* Lead Form Modal */}
       <LeadFormModal
         isOpen={leadModalOpen}
-        onClose={() => setLeadModalOpen(false)}
+        onClose={() => { setLeadModalOpen(false); setEditLeadData(null); }}
         onSuccess={() => {
           setLeadModalOpen(false);
+          setEditLeadData(null);
           loadLeads();
         }}
+        editData={editLeadData}
       />
 
       {/* Detail Modal */}
