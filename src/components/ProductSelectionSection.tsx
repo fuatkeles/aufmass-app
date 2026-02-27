@@ -21,6 +21,11 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
   const productTypes = selection.category
     ? Object.keys(productConfig[selection.category] || {})
     : [];
+  const models = selection.category && selection.productType
+    ? (productConfig[selection.category]?.[selection.productType]?.models || [])
+    : [];
+  const requiresModelSelection = selection.category !== 'MARKISE';
+  const selectedModel = Array.isArray(selection.model) ? (selection.model[0] || '') : (selection.model || '');
 
   const handleCategorySelect = (category: string) => {
     updateSelection('category', category);
@@ -123,6 +128,30 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
       )}
 
       {/* ARCHIVED: Model Selection - removed as model selection is no longer needed in first measurement */}
+      {selection.productType && requiresModelSelection && models.length > 0 && (
+        <motion.div
+          className="selection-step"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <h3 className="step-title">3. Modell wÃ¤hlen</h3>
+          <select
+            className="model-select"
+            value={selectedModel}
+            onChange={(e) => updateSelection('model', e.target.value)}
+          >
+            <option value="">Bitte Modell wÃ¤hlen...</option>
+            {models.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </motion.div>
+      )}
+
+      {/* Legacy multi-select model dropdown kept for reference */}
       {/* {selection.productType && models.length > 0 && (
         <motion.div
           className="selection-step"
@@ -179,7 +208,7 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
       )} */}
 
       {/* Selection Summary */}
-      {selection.category && selection.productType && (
+      {selection.category && selection.productType && (!requiresModelSelection || !!selectedModel) && (
         <motion.div
           className="selection-summary"
           initial={{ opacity: 0, scale: 0.95 }}
@@ -196,11 +225,12 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
               <span className="summary-label">Produkttyp:</span>
               <span className="summary-value">{selection.productType}</span>
             </div>
-            {/* ARCHIVED: Model display in summary */}
-            {/* <div className="summary-item">
-              <span className="summary-label">Modell{selectedModels.length > 1 ? 'e' : ''}:</span>
-              <span className="summary-value">{selectedModels.join(', ')}</span>
-            </div> */}
+            {requiresModelSelection && (
+              <div className="summary-item">
+                <span className="summary-label">Modell:</span>
+                <span className="summary-value">{selectedModel}</span>
+              </div>
+            )}
           </div>
         </motion.div>
       )}

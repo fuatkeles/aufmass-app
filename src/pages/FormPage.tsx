@@ -146,6 +146,7 @@ const FormPage = () => {
             kundeVorname: apiData.kundeVorname || '',
             kundeNachname: apiData.kundeNachname || '',
             kundeEmail: apiData.kundeEmail || '',
+            kundeTelefon: apiData.kundeTelefon || '',
             kundenlokation: apiData.kundenlokation || '',
             productSelection: {
               category: apiData.category || '',

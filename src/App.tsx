@@ -848,11 +848,10 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
         title: 'Produktauswahl',
         icon: '2',
         canProceed: () => {
-          // ARCHIVED: Model selection no longer required
-          // const models = formData.productSelection.model;
-          // const hasModels = Array.isArray(models) ? models.length > 0 : !!models;
-          return !!(formData.productSelection.category &&
-                 formData.productSelection.productType);
+          const { category, productType, model } = formData.productSelection;
+          const requiresModel = category !== 'MARKISE';
+          const hasModel = Array.isArray(model) ? model.length > 0 : !!model;
+          return !!(category && productType && (!requiresModel || hasModel));
         }
       }
     ];
