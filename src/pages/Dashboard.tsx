@@ -24,6 +24,7 @@ const STATUS_OPTIONS = [
   { value: 'neu', label: 'Aufmaß Genommen', color: '#8b5cf6' },
   { value: 'angebot_versendet', label: 'Angebot Versendet', color: '#a78bfa' },
   { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
+  { value: 'bauantrag', label: 'Bauantrag', color: '#2563eb' },
   { value: 'anzahlung', label: 'Anzahlung Erhalten', color: '#06b6d4' },
   { value: 'bestellt', label: 'Bestellt/In Bearbeitung', color: '#f59e0b' },
   { value: 'montage_geplant', label: 'Montage Geplant', color: '#a855f7' },
@@ -40,7 +41,8 @@ const STATUS_ORDER = [
   'auftrag_abgelehnt',
   'neu',
   'angebot_versendet',
-  'auftrag_erteilt',  // Index 3 - lock starts AFTER this
+  'auftrag_erteilt',  // lock starts AFTER this
+  'bauantrag',
   'anzahlung',
   'bestellt',
   'montage_geplant',

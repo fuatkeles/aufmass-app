@@ -22,6 +22,7 @@ const STATUS_STEPS = [
   { value: 'angebot_versendet', label: 'Angebot Versendet', color: '#a78bfa' },
   { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
   { value: 'auftrag_abgelehnt', label: 'Auftrag Abgelehnt', color: '#6b7280' },
+  { value: 'bauantrag', label: 'Bauantrag', color: '#2563eb' },
   { value: 'anzahlung', label: 'Anzahlung Erhalten', color: '#06b6d4' },
   { value: 'bestellt', label: 'Bestellt', color: '#f59e0b' },
   { value: 'montage_geplant', label: 'Montage Geplant', color: '#a855f7' },
@@ -141,7 +142,7 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
       if (wpConfig?.fields) {
         for (const field of wpConfig.fields as ProductField[]) {
           if (excludedFields.includes(field.name)) continue;
-          if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section') continue;
+          if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section' || field.type === 'schiebe_element_section' || field.type === 'keil_fenster_section') continue;
 
           if (field.showWhen) {
             const dependentValue = wp.specifications[field.showWhen.field];
@@ -226,7 +227,7 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
       if (excludedFields.includes(field.name)) continue;
 
       // Skip markise_trigger and senkrecht_section (handled separately)
-      if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section') continue;
+      if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section' || field.type === 'schiebe_element_section' || field.type === 'keil_fenster_section') continue;
 
       // Handle showWhen conditions - skip if condition not met
       if (field.showWhen) {
@@ -382,6 +383,52 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
       }
     }
 
+    // ============ VALIDATE SCHIEBE ELEMENT FIELDS ============
+    const hasSchiebeField = (productTypeConfig.fields as ProductField[]).some(f => f.type === 'schiebe_element_section');
+    if (hasSchiebeField) {
+      const schiebeValue = formData.specifications['schiebeElementActive'];
+      if (!schiebeValue || (schiebeValue !== 'Ja' && schiebeValue !== 'Keine')) {
+        return false;
+      }
+      if (schiebeValue === 'Ja') {
+        let schiebePositions: string[] = [];
+        try {
+          const rawData = formData.specifications['schiebeElementData'];
+          if (typeof rawData === 'string') {
+            const parsed = JSON.parse(rawData);
+            if (Array.isArray(parsed)) schiebePositions = parsed.filter((item): item is string => typeof item === 'string');
+          }
+        } catch { schiebePositions = []; }
+
+        if (schiebePositions.length === 0) {
+          return false;
+        }
+      }
+    }
+
+    // ============ VALIDATE KEIL FENSTER FIELDS ============
+    const hasKeilField = (productTypeConfig.fields as ProductField[]).some(f => f.type === 'keil_fenster_section');
+    if (hasKeilField) {
+      const keilValue = formData.specifications['keilFensterActive'];
+      if (!keilValue || (keilValue !== 'Ja' && keilValue !== 'Keine')) {
+        return false;
+      }
+      if (keilValue === 'Ja') {
+        let keilPositions: string[] = [];
+        try {
+          const rawData = formData.specifications['keilFensterData'];
+          if (typeof rawData === 'string') {
+            const parsed = JSON.parse(rawData);
+            if (Array.isArray(parsed)) keilPositions = parsed.filter((item): item is string => typeof item === 'string');
+          }
+        } catch { keilPositions = []; }
+
+        if (keilPositions.length === 0) {
+          return false;
+        }
+      }
+    }
+
     // ============ VALIDATE WEITERE PRODUKTE ============
     if (!checkWeitereProdukteValid()) return false;
 
@@ -425,7 +472,7 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
       if (excludedFields.includes(field.name)) continue;
 
       // Skip markise_trigger and senkrecht_section (handled separately)
-      if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section') continue;
+      if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section' || field.type === 'schiebe_element_section' || field.type === 'keil_fenster_section') continue;
 
       // Handle showWhen conditions - skip if condition not met
       if (field.showWhen) {
@@ -588,6 +635,50 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
       }
     }
 
+    // ============ VALIDATE SCHIEBE ELEMENT FIELDS ============
+    const hasSchiebeFieldMissing = (productTypeConfig.fields as ProductField[]).some(f => f.type === 'schiebe_element_section');
+    if (hasSchiebeFieldMissing) {
+      const schiebeValue = formData.specifications['schiebeElementActive'];
+      if (!schiebeValue || (schiebeValue !== 'Ja' && schiebeValue !== 'Keine')) {
+        missingFields.push({ name: 'schiebeElement', label: 'Schiebe Element' });
+      } else if (schiebeValue === 'Ja') {
+        let schiebePositions: string[] = [];
+        try {
+          const rawData = formData.specifications['schiebeElementData'];
+          if (typeof rawData === 'string') {
+            const parsed = JSON.parse(rawData);
+            if (Array.isArray(parsed)) schiebePositions = parsed.filter((item): item is string => typeof item === 'string');
+          }
+        } catch { schiebePositions = []; }
+
+        if (schiebePositions.length === 0) {
+          missingFields.push({ name: 'schiebeElement', label: 'Schiebe Element Position(en)' });
+        }
+      }
+    }
+
+    // ============ VALIDATE KEIL FENSTER FIELDS ============
+    const hasKeilFieldMissing = (productTypeConfig.fields as ProductField[]).some(f => f.type === 'keil_fenster_section');
+    if (hasKeilFieldMissing) {
+      const keilValue = formData.specifications['keilFensterActive'];
+      if (!keilValue || (keilValue !== 'Ja' && keilValue !== 'Keine')) {
+        missingFields.push({ name: 'keilFenster', label: 'Keil Fenster' });
+      } else if (keilValue === 'Ja') {
+        let keilPositions: string[] = [];
+        try {
+          const rawData = formData.specifications['keilFensterData'];
+          if (typeof rawData === 'string') {
+            const parsed = JSON.parse(rawData);
+            if (Array.isArray(parsed)) keilPositions = parsed.filter((item): item is string => typeof item === 'string');
+          }
+        } catch { keilPositions = []; }
+
+        if (keilPositions.length === 0) {
+          missingFields.push({ name: 'keilFenster', label: 'Keil Fenster Position(en)' });
+        }
+      }
+    }
+
     // ============ VALIDATE UNTERBAUELEMENTE ============
     const unterbauelementeStr = formData.specifications?.unterbauelementeData as string;
     if (unterbauelementeStr) {
@@ -677,7 +768,7 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
           for (const field of wpConfig.fields as ProductField[]) {
             // Skip excluded fields
             if (excludedFields.includes(field.name)) continue;
-            if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section') continue;
+            if (field.type === 'markise_trigger' || field.type === 'senkrecht_section' || field.type === 'festes_element_section' || field.type === 'schiebe_element_section' || field.type === 'keil_fenster_section') continue;
 
             // Handle showWhen conditions
             if (field.showWhen) {

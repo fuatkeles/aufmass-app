@@ -1028,6 +1028,86 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
         }
       }
 
+      // ============ INTEGRATED SCHIEBE ELEMENT (for ÜBERDACHUNG) ============
+      const schiebeActive = formData.specifications.schiebeElementActive as string;
+      if (schiebeActive === 'Ja' && formData.specifications.schiebeElementData) {
+        try {
+          const rawSchiebe = JSON.parse(formData.specifications.schiebeElementData as string);
+          const sPositions: string[] = Array.isArray(rawSchiebe) ? rawSchiebe.filter((item: unknown) => typeof item === 'string') : [];
+
+          if (sPositions.length > 0) {
+            checkNewPage(25);
+            yPos += 5;
+
+            // Section header
+            pdf.setFontSize(12);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFillColor(127, 169, 61);
+            pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.text('SCHIEBE ELEMENT', margin + 2, yPos);
+            pdf.setTextColor(0, 0, 0);
+            yPos += 10;
+
+            pdf.setFontSize(10);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('Positionen:', margin + 5, yPos);
+            pdf.setFont('helvetica', 'normal');
+            const sPosText = sPositions.join(', ');
+            const sPosMaxWidth = pageWidth - margin - 60;
+            const sPosLines = pdf.splitTextToSize(sPosText, sPosMaxWidth);
+            sPosLines.forEach((line: string, i: number) => {
+              if (i > 0) checkNewPage();
+              pdf.text(line, margin + 40, yPos);
+              yPos += 6;
+            });
+            yPos += 4;
+          }
+        } catch (e) {
+          // Skip schiebe element data if parsing fails
+        }
+      }
+
+      // ============ INTEGRATED KEIL FENSTER (for ÜBERDACHUNG) ============
+      const keilFensterActive = formData.specifications.keilFensterActive as string;
+      if (keilFensterActive === 'Ja' && formData.specifications.keilFensterData) {
+        try {
+          const rawKeil = JSON.parse(formData.specifications.keilFensterData as string);
+          const kPositions: string[] = Array.isArray(rawKeil) ? rawKeil.filter((item: unknown) => typeof item === 'string') : [];
+
+          if (kPositions.length > 0) {
+            checkNewPage(25);
+            yPos += 5;
+
+            // Section header
+            pdf.setFontSize(12);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFillColor(127, 169, 61);
+            pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.text('KEIL FENSTER', margin + 2, yPos);
+            pdf.setTextColor(0, 0, 0);
+            yPos += 10;
+
+            pdf.setFontSize(10);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('Positionen:', margin + 5, yPos);
+            pdf.setFont('helvetica', 'normal');
+            const kPosText = kPositions.join(', ');
+            const kPosMaxWidth = pageWidth - margin - 60;
+            const kPosLines = pdf.splitTextToSize(kPosText, kPosMaxWidth);
+            kPosLines.forEach((line: string, i: number) => {
+              if (i > 0) checkNewPage();
+              pdf.text(line, margin + 40, yPos);
+              yPos += 6;
+            });
+            yPos += 4;
+          }
+        } catch (e) {
+          // Skip keil fenster data if parsing fails
+        }
+      }
+
       yPos += 8;
     }
   }
@@ -1251,6 +1331,40 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
             displayFields.push({ label: 'Festes Element:', value: `Ja - ${posText}`, isConditional: false });
           } else if (activeVal === 'Keine') {
             displayFields.push({ label: 'Festes Element:', value: 'Keine', isConditional: false });
+          }
+          return;
+        }
+
+        // Handle schiebe_element_section field type for Weitere Produkte
+        if (field.type === 'schiebe_element_section') {
+          const activeVal = produkt.specifications[`${field.name}Active`];
+          if (activeVal === 'Ja') {
+            const posData = produkt.specifications[`${field.name}Data`];
+            let positions: string[] = [];
+            try {
+              positions = typeof posData === 'string' ? JSON.parse(posData) : (Array.isArray(posData) ? posData : []);
+            } catch (e) { /* ignore */ }
+            const posText = positions.length > 0 ? positions.join(', ') : 'Keine Positionen';
+            displayFields.push({ label: 'Schiebe Element:', value: `Ja - ${posText}`, isConditional: false });
+          } else if (activeVal === 'Keine') {
+            displayFields.push({ label: 'Schiebe Element:', value: 'Keine', isConditional: false });
+          }
+          return;
+        }
+
+        // Handle keil_fenster_section field type for Weitere Produkte
+        if (field.type === 'keil_fenster_section') {
+          const activeVal = produkt.specifications[`${field.name}Active`];
+          if (activeVal === 'Ja') {
+            const posData = produkt.specifications[`${field.name}Data`];
+            let positions: string[] = [];
+            try {
+              positions = typeof posData === 'string' ? JSON.parse(posData) : (Array.isArray(posData) ? posData : []);
+            } catch (e) { /* ignore */ }
+            const posText = positions.length > 0 ? positions.join(', ') : 'Keine Positionen';
+            displayFields.push({ label: 'Keil Fenster:', value: `Ja - ${posText}`, isConditional: false });
+          } else if (activeVal === 'Keine') {
+            displayFields.push({ label: 'Keil Fenster:', value: 'Keine', isConditional: false });
           }
           return;
         }

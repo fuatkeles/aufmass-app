@@ -693,6 +693,130 @@ const WeitereProdukteSectionInline = ({
         );
       }
 
+      case 'schiebe_element_section': {
+        const wpSchiebeActive = product.specifications['schiebeElementActive'] === 'Ja';
+        const wpSchiebePositions: string[] = (() => {
+          try {
+            const data = product.specifications['schiebeElementData'];
+            if (typeof data === 'string') {
+              const parsed = JSON.parse(data);
+              if (Array.isArray(parsed)) return parsed.filter((item: unknown): item is string => typeof item === 'string');
+            }
+            if (Array.isArray(data)) return (data as unknown[]).filter((item): item is string => typeof item === 'string');
+            return [];
+          } catch { return []; }
+        })();
+        const schiebePosOptions = ['LINKS', 'RECHTS', 'FRONT', 'FRONT LINKS', 'FRONT RECHTS', 'HINTEN LINKS', 'HINTEN RECHTS'];
+
+        return (
+          <div key={field.name} className="form-field senkrecht-section">
+            <label>
+              Schiebe Element <span className="required">*</span>
+            </label>
+            <select
+              value={product.specifications['schiebeElementActive'] === 'Ja' ? 'Ja' : (product.specifications['schiebeElementActive'] === 'Keine' ? 'Keine' : '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                handleWPSpecChange(index, 'schiebeElementActive', val);
+                if (val === 'Keine' || val === '') {
+                  handleWPSpecChange(index, 'schiebeElementData', '[]');
+                }
+              }}
+            >
+              <option value="">Bitte wählen...</option>
+              <option value="Keine">Keine</option>
+              <option value="Ja">Ja</option>
+            </select>
+            {wpSchiebeActive && (
+              <div className="senkrecht-positions" style={{ marginTop: '0.75rem' }}>
+                <label className="senkrecht-positions-label">
+                  Position(en) wählen <span className="required">*</span>
+                </label>
+                <div className="senkrecht-positions-grid">
+                  {schiebePosOptions.map(pos => (
+                    <label key={pos} className={`senkrecht-position-chip ${wpSchiebePositions.includes(pos) ? 'selected' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={wpSchiebePositions.includes(pos)}
+                        onChange={() => {
+                          const newPositions = wpSchiebePositions.includes(pos)
+                            ? wpSchiebePositions.filter(p => p !== pos)
+                            : [...wpSchiebePositions, pos];
+                          handleWPSpecChange(index, 'schiebeElementData', JSON.stringify(newPositions));
+                        }}
+                      />
+                      <span>{pos}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      case 'keil_fenster_section': {
+        const wpKeilActive = product.specifications['keilFensterActive'] === 'Ja';
+        const wpKeilPositions: string[] = (() => {
+          try {
+            const data = product.specifications['keilFensterData'];
+            if (typeof data === 'string') {
+              const parsed = JSON.parse(data);
+              if (Array.isArray(parsed)) return parsed.filter((item: unknown): item is string => typeof item === 'string');
+            }
+            if (Array.isArray(data)) return (data as unknown[]).filter((item): item is string => typeof item === 'string');
+            return [];
+          } catch { return []; }
+        })();
+        const keilPosOptions = ['LINKS', 'RECHTS'];
+
+        return (
+          <div key={field.name} className="form-field senkrecht-section">
+            <label>
+              Keil Fenster <span className="required">*</span>
+            </label>
+            <select
+              value={product.specifications['keilFensterActive'] === 'Ja' ? 'Ja' : (product.specifications['keilFensterActive'] === 'Keine' ? 'Keine' : '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                handleWPSpecChange(index, 'keilFensterActive', val);
+                if (val === 'Keine' || val === '') {
+                  handleWPSpecChange(index, 'keilFensterData', '[]');
+                }
+              }}
+            >
+              <option value="">Bitte wählen...</option>
+              <option value="Keine">Keine</option>
+              <option value="Ja">Ja</option>
+            </select>
+            {wpKeilActive && (
+              <div className="senkrecht-positions" style={{ marginTop: '0.75rem' }}>
+                <label className="senkrecht-positions-label">
+                  Position(en) wählen <span className="required">*</span>
+                </label>
+                <div className="senkrecht-positions-grid">
+                  {keilPosOptions.map(pos => (
+                    <label key={pos} className={`senkrecht-position-chip ${wpKeilPositions.includes(pos) ? 'selected' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={wpKeilPositions.includes(pos)}
+                        onChange={() => {
+                          const newPositions = wpKeilPositions.includes(pos)
+                            ? wpKeilPositions.filter(p => p !== pos)
+                            : [...wpKeilPositions, pos];
+                          handleWPSpecChange(index, 'keilFensterData', JSON.stringify(newPositions));
+                        }}
+                      />
+                      <span>{pos}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
       case 'text':
         return (
           <div key={field.name} className="form-field">
