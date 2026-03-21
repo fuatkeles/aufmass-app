@@ -79,8 +79,15 @@ const WeitereProdukteSectionInline = ({
   };
 
   const getWPModelColors = (cat: string, pType: string, mod: string) => {
-    if (!cat || !pType || !mod || !productConfig[cat]?.[pType]) return [];
-    return productConfig[cat][pType].modelColors?.[mod] || [];
+    if (!cat || !pType || !productConfig[cat]?.[pType]) return [];
+    const allColors = productConfig[cat][pType].modelColors;
+    if (!allColors) return [];
+    // If model is selected, return its colors
+    if (mod && allColors[mod]) return allColors[mod];
+    // If no model selected, merge all unique colors from all models
+    const merged = new Set<string>();
+    Object.values(allColors).forEach((colors: string[]) => colors.forEach(c => merged.add(c)));
+    return Array.from(merged);
   };
 
   const handleWPCategoryChange = (index: number, value: string) => {
@@ -209,7 +216,6 @@ const WeitereProdukteSectionInline = ({
             <select
               value={value as string || ''}
               onChange={(e) => handleWPSpecChange(index, field.name, e.target.value)}
-              disabled={!product.model}
             >
               <option value="">Bitte wählen...</option>
               {colors.map(color => (

@@ -198,26 +198,35 @@ const fixImageOrientationAuto = async (base64: string): Promise<string> => {
   return fixImageOrientation(base64, orientation);
 };
 
-// Helper to fetch server image and convert to base64
-const fetchServerImageAsBase64 = async (imageId: number): Promise<string> => {
+// Helper to fetch server image and convert to base64 (with retry)
+const fetchServerImageAsBase64 = async (imageId: number, retries = 2): Promise<string> => {
   const url = getImageUrl(imageId);
   const token = getStoredToken();
 
-  const response = await fetch(url, {
-    headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-  });
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
 
-  if (!response.ok) {
-    throw new Error('Failed to fetch image');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image (status ${response.status})`);
+      }
+
+      const blob = await response.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (err) {
+      if (attempt === retries) throw err;
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
+    }
   }
-
-  const blob = await response.blob();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+  throw new Error('Failed to fetch image after retries');
 };
 
 // Helper to check if object is a server image
@@ -290,14 +299,14 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     pdf.setFont('helvetica', 'bold');
     pdf.text('Arbeit fertiggestellt:', margin + 2, yPos);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(abnahme.istFertig ? checkMark : crossMark, margin + 52, yPos);
+    pdf.text(abnahme.istFertig ? checkMark : crossMark, margin + 65, yPos);
     yPos += 6;
 
     // Probleme vorhanden
     pdf.setFont('helvetica', 'bold');
     pdf.text('Probleme/Maengel:', margin + 2, yPos);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(abnahme.hatProbleme ? checkMark : crossMark, margin + 52, yPos);
+    pdf.text(abnahme.hatProbleme ? checkMark : crossMark, margin + 65, yPos);
     yPos += 6;
 
     // Common fields for both ARBEIT IST FERTIG and ES GIBT MÄNGEL
@@ -307,7 +316,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
         pdf.setFont('helvetica', 'bold');
         pdf.text('Baustelle sauber:', margin + 2, yPos);
         pdf.setFont('helvetica', 'normal');
-        pdf.text(abnahme.baustelleSauber === 'ja' ? 'JA' : 'NEIN', margin + 52, yPos);
+        pdf.text(abnahme.baustelleSauber === 'ja' ? 'JA' : 'NEIN', margin + 65, yPos);
         yPos += 6;
       }
 
@@ -316,7 +325,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
         pdf.setFont('helvetica', 'bold');
         pdf.text('Monteur Note:', margin + 2, yPos);
         pdf.setFont('helvetica', 'normal');
-        pdf.text(String(abnahme.monteurNote), margin + 52, yPos);
+        pdf.text(String(abnahme.monteurNote), margin + 65, yPos);
         yPos += 6;
       }
     }
@@ -451,7 +460,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
       pdf.setFont('helvetica', 'bold');
       pdf.text('Kundenname:', margin + 2, yPos);
       pdf.setFont('helvetica', 'normal');
-      pdf.text(abnahme.kundeName, margin + 52, yPos);
+      pdf.text(abnahme.kundeName, margin + 65, yPos);
       yPos += 6;
     }
 
@@ -459,7 +468,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     pdf.setFont('helvetica', 'bold');
     pdf.text('Bestaetigt:', margin + 2, yPos);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(abnahme.kundeUnterschrift ? 'Ja, Kunde hat bestaetigt' : 'Nein, ausstehend', margin + 52, yPos);
+    pdf.text(abnahme.kundeUnterschrift ? 'Ja, Kunde hat bestaetigt' : 'Nein, ausstehend', margin + 65, yPos);
     yPos += 6;
 
     // Abnahme date
@@ -474,7 +483,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
         hour: '2-digit',
         minute: '2-digit'
       });
-      pdf.text(abnahmeDateFormatted, margin + 52, yPos);
+      pdf.text(abnahmeDateFormatted, margin + 65, yPos);
       yPos += 6;
     }
 
@@ -618,8 +627,8 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     pdf.setFont('helvetica', 'bold');
     pdf.text(label, margin + 2, yPos);
     pdf.setFont('helvetica', 'normal');
-    const lines = pdf.splitTextToSize(value, pageWidth - margin - 60);
-    pdf.text(lines, margin + 52, yPos);
+    const lines = pdf.splitTextToSize(value, pageWidth - margin - 73);
+    pdf.text(lines, margin + 65, yPos);
     yPos += 6 * lines.length;
   });
 
@@ -658,8 +667,8 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     pdf.setFont('helvetica', 'bold');
     pdf.text(label, margin + 2, yPos);
     pdf.setFont('helvetica', 'normal');
-    const lines = pdf.splitTextToSize(value, pageWidth - margin - 60);
-    pdf.text(lines, margin + 52, yPos);
+    const lines = pdf.splitTextToSize(value, pageWidth - margin - 73);
+    pdf.text(lines, margin + 65, yPos);
     yPos += 6 * lines.length;
   });
 
@@ -782,7 +791,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
           }
 
           const lines = pdf.splitTextToSize(finalDisplayValue, pageWidth - margin - 60);
-          pdf.text(lines, margin + 52, yPos);
+          pdf.text(lines, margin + 65, yPos);
 
           // Reset text color and font
           if (isConditionalWithValue) {
@@ -861,7 +870,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
                   pdf.setFont('helvetica', 'bold');
                   pdf.text(label, margin + 10, yPos);
                   pdf.setFont('helvetica', 'normal');
-                  pdf.text(value, margin + 52, yPos);
+                  pdf.text(value, margin + 65, yPos);
                   yPos += 6;
                 }
               });
@@ -933,7 +942,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
           pdf.setFont('helvetica', 'bold');
           pdf.text(label, margin + 5, yPos);
           pdf.setFont('helvetica', 'normal');
-          pdf.text(value, margin + 52, yPos);
+          pdf.text(value, margin + 65, yPos);
           yPos += 6;
         });
 
@@ -1450,7 +1459,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
         }
 
         const lines = pdf.splitTextToSize(displayValue, pageWidth - margin - 70);
-        pdf.text(lines, margin + 52, yPos);
+        pdf.text(lines, margin + 65, yPos);
 
         // Reset text color and font
         if (item.isConditional) {
@@ -1557,15 +1566,23 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
         try {
           if (item instanceof File) {
             // It's a File object - get EXIF orientation and fix if needed
-            const orientation = await getExifOrientation(item);
             base64 = await fileToBase64(item);
-            base64 = await fixImageOrientation(base64, orientation);
+            try {
+              const orientation = await getExifOrientation(item);
+              base64 = await fixImageOrientation(base64, orientation);
+            } catch {
+              // Use original base64 if orientation fix fails
+            }
             fileName = item.name;
           } else if (isServerImage(item)) {
             // It's a server image - fetch from server and fix orientation
             base64 = await fetchServerImageAsBase64(item.id);
-            // Try to fix orientation for server images too
-            base64 = await fixImageOrientationAuto(base64);
+            // Try to fix orientation for server images too (non-critical)
+            try {
+              base64 = await fixImageOrientationAuto(base64);
+            } catch {
+              // Use original base64 if orientation fix fails
+            }
             fileName = item.file_name;
           } else {
             continue;

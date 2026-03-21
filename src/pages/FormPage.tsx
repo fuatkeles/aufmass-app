@@ -221,7 +221,7 @@ const FormPage = () => {
         await updateForm(formId, apiData);
       }
 
-      // Upload new images if any
+      // Upload new images if any - MUST complete before PDF generation
       const newImages = data.bilder?.filter(b => b instanceof File) as File[];
       if (newImages && newImages.length > 0) {
         await uploadImages(formId, newImages);
@@ -236,10 +236,12 @@ const FormPage = () => {
         }
       }
 
-      // Generate and save PDF in background (don't block the save)
+      // Generate and save PDF in background AFTER images are uploaded
       const bgFormId = formId;
       (async () => {
         try {
+          // Small delay to ensure DB has committed the image records
+          await new Promise(resolve => setTimeout(resolve, 500));
           const freshData = await getForm(bgFormId);
           const pdfData = {
             id: String(freshData.id),

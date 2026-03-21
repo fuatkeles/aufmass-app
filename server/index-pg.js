@@ -47,7 +47,7 @@ app.use(express.json({ limit: '50mb' }));
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB per file (PDF can be large)
+    fileSize: 20 * 1024 * 1024, // 20MB per file
     files: 10
   }
 });
@@ -1041,7 +1041,7 @@ app.delete('/api/forms/:id', authenticateToken, async (req, res) => {
 // ============ PDF STORAGE ENDPOINTS ============
 
 // PDF storage directory
-const PDF_DIR = process.env.PDF_DIR || (process.platform === 'win32' ? './aufmass-pdfs' : '/var/www/aufmass-pdfs');
+const PDF_DIR = '/var/www/aufmass-pdfs';
 
 // Ensure PDF directory exists
 if (!fs.existsSync(PDF_DIR)) {
@@ -1075,47 +1075,30 @@ app.post('/api/forms/:id/pdf', authenticateToken, upload.single('pdf'), async (r
   }
 });
 
-// Get generated PDF for a form (filesystem first, fallback to DB)
+// Get generated PDF for a form (from filesystem - very fast)
 app.get('/api/forms/:id/pdf', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const pdfPath = path.join(PDF_DIR, `${id}.pdf`);
 
-    // Try filesystem first
-    if (fs.existsSync(pdfPath)) {
-      const stats = fs.statSync(pdfPath);
-      res.set({
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="aufmass_${id}.pdf"`,
-        'Content-Length': stats.size,
-        'Cache-Control': 'public, max-age=3600'
-      });
-      const fileStream = fs.createReadStream(pdfPath);
-      return fileStream.pipe(res);
-    }
-
-    // Fallback to DB (generated_pdf column)
-    const result = await pool.query(
-      'SELECT generated_pdf FROM aufmass_forms WHERE id = $1',
-      [id]
-    );
-
-    if (result.rows.length === 0 || !result.rows[0].generated_pdf) {
+    // Check if PDF file exists
+    if (!fs.existsSync(pdfPath)) {
       return res.status(404).json({ error: 'No PDF generated for this form', needsGeneration: true });
     }
 
-    const pdfBuffer = result.rows[0].generated_pdf;
-
-    // Cache to filesystem for next time
-    try { fs.writeFileSync(pdfPath, pdfBuffer); } catch {}
+    // Get file stats for headers
+    const stats = fs.statSync(pdfPath);
 
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="aufmass_${id}.pdf"`,
-      'Content-Length': pdfBuffer.length,
-      'Cache-Control': 'public, max-age=3600'
+      'Content-Length': stats.size,
+      'Cache-Control': 'public, max-age=3600' // Cache for 1 hour
     });
-    res.send(pdfBuffer);
+
+    // Stream file directly - very fast
+    const fileStream = fs.createReadStream(pdfPath);
+    fileStream.pipe(res);
   } catch (err) {
     console.error('Error getting PDF:', err);
     res.status(500).json({ error: 'Failed to get PDF' });
@@ -1718,15 +1701,15 @@ app.get('/api/stats/montageteam', authenticateToken, async (req, res) => {
         FROM aufmass_montageteams m
         LEFT JOIN (
           SELECT
-            specifications::jsonb->>'montageteam' as team_name,
+            specifications->>'montageteam' as team_name,
             COUNT(*) as count,
             SUM(CASE WHEN status IN ('neu', 'draft', 'completed') THEN 1 ELSE 0 END) as neu,
             SUM(CASE WHEN status = 'abgeschlossen' THEN 1 ELSE 0 END) as abgeschlossen
           FROM aufmass_forms
-          WHERE specifications::jsonb->>'montageteam' IS NOT NULL
-            AND specifications::jsonb->>'montageteam' != ''
+          WHERE specifications->>'montageteam' IS NOT NULL
+            AND specifications->>'montageteam' != ''
             AND branch_id = $1
-          GROUP BY specifications::jsonb->>'montageteam'
+          GROUP BY specifications->>'montageteam'
         ) f ON m.name = f.team_name
         WHERE m.is_active = true AND m.branch_id = $1
         ORDER BY m.name ASC
@@ -1745,14 +1728,14 @@ app.get('/api/stats/montageteam', authenticateToken, async (req, res) => {
         FROM aufmass_montageteams m
         LEFT JOIN (
           SELECT
-            specifications::jsonb->>'montageteam' as team_name,
+            specifications->>'montageteam' as team_name,
             COUNT(*) as count,
             SUM(CASE WHEN status IN ('neu', 'draft', 'completed') THEN 1 ELSE 0 END) as neu,
             SUM(CASE WHEN status = 'abgeschlossen' THEN 1 ELSE 0 END) as abgeschlossen
           FROM aufmass_forms
-          WHERE specifications::jsonb->>'montageteam' IS NOT NULL
-            AND specifications::jsonb->>'montageteam' != ''
-          GROUP BY specifications::jsonb->>'montageteam'
+          WHERE specifications->>'montageteam' IS NOT NULL
+            AND specifications->>'montageteam' != ''
+          GROUP BY specifications->>'montageteam'
         ) f ON m.name = f.team_name
         WHERE m.is_active = true
         ORDER BY m.name ASC
