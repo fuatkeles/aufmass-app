@@ -1385,8 +1385,14 @@ const DynamicSpecificationForm = ({
   };
 
   const getWPColorsForModel = (cat: string, pt: string, mdl: string): string[] => {
-    if (!cat || !pt || !mdl) return [];
-    return productConfig[cat]?.[pt]?.modelColors?.[mdl] || [];
+    if (!cat || !pt || !productConfig[cat]?.[pt]) return [];
+    const allColors = productConfig[cat][pt].modelColors;
+    if (!allColors) return [];
+    if (mdl && allColors[mdl]) return allColors[mdl];
+    // No model selected - merge all colors
+    const merged = new Set<string>();
+    Object.values(allColors).forEach((c: string[]) => c.forEach(v => merged.add(v)));
+    return Array.from(merged);
   };
 
   const getWPProductLabel = (product: WeiteresProdukt, index: number) => {
@@ -1468,7 +1474,6 @@ const DynamicSpecificationForm = ({
             <select
               value={value as string || ''}
               onChange={(e) => handleWPSpecChange(index, field.name, e.target.value)}
-              disabled={!product.model}
             >
               <option value="">Bitte wählen...</option>
               {colors.map(color => (
