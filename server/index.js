@@ -3486,7 +3486,7 @@ app.get('/api/lead-products', authenticateToken, async (req, res) => {
     let query, params;
     if (req.branchId) {
       query = `SELECT * FROM aufmass_lead_products
-               WHERE branch_id = $1 OR (branch_id IS NULL AND product_name LIKE '%PREMIUMLINE%')
+               WHERE branch_id = $1
                ORDER BY product_name, breite, tiefe`;
       params = [req.branchId];
     } else {
@@ -3608,7 +3608,7 @@ app.put('/api/lead-products/:id', authenticateToken, async (req, res) => {
     // Verify product belongs to this branch
     let checkQuery, checkParams;
     if (req.branchId) {
-      checkQuery = 'SELECT * FROM aufmass_lead_products WHERE id = $1 AND (branch_id = $2 OR branch_id IS NULL)';
+      checkQuery = 'SELECT * FROM aufmass_lead_products WHERE id = $1 AND branch_id = $2';
       checkParams = [id, req.branchId];
     } else {
       checkQuery = 'SELECT * FROM aufmass_lead_products WHERE id = $1';
@@ -3702,9 +3702,14 @@ app.delete('/api/lead-products/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Invalid product ID' });
     }
 
-    // Simple delete without branch check for debugging
+    // Delete with branch isolation
     console.log('Executing delete query for ID:', id);
-    const deleteResult = await pool.query('DELETE FROM aufmass_lead_products WHERE id = $1', [id]);
+    let deleteResult;
+    if (req.branchId) {
+      deleteResult = await pool.query('DELETE FROM aufmass_lead_products WHERE id = $1 AND branch_id = $2', [id, req.branchId]);
+    } else {
+      deleteResult = await pool.query('DELETE FROM aufmass_lead_products WHERE id = $1', [id]);
+    }
 
     console.log('Delete result:', deleteResult.rowCount);
 
@@ -3730,7 +3735,7 @@ app.get('/api/lead-products/names', authenticateToken, async (req, res) => {
     let query, params;
     if (req.branchId) {
       query = `SELECT DISTINCT product_name FROM aufmass_lead_products
-               WHERE branch_id = $1 OR (branch_id IS NULL AND product_name LIKE '%PREMIUMLINE%')
+               WHERE branch_id = $1
                ORDER BY product_name`;
       params = [req.branchId];
     } else {
