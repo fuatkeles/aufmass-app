@@ -428,6 +428,11 @@ export default function Angebote() {
               </div>
 
               <div className="modal-body">
+                {selectedLead.angebot_nummer && (
+                  <div className="detail-nummer">
+                    <span className="angebot-nummer">{selectedLead.angebot_nummer}</span>
+                  </div>
+                )}
                 <section className="detail-section">
                   <h3>Kunde</h3>
                   <p><strong>{selectedLead.customer_firstname} {selectedLead.customer_lastname}</strong></p>

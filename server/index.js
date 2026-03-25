@@ -3835,7 +3835,11 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
       [year, req.branchId || null]
     );
     const nextNum = parseInt(countResult.rows[0].cnt) + 1;
-    const branchPrefix = req.branchId ? req.branchId.substring(0, 3).toUpperCase() : 'ANG';
+    const branchPrefixMap = {
+      'koblenz': 'KOB', 'ayluxtr': 'AYT', 'aylux': 'AYL', 'ayluxus': 'AYU',
+      'ayluxgkmu': 'GKM', 'ayluxmau': 'MAU', 'ayluxa': 'AYA'
+    };
+    const branchPrefix = req.branchId ? (branchPrefixMap[req.branchId] || req.branchId.substring(0, 3).toUpperCase()) : 'ANG';
     const angebotNummer = `${branchPrefix}-${year}-${String(nextNum).padStart(3, '0')}`;
 
     // Insert lead with discount fields and angebot_nummer
