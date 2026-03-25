@@ -655,8 +655,11 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
 
   const produktauswahl: string[][] = [
     ['Kategorie:', formData.productSelection.category || '-'],
-    ['Produkttyp:', formData.productSelection.productType || '-'],
   ];
+  // Hide Produkttyp in Abnahme PDF
+  if (!formData.abnahme) {
+    produktauswahl.push(['Produkttyp:', formData.productSelection.productType || '-']);
+  }
   // Only show model row if model was selected
   if (modelValue) {
     produktauswahl.push(['Modell:', modelValue]);

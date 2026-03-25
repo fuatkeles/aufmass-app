@@ -31,6 +31,7 @@ const STATUS_OPTIONS = [
   { value: 'montage_gestartet', label: 'Montage Gestartet', color: '#ec4899' },
   { value: 'abnahme', label: 'Abnahme', color: '#10b981' },
   { value: 'reklamation_eingegangen', label: 'Reklamation Eingegangen', color: '#ef4444' },
+  { value: 'reklamation_bestellt', label: 'Reklamation Bestellt', color: '#dc2626' },
   { value: 'reklamation_abgelehnt', label: 'Reklamation Abgelehnt', color: '#b91c1c' },
   { value: 'papierkorb', label: 'Papierkorb', color: '#71717a' },
 ];
@@ -49,6 +50,7 @@ const STATUS_ORDER = [
   'montage_gestartet',
   'abnahme',
   'reklamation_eingegangen',
+  'reklamation_bestellt',
   'reklamation_abgelehnt',
 ];
 
@@ -1204,6 +1206,7 @@ Aylux Team`;
                       </div>
                       {isAdminOrOffice() ? (
                         <div className="status-selector">
+                          <div className="status-pill-row">
                           <button
                             className="status-pill-btn"
                             style={{ backgroundColor: getStatusColor(getFormStatus(form)) }}
@@ -1215,6 +1218,14 @@ Aylux Team`;
                             {getStatusLabel(getFormStatus(form)).split('/')[0]}
                             <svg className="chevron-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6" /></svg>
                           </button>
+                          <button
+                            className="status-history-btn"
+                            title="Status-Historie"
+                            onClick={(e) => { e.stopPropagation(); handleOpenHistory(form.id!); }}
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                          </button>
+                          </div>
                           <AnimatePresence>
                             {statusDropdownOpen === form.id && (
                               <motion.div

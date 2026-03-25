@@ -29,6 +29,7 @@ const STATUS_STEPS = [
   { value: 'montage_gestartet', label: 'Montage Gestartet', color: '#ec4899' },
   { value: 'abnahme', label: 'Abnahme', color: '#10b981' },
   { value: 'reklamation_eingegangen', label: 'Reklamation Eingegangen', color: '#ef4444' },
+  { value: 'reklamation_bestellt', label: 'Reklamation Bestellt', color: '#dc2626' },
   { value: 'reklamation_abgelehnt', label: 'Reklamation Abgelehnt', color: '#b91c1c' },
 ];
 
@@ -69,6 +70,17 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
 
   const [currentStep, setCurrentStep] = useState(0);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
+
+  // Warn before leaving unsaved form
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (formData.kundeVorname || formData.kundeNachname || formData.kundenlokation) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [formData.kundeVorname, formData.kundeNachname, formData.kundenlokation]);
 
   // Status date modal state (for all status changes)
   const [statusDateModalOpen, setStatusDateModalOpen] = useState(false);
@@ -1431,12 +1443,20 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
         </AnimatePresence>
 
         <div className="navigation-buttons">
-          {onCancel && currentStep === 0 && (
+          {onCancel && (
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="btn btn-secondary"
-              onClick={onCancel}
+              onClick={() => {
+                if (formData.kundeVorname || formData.kundeNachname || formData.kundenlokation) {
+                  if (confirm('Möchten Sie wirklich abbrechen? Nicht gespeicherte Daten gehen verloren.')) {
+                    onCancel();
+                  }
+                } else {
+                  onCancel();
+                }
+              }}
             >
               Abbrechen
             </motion.button>

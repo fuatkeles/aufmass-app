@@ -28,7 +28,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon", "Ziegel"],
           "required": true
         },
         {
@@ -129,7 +129,7 @@
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
-          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück"],
+          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück", "1 Reihe", "2 Reihen", "3 Reihen"],
           "required": true
         },
         {
@@ -245,7 +245,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon", "Ziegel"],
           "required": true
         },
         {
@@ -339,7 +339,7 @@
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
-          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück"],
+          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück", "1 Reihe", "2 Reihen", "3 Reihen"],
           "required": true
         },
         {
@@ -451,7 +451,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon", "Ziegel"],
           "required": true
         },
         {
@@ -552,7 +552,7 @@
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
-          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück"],
+          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück", "1 Reihe", "2 Reihen", "3 Reihen"],
           "required": true
         },
         {
@@ -664,7 +664,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon", "Ziegel"],
           "required": true
         },
         {
@@ -765,7 +765,7 @@
           "name": "ledBeleuchtung",
           "label": "LED Beleuchtung",
           "type": "select",
-          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück"],
+          "options": ["Keine", "6 Stück", "9 Stück", "12 Stück", "1 Reihe", "2 Reihen", "3 Reihen"],
           "required": true
         },
         {
@@ -1108,7 +1108,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon", "Ziegel"],
           "required": true
         },
         {
@@ -1148,7 +1148,7 @@
           "name": "antrieb",
           "label": "Antrieb",
           "type": "select",
-          "options": ["Funk Motor", "E-Motor (Schalter)"],
+          "options": ["Funk Motor", "E-Motor (Schalter)", "Kurbel"],
           "required": true
         },
         {
@@ -1177,7 +1177,7 @@
           "name": "befestigungsart",
           "label": "Befestigungsart",
           "type": "select",
-          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon"],
+          "options": ["Wand", "Decke", "Freistehend", "Untenbalkon", "Ziegel"],
           "required": true
         },
         {
@@ -1217,7 +1217,7 @@
           "name": "antrieb",
           "label": "Antrieb",
           "type": "select",
-          "options": ["Funk Motor", "E-Motor (Schalter)"],
+          "options": ["Funk Motor", "E-Motor (Schalter)", "Kurbel"],
           "required": true
         },
         {

@@ -3581,6 +3581,38 @@
   height: 14px;
 }
 
+.status-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.status-history-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-tertiary, rgba(255,255,255,0.1));
+  color: var(--text-secondary, #9ca3af);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.status-history-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.status-history-btn:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.15));
+  color: var(--text-primary, #fff);
+  transform: scale(1.1);
+}
+
 .status-pill-static {
   display: flex;
   align-items: center;
