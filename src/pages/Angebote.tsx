@@ -19,6 +19,7 @@ interface Lead {
   status: string;
   created_by_name: string;
   created_at: string;
+  angebot_nummer?: string;
 }
 
 interface LeadItem {
@@ -266,7 +267,10 @@ export default function Angebote() {
               <div className="lead-header">
                 <div className="lead-customer">
                   <h3>{lead.customer_firstname} {lead.customer_lastname}</h3>
-                  <span className="lead-email">{lead.customer_email}</span>
+                  <div className="lead-meta">
+                    {lead.angebot_nummer && <span className="angebot-nummer">{lead.angebot_nummer}</span>}
+                    <span className="lead-email">{lead.customer_email}</span>
+                  </div>
                 </div>
                 <div className="lead-status">
                   <span

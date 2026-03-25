@@ -181,6 +181,9 @@ async function initializeTables() {
     await pool.query(`ALTER TABLE aufmass_lead_items ADD COLUMN IF NOT EXISTS custom_field_values TEXT`);
     console.log('aufmass_lead_items.custom_field_values column ready');
 
+    // Angebot nummer column
+    await pool.query(`ALTER TABLE aufmass_leads ADD COLUMN IF NOT EXISTS angebot_nummer VARCHAR(20)`);
+
     // Check if admin exists, create default admin if not
     const adminCheck = await pool.query(
       "SELECT COUNT(*) as count FROM aufmass_users WHERE role = 'admin'"
@@ -3823,13 +3826,25 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
       finalTotal -= (total_discount || 0);
     }
 
-    // Insert lead with discount fields
+    // Generate angebot_nummer: ANG-YYYY-NNN (per branch, per year)
+    const year = new Date().getFullYear();
+    const countResult = await pool.query(
+      `SELECT COUNT(*) as cnt FROM aufmass_leads
+       WHERE EXTRACT(YEAR FROM created_at) = $1
+       AND (branch_id = $2 OR ($2 IS NULL AND branch_id IS NULL))`,
+      [year, req.branchId || null]
+    );
+    const nextNum = parseInt(countResult.rows[0].cnt) + 1;
+    const branchPrefix = req.branchId ? req.branchId.substring(0, 3).toUpperCase() : 'ANG';
+    const angebotNummer = `${branchPrefix}-${year}-${String(nextNum).padStart(3, '0')}`;
+
+    // Insert lead with discount fields and angebot_nummer
     const leadResult = await pool.query(
-      `INSERT INTO aufmass_leads (customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, subtotal, total_discount, total_price, status, branch_id, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'offen', $10, $11) RETURNING id`,
+      `INSERT INTO aufmass_leads (customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, subtotal, total_discount, total_price, status, branch_id, created_by, angebot_nummer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'offen', $10, $11, $12) RETURNING id, angebot_nummer`,
       [customer_firstname, customer_lastname, customer_email || null, customer_phone || null,
        customer_address || null, notes || null, subtotal || 0, total_discount || 0, finalTotal,
-       req.branchId || null, req.user.id]
+       req.branchId || null, req.user.id, angebotNummer]
     );
 
     const leadId = leadResult.rows[0].id;
