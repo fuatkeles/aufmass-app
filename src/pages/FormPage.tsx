@@ -200,10 +200,15 @@ const FormPage = () => {
       };
 
       // Add signature if present
+      console.log('=== SAVE DEBUG ===');
+      console.log('data.customerSignature exists:', !!data.customerSignature);
+      console.log('data.customerSignature length:', data.customerSignature?.length);
+      console.log('data.signatureName:', data.signatureName);
       if (data.customerSignature) {
         (apiData as Record<string, unknown>).customerSignature = data.customerSignature;
         (apiData as Record<string, unknown>).signatureName = data.signatureName;
       }
+      console.log('apiData.customerSignature exists:', !!(apiData as Record<string, unknown>).customerSignature);
 
       // Only set status to 'neu' for new forms, promote drafts on full save
       if (id === 'new') {

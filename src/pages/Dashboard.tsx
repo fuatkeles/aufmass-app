@@ -942,17 +942,20 @@ Aylux Team`;
 
   const handleOpenPDF = async (formId: number) => {
     try {
+      // Always fetch form data to check for signature
+      const [formData, abnahmeData, abnahmeImages] = await Promise.all([
+        getForm(formId),
+        getAbnahme(formId),
+        getAbnahmeImages(formId)
+      ]);
+
+      const hasSignature = !!(formData as unknown as Record<string, string>).customer_signature;
+
       // Check if PDF needs regeneration
       const status = await getPdfStatus(formId);
 
-      if (status.needsRegeneration) {
+      if (status.needsRegeneration || hasSignature) {
         setPdfGenerating(formId);
-        // Get fresh form data including abnahme
-        const [formData, abnahmeData, abnahmeImages] = await Promise.all([
-          getForm(formId),
-          getAbnahme(formId),
-          getAbnahmeImages(formId)
-        ]);
 
         const pdfFormData = {
           ...formData,

@@ -1121,8 +1121,9 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
   const handleExport = async () => {
     const formId = formData.id ? parseInt(formData.id) : null;
 
-    // Eğer form ID varsa, önce stored PDF'i dene
-    if (formId) {
+    // Eğer form ID varsa ve imza yoksa, stored PDF'i dene
+    // İmza varsa her zaman yeniden generate et (imza güncel olmalı)
+    if (formId && !formData.customerSignature) {
       try {
         const pdfStatus = await getPdfStatus(formId);
         if (pdfStatus.hasPdf && !pdfStatus.isOutdated) {
@@ -1296,6 +1297,9 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
             customerSignature={formData.customerSignature}
             signatureName={formData.signatureName}
             onSignatureSave={(sigData, sigName) => {
+              console.log('=== SIGNATURE SAVE ===');
+              console.log('sigData length:', sigData.length);
+              console.log('sigName:', sigName);
               setFormData(prev => ({
                 ...prev,
                 customerSignature: sigData,

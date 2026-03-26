@@ -1513,6 +1513,9 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
   // ============ KUNDENUNTERSCHRIFT ============
   const customerSignature = formData.customerSignature;
   const signatureName = formData.signatureName;
+  console.log('PDF Generator - customerSignature exists:', !!customerSignature, 'length:', customerSignature?.length);
+  console.log('PDF Generator - signatureName:', signatureName);
+  console.log('PDF Generator - forSignature flag:', forSignature);
 
   if (customerSignature && !forSignature) {
     checkNewPage(60);
