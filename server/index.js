@@ -1096,7 +1096,7 @@ app.get('/api/forms/:id/pdf', authenticateToken, async (req, res) => {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="aufmass_${id}.pdf"`,
         'Content-Length': stats.size,
-        'Cache-Control': 'public, max-age=3600'
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
       });
       const fileStream = fs.createReadStream(pdfPath);
       return fileStream.pipe(res);
@@ -1121,7 +1121,7 @@ app.get('/api/forms/:id/pdf', authenticateToken, async (req, res) => {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="aufmass_${id}.pdf"`,
       'Content-Length': pdfBuffer.length,
-      'Cache-Control': 'public, max-age=3600'
+      'Cache-Control': 'no-cache, no-store, must-revalidate'
     });
     res.send(pdfBuffer);
   } catch (err) {

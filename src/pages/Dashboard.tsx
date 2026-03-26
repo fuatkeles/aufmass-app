@@ -984,12 +984,12 @@ Aylux Team`;
       }
 
       // Open PDF in new tab
-      window.open(getPdfUrl(formId), '_blank');
+      window.open(getPdfUrl(formId) + '&t=' + Date.now(), '_blank');
     } catch (err) {
       console.error('Error opening PDF:', err);
       setPdfGenerating(null);
       // Fallback - just try to open it
-      window.open(getPdfUrl(formId), '_blank');
+      window.open(getPdfUrl(formId) + '&t=' + Date.now(), '_blank');
     }
   };
 
