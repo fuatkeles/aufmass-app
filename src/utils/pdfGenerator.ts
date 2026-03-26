@@ -1511,8 +1511,8 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
   }
 
   // ============ KUNDENUNTERSCHRIFT ============
-  const customerSignature = (formData as unknown as Record<string, unknown>).customerSignature as string | undefined;
-  const signatureName = (formData as unknown as Record<string, unknown>).signatureName as string | undefined;
+  const customerSignature = formData.customerSignature;
+  const signatureName = formData.signatureName;
 
   if (customerSignature && !forSignature) {
     checkNewPage(60);

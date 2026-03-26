@@ -160,8 +160,8 @@ const FormPage = () => {
             status: (apiData.status as 'draft' | 'completed' | 'archived') || 'draft',
             createdAt: apiData.created_at,
             updatedAt: apiData.updated_at,
-            customerSignature: (apiData as unknown as Record<string, unknown>).customer_signature as string | undefined,
-            signatureName: (apiData as unknown as Record<string, unknown>).signature_name as string | undefined
+            customerSignature: (apiData as unknown as Record<string, string>).customer_signature || undefined,
+            signatureName: (apiData as unknown as Record<string, string>).signature_name || undefined
           };
 
           setInitialData(formData);
@@ -197,8 +197,8 @@ const FormPage = () => {
         markiseData: (data.specifications as Record<string, unknown>)?.markiseData,
         weitereProdukte: data.weitereProdukte || [],
         bemerkungen: data.bemerkungen || '',
-        customerSignature: (data as unknown as Record<string, unknown>).customerSignature as string | undefined,
-        signatureName: (data as unknown as Record<string, unknown>).signatureName as string | undefined
+        customerSignature: data.customerSignature || undefined,
+        signatureName: data.signatureName || undefined
       };
 
       // Only set status to 'neu' for new forms, promote drafts on full save

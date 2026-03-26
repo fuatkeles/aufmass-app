@@ -72,6 +72,10 @@ export interface FormData {
   updatedAt?: string;
   status?: 'neu' | 'auftrag_erteilt' | 'bestellt' | 'abgeschlossen' | 'reklamation' | 'draft' | 'completed' | 'archived';
 
+  // Customer signature
+  customerSignature?: string;
+  signatureName?: string;
+
   // Abnahme (acceptance) data - optional, only when status is 'abnahme'
   abnahme?: AbnahmeData;
 
