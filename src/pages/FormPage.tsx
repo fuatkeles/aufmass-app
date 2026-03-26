@@ -265,7 +265,9 @@ const FormPage = () => {
             weitereProdukte: freshData.weitereProdukte || [],
             bilder: freshData.bilder || [],
             bemerkungen: freshData.bemerkungen || '',
-            status: (freshData.status as 'draft' | 'completed' | 'archived') || 'draft'
+            status: (freshData.status as 'draft' | 'completed' | 'archived') || 'draft',
+            customerSignature: (freshData as unknown as Record<string, string>).customer_signature || undefined,
+            signatureName: (freshData as unknown as Record<string, string>).signature_name || undefined
           };
           const pdfResult = await generatePDF(pdfData, { returnBlob: true });
           if (pdfResult?.blob) {

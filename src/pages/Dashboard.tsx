@@ -588,6 +588,8 @@ const Dashboard = () => {
         },
         specifications: formData.specifications as Record<string, string | number | boolean | string[]>,
         bilder: formData.bilder || [],
+        customerSignature: (formData as unknown as Record<string, string>).customer_signature || undefined,
+        signatureName: (formData as unknown as Record<string, string>).signature_name || undefined,
         abnahme: abnahmeData ? {
           ...abnahmeData,
           maengelBilder: abnahmeImages || []
@@ -962,6 +964,8 @@ Aylux Team`;
           },
           specifications: formData.specifications as Record<string, string | number | boolean | string[]>,
           bilder: formData.bilder || [],
+          customerSignature: (formData as unknown as Record<string, string>).customer_signature || undefined,
+          signatureName: (formData as unknown as Record<string, string>).signature_name || undefined,
           abnahme: abnahmeData ? {
             ...abnahmeData,
             maengelBilder: abnahmeImages || []
