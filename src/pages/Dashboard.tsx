@@ -964,8 +964,8 @@ Aylux Team`;
           },
           specifications: formData.specifications as Record<string, string | number | boolean | string[]>,
           bilder: formData.bilder || [],
-          customerSignature: (formData as unknown as Record<string, string>).customer_signature || undefined,
-          signatureName: (formData as unknown as Record<string, string>).signature_name || undefined,
+          customerSignature: (formData as unknown as Record<string, string>).customer_signature || null,
+          signatureName: (formData as unknown as Record<string, string>).signature_name || null,
           abnahme: abnahmeData ? {
             ...abnahmeData,
             maengelBilder: abnahmeImages || []

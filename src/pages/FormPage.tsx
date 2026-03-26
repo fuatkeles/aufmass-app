@@ -197,9 +197,13 @@ const FormPage = () => {
         markiseData: (data.specifications as Record<string, unknown>)?.markiseData,
         weitereProdukte: data.weitereProdukte || [],
         bemerkungen: data.bemerkungen || '',
-        customerSignature: data.customerSignature || undefined,
-        signatureName: data.signatureName || undefined
       };
+
+      // Add signature if present
+      if (data.customerSignature) {
+        (apiData as Record<string, unknown>).customerSignature = data.customerSignature;
+        (apiData as Record<string, unknown>).signatureName = data.signatureName;
+      }
 
       // Only set status to 'neu' for new forms, promote drafts on full save
       if (id === 'new') {
@@ -266,8 +270,8 @@ const FormPage = () => {
             bilder: freshData.bilder || [],
             bemerkungen: freshData.bemerkungen || '',
             status: (freshData.status as 'draft' | 'completed' | 'archived') || 'draft',
-            customerSignature: (freshData as unknown as Record<string, string>).customer_signature || undefined,
-            signatureName: (freshData as unknown as Record<string, string>).signature_name || undefined
+            customerSignature: (freshData as unknown as Record<string, string>).customer_signature || null,
+            signatureName: (freshData as unknown as Record<string, string>).signature_name || null
           };
           const pdfResult = await generatePDF(pdfData, { returnBlob: true });
           if (pdfResult?.blob) {

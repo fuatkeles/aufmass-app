@@ -17,8 +17,8 @@ interface FinalSectionProps {
   onExport: () => Promise<void> | void;
   onSave: () => Promise<void> | void;
   onNewForm: () => void;
-  customerSignature?: string;
-  signatureName?: string;
+  customerSignature?: string | null;
+  signatureName?: string | null;
   onSignatureSave?: (signatureData: string, signerName: string) => void;
   kundeVorname?: string;
   kundeNachname?: string;
