@@ -159,7 +159,9 @@ const FormPage = () => {
             bemerkungen: apiData.bemerkungen || '',
             status: (apiData.status as 'draft' | 'completed' | 'archived') || 'draft',
             createdAt: apiData.created_at,
-            updatedAt: apiData.updated_at
+            updatedAt: apiData.updated_at,
+            customerSignature: (apiData as Record<string, unknown>).customer_signature as string | undefined,
+            signatureName: (apiData as Record<string, unknown>).signature_name as string | undefined
           };
 
           setInitialData(formData);
@@ -178,7 +180,7 @@ const FormPage = () => {
   const handleSave = async (data: FormData): Promise<number | void> => {
     try {
       // Transform local FormData to API format
-      const apiData: Omit<ApiFormData, 'id'> & { status?: string } = {
+      const apiData: Omit<ApiFormData, 'id'> & { status?: string; customerSignature?: string; signatureName?: string } = {
         datum: data.datum,
         aufmasser: data.aufmasser,
         kundeVorname: data.kundeVorname,
@@ -194,7 +196,9 @@ const FormPage = () => {
         specifications: data.specifications || {},
         markiseData: (data.specifications as Record<string, unknown>)?.markiseData,
         weitereProdukte: data.weitereProdukte || [],
-        bemerkungen: data.bemerkungen || ''
+        bemerkungen: data.bemerkungen || '',
+        customerSignature: (data as Record<string, unknown>).customerSignature as string | undefined,
+        signatureName: (data as Record<string, unknown>).signatureName as string | undefined
       };
 
       // Only set status to 'neu' for new forms, promote drafts on full save

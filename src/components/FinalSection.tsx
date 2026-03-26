@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ServerImage } from '../types';
 import { deleteImage, getImageUrl } from '../services/api';
 import { useToast } from './Toast';
+import SignatureCanvas from './SignatureCanvas';
 import './FinalSection.css';
 import './SectionStyles.css';
 
@@ -16,6 +17,11 @@ interface FinalSectionProps {
   onExport: () => Promise<void> | void;
   onSave: () => Promise<void> | void;
   onNewForm: () => void;
+  customerSignature?: string;
+  signatureName?: string;
+  onSignatureSave?: (signatureData: string, signerName: string) => void;
+  kundeVorname?: string;
+  kundeNachname?: string;
 }
 
 const FinalSection = ({
@@ -25,7 +31,12 @@ const FinalSection = ({
   updateBilder,
   onExport,
   onSave,
-  onNewForm
+  onNewForm,
+  customerSignature,
+  signatureName,
+  onSignatureSave,
+  kundeVorname,
+  kundeNachname
 }: FinalSectionProps) => {
   const toast = useToast();
   const [dragActive, setDragActive] = useState(false);
@@ -33,6 +44,7 @@ const FinalSection = ({
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [pdfExported, setPdfExported] = useState(false);
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const bemerkungenRef = useRef<HTMLTextAreaElement>(null);
@@ -321,6 +333,60 @@ const FinalSection = ({
             rows={6}
           />
         </motion.div>
+
+        {/* Signature Section */}
+        {onSignatureSave && (
+          <motion.div
+            className="form-field full-width signature-section"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.25 }}
+          >
+            <label>
+              Kundenunterschrift
+            </label>
+            {customerSignature ? (
+              <div className="signature-preview">
+                <img src={customerSignature} alt="Unterschrift" className="signature-image" />
+                <div className="signature-info">
+                  <span className="signature-signer">{signatureName}</span>
+                  <span className="signature-date-label">{new Date().toLocaleDateString('de-DE')}</span>
+                </div>
+                <button
+                  type="button"
+                  className="signature-change-btn"
+                  onClick={() => setSignatureModalOpen(true)}
+                >
+                  Unterschrift ändern
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="signature-add-btn"
+                onClick={() => setSignatureModalOpen(true)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                </svg>
+                Unterschrift hinzufügen
+              </button>
+            )}
+          </motion.div>
+        )}
+
+        <SignatureCanvas
+          isOpen={signatureModalOpen}
+          onCancel={() => setSignatureModalOpen(false)}
+          onSave={(data, name) => {
+            if (onSignatureSave) onSignatureSave(data, name);
+            setSignatureModalOpen(false);
+            toast.success('Unterschrift', 'Unterschrift wurde erfolgreich gespeichert.');
+          }}
+          title="Kundenunterschrift"
+          signerNameLabel="Name des Kunden"
+          initialName={`${kundeVorname || ''} ${kundeNachname || ''}`.trim()}
+        />
 
         {/* Action Section */}
         <motion.div

@@ -1293,6 +1293,17 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
             onExport={handleExport}
             onSave={handleSaveOnly}
             onNewForm={handleNewForm}
+            customerSignature={(formData as Record<string, unknown>).customerSignature as string | undefined}
+            signatureName={(formData as Record<string, unknown>).signatureName as string | undefined}
+            onSignatureSave={(sigData, sigName) => {
+              setFormData(prev => ({
+                ...prev,
+                customerSignature: sigData,
+                signatureName: sigName
+              } as FormData));
+            }}
+            kundeVorname={formData.kundeVorname}
+            kundeNachname={formData.kundeNachname}
           />
         );
       default:

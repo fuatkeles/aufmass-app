@@ -1510,6 +1510,62 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     pdf.setTextColor(0, 0, 0);
   }
 
+  // ============ KUNDENUNTERSCHRIFT ============
+  const customerSignature = (formData as Record<string, unknown>).customerSignature as string | undefined;
+  const signatureName = (formData as Record<string, unknown>).signatureName as string | undefined;
+
+  if (customerSignature && !forSignature) {
+    checkNewPage(60);
+
+    pdf.setFontSize(14);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFillColor(127, 169, 61);
+    pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.text('KUNDENUNTERSCHRIFT', margin + 2, yPos);
+    yPos += 12;
+
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFontSize(10);
+
+    try {
+      // Signature image
+      const sigWidth = 70;
+      const sigHeight = 30;
+      const sigX = margin + 2;
+      pdf.addImage(customerSignature, 'PNG', sigX, yPos, sigWidth, sigHeight);
+
+      // Signature line under the image
+      pdf.setDrawColor(150, 150, 150);
+      pdf.setLineWidth(0.3);
+      pdf.line(sigX, yPos + sigHeight + 2, sigX + sigWidth, yPos + sigHeight + 2);
+
+      // Name and date to the right
+      const infoX = margin + sigWidth + 15;
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Name:', infoX, yPos + 8);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(signatureName || '-', infoX + 15, yPos + 8);
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Datum:', infoX, yPos + 16);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(new Date().toLocaleDateString('de-DE'), infoX + 16, yPos + 16);
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Ort:', infoX, yPos + 24);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(formData.kundenlokation || '-', infoX + 10, yPos + 24);
+
+      yPos += sigHeight + 15;
+    } catch (sigErr) {
+      console.error('Error embedding signature in PDF:', sigErr);
+      pdf.setFont('helvetica', 'italic');
+      pdf.text('Unterschrift konnte nicht geladen werden', margin + 2, yPos);
+      yPos += 10;
+    }
+  }
+
   // ============ BILDER & ANHÄNGE (skip for signature PDF) ============
   const bilder = formData.bilder as (File | ServerImage)[];
   if (bilder && bilder.length > 0 && !forSignature) {

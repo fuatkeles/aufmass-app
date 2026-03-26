@@ -804,14 +804,14 @@ app.get('/api/forms/:id', authenticateToken, async (req, res) => {
       query = `SELECT id, datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email, kunde_telefon,
                kundenlokation, category, product_type, model, specifications,
                markise_data, bemerkungen, status, created_by, created_at, updated_at,
-               montage_datum, status_date, pdf_generated_at
+               montage_datum, status_date, pdf_generated_at, customer_signature, signature_name
                FROM aufmass_forms WHERE id = $1 AND branch_id = $2`;
       params = [id, req.branchId];
     } else {
       query = `SELECT id, datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email, kunde_telefon,
                kundenlokation, category, product_type, model, specifications,
                markise_data, bemerkungen, status, created_by, created_at, updated_at,
-               montage_datum, status_date, pdf_generated_at
+               montage_datum, status_date, pdf_generated_at, customer_signature, signature_name
                FROM aufmass_forms WHERE id = $1`;
       params = [id];
     }
@@ -872,7 +872,9 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
       bemerkungen,
       status,
       weitereProdukte,
-      leadId
+      leadId,
+      customerSignature,
+      signatureName
     } = req.body;
 
     // Auto-set status_date to form datum (Aufmass date) when form is created
@@ -884,14 +886,15 @@ app.post('/api/forms', authenticateToken, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO aufmass_forms
-       (datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email, kunde_telefon, kundenlokation, category, product_type, model, specifications, markise_data, bemerkungen, status, status_date, branch_id, created_by, lead_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+       (datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email, kunde_telefon, kundenlokation, category, product_type, model, specifications, markise_data, bemerkungen, status, status_date, branch_id, created_by, lead_id, customer_signature, signature_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        RETURNING id`,
       [
         datum, aufmasser, kundeVorname, kundeNachname, kundeEmail || null, kundeTelefon || null,
         kundenlokation, category, productType, model,
         JSON.stringify(specifications || {}), JSON.stringify(markiseData || null),
-        bemerkungen || '', status || 'neu', datum, req.branchId || null, req.user.id, leadId || null
+        bemerkungen || '', status || 'neu', datum, req.branchId || null, req.user.id, leadId || null,
+        customerSignature || null, signatureName || null
       ]
     );
 
@@ -939,7 +942,9 @@ app.put('/api/forms/:id', authenticateToken, async (req, res) => {
       status: { column: 'status' },
       montageDatum: { column: 'montage_datum' },
       statusDate: { column: 'status_date' },
-      papierkorbDate: { column: 'papierkorb_date' }
+      papierkorbDate: { column: 'papierkorb_date' },
+      customerSignature: { column: 'customer_signature' },
+      signatureName: { column: 'signature_name' }
     };
 
     // Auto-set papierkorb_date when moving to trash, clear when restoring
