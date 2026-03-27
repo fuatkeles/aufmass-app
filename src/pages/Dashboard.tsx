@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage, uploadImages, getPdfUrl, getPdfStatus, getForm, savePdf, getBranchFeatures, sendAesSignature, sendAbnahmeAesSignature, getEsignatureStatus, downloadBoldSignDocument, refreshSignatureStatus, getAngebot, saveAngebot, sendAngebotAesSignature, getSignatureNotifications, downloadSignedDocument, getLeadPdfUrl } from '../services/api';
+import { getForms, deleteForm, getMontageteamStats, getMontageteams, updateForm, getImageUrl, getStoredUser, getStatusHistory, getAbnahme, saveAbnahme, uploadAbnahmeImages, getAbnahmeImages, getAbnahmeImageUrl, deleteAbnahmeImage, uploadImages, getPdfUrl, getPdfStatus, getForm, savePdf, getBranchFeatures, sendAesSignature, sendAbnahmeAesSignature, getEsignatureStatus, downloadBoldSignDocument, refreshSignatureStatus, getAngebot, saveAngebot, sendAngebotAesSignature, getSignatureNotifications, downloadSignedDocument, getLeadPdfUrl, createAbnahmeSignRequest } from '../services/api';
 import type { BranchFeatures, EsignatureStatus, EsignatureRequest, AngebotItem, SignatureNotification } from '../services/api';
 import { generatePDF } from '../utils/pdfGenerator';
 import type { AbnahmeImage } from '../services/api';
@@ -474,60 +474,176 @@ const Dashboard = () => {
   if (!abnahmeValidation.photosOk) abnahmeMissingFields.push('Min. 2 Fotos');
   if (!abnahmeValidation.kundeName) abnahmeMissingFields.push('Kundenname');
 
-  // Save abnahme and update status, then send e-signature
+  const persistAbnahmeDraft = async (): Promise<string> => {
+    if (!abnahmeFormId) return 'abnahme';
+
+    await saveAbnahme(abnahmeFormId, abnahmeData);
+
+    if (maengelImageFiles.length > 0) {
+      await uploadAbnahmeImages(abnahmeFormId, maengelImageFiles);
+      setMaengelImageFiles([]);
+    }
+
+    const newStatus = abnahmeData.hatProbleme ? 'reklamation_eingegangen' : 'abnahme';
+    await updateForm(abnahmeFormId, { status: newStatus });
+    setForms(forms.map(f =>
+      f.id === abnahmeFormId
+        ? { ...f, status: newStatus }
+        : f
+    ));
+
+    return newStatus;
+  };
+
+  const buildMailtoLink = (to: string, subject: string, body: string): string => {
+    const queryParts: string[] = [];
+
+    if (subject) {
+      queryParts.push(`subject=${encodeURIComponent(subject)}`);
+    }
+    if (body) {
+      queryParts.push(`body=${encodeURIComponent(body)}`);
+    }
+
+    return `mailto:${to}${queryParts.length > 0 ? `?${queryParts.join('&')}` : ''}`;
+  };
+
+  const getEmailTemplate = (form: FormData): { to: string; subject: string; body: string } => {
+    const kundenName = `${form.kundeVorname} ${form.kundeNachname}`.trim();
+    const status = getFormStatus(form);
+    const montageDatumFormatted = form.montageDatum
+      ? new Date(form.montageDatum).toLocaleDateString('de-DE')
+      : '________';
+
+    let subject = '';
+    let body = '';
+
+    switch (status) {
+      case 'anzahlung':
+        subject = 'Information zu Ihrer Bestellung/Anzahlung';
+        body = `Sehr geehrte/r ${kundenName},
+
+Ihre Anzahlung in Höhe von ______ Euro ist auf unserem Konto eingegangen. Sobald Ihre Bestellung in den Produktionsplan aufgenommen wurde, werden wir Sie zusätzlich informieren.
+
+Vielen Dank, dass Sie sich für Aylux entschieden haben. Unsere voraussichtliche Montagefrist beträgt ca. 8–10 Wochen. Wir danken Ihnen für Ihre Geduld. Diese E-Mail stellt keinen Montagetermin dar. Nachdem Ihre Bestellung speziell nach den Maßen Ihres Hauses produziert wurde, werden wir Sie zur Vereinbarung eines Montagetermins erneut kontaktieren. Bitte verfolgen Sie daher unsere Informations-E-Mails.
+
+Gerne beantworten wir Ihre Fragen, die Sie in dieser Zeit stellen möchten.
+
+Mit freundlichen Grüßen
+Aylux Team`;
+        break;
+
+      case 'bestellt':
+        subject = 'Information zu Ihrer Bestellung';
+        body = `Sehr geehrte/r ${kundenName},
+
+Vielen Dank, dass Sie sich für Aylux entschieden haben. Ihre Bestellung wurde in die Produktion aufgenommen. Die Produktionszeit beträgt etwa 4 Wochen. Wir werden uns so bald wie möglich erneut mit Ihnen in Verbindung setzen, um einen Montagetermin zu vereinbaren. Bitte verfolgen Sie daher unsere Informations-E-Mails. Vielen Dank für Ihre Geduld.
+
+Gerne beantworten wir Ihre Fragen, die Sie in dieser Zeit stellen möchten.
+
+Mit freundlichen Grüßen
+Aylux Team`;
+        break;
+
+      case 'montage_geplant':
+        subject = 'Information zum Montagetermin Ihrer Bestellung';
+        body = `Sehr geehrte/r ${kundenName},
+
+der Produktionsprozess des von Ihnen bestellten Produkts ist abgeschlossen, und der vorgesehene Montagetermin ist der ${montageDatumFormatted}.
+
+Bitte teilen Sie uns mit, ob der genannte Termin für Sie passend ist. Sollte der geplante Termin für Sie nicht geeignet sein, bitten wir Sie, uns die für Sie passenden Tage oder möglichen Zeiträume mitzuteilen. Nach Ihrer Bestätigung wird die Montageplanung finalisiert.
+
+Bei Fragen stehen wir Ihnen jederzeit gerne zur Verfügung.
+
+Vielen Dank für Ihr Interesse und Ihre Zusammenarbeit. Wir wünschen Ihnen einen schönen Tag.
+
+Mit freundlichen Grüßen
+Aylux Team`;
+        break;
+
+      case 'reklamation':
+        subject = 'Information zu Reklamation / Restarbeiten';
+        body = `Sehr geehrte/r ${kundenName},
+
+wir möchten Sie darüber informieren, dass die erforderlichen Arbeiten im Zusammenhang mit Ihrer Reklamation / den Restarbeiten durchgeführt wurden. Die vorgenommenen bzw. noch vorzunehmenden Anpassungen sind in dem beigefügten Dokument detailliert aufgeführt. Wir bitten Sie, dieses entsprechend zu prüfen.
+
+Wir werden Sie in kürzester Zeit bezüglich eines Montagetermins zur finalen Durchführung informieren. Bitte verfolgen Sie hierzu unsere weiteren Informations-E-Mails.
+
+Sollten Sie in der Zwischenzeit Fragen haben, stehen wir Ihnen jederzeit gerne zur Verfügung.
+
+Vielen Dank für Ihre Geduld und Ihr Verständnis.
+
+Mit freundlichen Grüßen
+Aylux Team`;
+        break;
+    }
+
+    return {
+      to: form.kundeEmail || '',
+      subject,
+      body
+    };
+  };
+
+  const buildAbnahmeSignMailtoLink = (form: FormData, signUrl: string): string | null => {
+    if (!form.kundeEmail) {
+      return null;
+    }
+
+    const kundenName = `${form.kundeVorname} ${form.kundeNachname}`.trim() || 'Kunde';
+    const template = getEmailTemplate(form);
+    const subject = template.subject || 'Bitte bestätigen Sie Ihre Abnahme';
+    const body = template.body
+      ? `${template.body}\n\nBitte bestätigen Sie die Abnahme über folgenden Link:\n${signUrl}`
+      : `Sehr geehrte/r ${kundenName},
+
+bitte bestätigen Sie die Abnahme über folgenden Link:
+${signUrl}
+
+Mit freundlichen Grüßen
+Aylux Team`;
+
+    return buildMailtoLink(form.kundeEmail, subject, body);
+  };
+
   const handleSaveAbnahme = async () => {
     if (!abnahmeFormId) return;
 
-    // Validate all required fields
     if (!abnahmeIsValid) {
-      toast.warning('Fehlende Felder', 'Bitte füllen Sie alle erforderlichen Felder aus: ' + abnahmeMissingFields.join(', '));
+      toast.warning('Fehlende Felder', 'Bitte fuellen Sie alle erforderlichen Felder aus: ' + abnahmeMissingFields.join(', '));
       return;
     }
 
     setAbnahmeSaving(true);
     try {
-      // Save abnahme data
-      await saveAbnahme(abnahmeFormId, abnahmeData);
+      const newStatus = await persistAbnahmeDraft();
+      const signRequest = await createAbnahmeSignRequest(abnahmeFormId);
+      const currentForm = forms.find(f => f.id === abnahmeFormId);
+      const updatedForm = currentForm ? { ...currentForm, status: newStatus, abnahmeSignPending: true } : null;
+      const mailtoLink = updatedForm ? buildAbnahmeSignMailtoLink(updatedForm, signRequest.signUrl) : null;
 
-      // Upload new mängel images if any
-      if (maengelImageFiles.length > 0) {
-        await uploadAbnahmeImages(abnahmeFormId, maengelImageFiles);
-        setMaengelImageFiles([]);
-      }
-
-      // Regenerate PDF with abnahme data before sending for signature (forSignature: true = no media)
-      await ensurePdfExists(abnahmeFormId, true);
-
-      // Send e-signature request automatically if enabled
-      if (branchFeatures?.esignature_enabled) {
-        try {
-          const sigResult = await sendAbnahmeAesSignature(abnahmeFormId);
-          console.log('Abnahme signature sent:', sigResult);
-
-          // Update local signature status
-          loadEsignatureStatus(abnahmeFormId);
-
-          toast.success('Abnahme gespeichert', 'E-Signatur wurde an den Kunden gesendet.');
-        } catch (sigErr) {
-          console.error('Error sending Abnahme signature:', sigErr);
-          toast.warning('Abnahme gespeichert', `E-Signatur konnte nicht gesendet werden: ${sigErr instanceof Error ? sigErr.message : 'Unbekannter Fehler'}`);
-        }
-      }
-
-      // Determine status: ES GIBT MÄNGEL → reklamation_eingegangen, otherwise → abnahme
-      const newStatus = abnahmeData.hatProbleme ? 'reklamation_eingegangen' : 'abnahme';
-
-      await updateForm(abnahmeFormId, { status: newStatus });
-      // Update local state
-      setForms(forms.map(f =>
+      setForms(prev => prev.map(f =>
         f.id === abnahmeFormId
-          ? { ...f, status: newStatus }
+          ? { ...f, status: newStatus, abnahmeSignPending: true }
           : f
       ));
+
       setAbnahmeModalOpen(false);
       setAbnahmeFormId(null);
       setMaengelImages([]);
       refreshStats();
+
+      if (mailtoLink) {
+        window.location.href = mailtoLink;
+        toast.success('Abnahme gespeichert', 'Mail mit Signaturlink wurde vorbereitet.');
+      } else {
+        try {
+          await navigator.clipboard.writeText(signRequest.signUrl);
+          toast.warning('E-Mail fehlt', 'Kein Kunde-E-Mail hinterlegt. Signaturlink wurde in die Zwischenablage kopiert.');
+        } catch {
+          toast.warning('E-Mail fehlt', 'Kein Kunde-E-Mail hinterlegt. Signaturlink wurde trotzdem erstellt.');
+        }
+      }
     } catch (err) {
       console.error('Error saving abnahme:', err);
       toast.error('Fehler', 'Abnahme konnte nicht gespeichert werden.');
@@ -535,7 +651,6 @@ const Dashboard = () => {
       setAbnahmeSaving(false);
     }
   };
-
   // Handle document/video upload
   const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -588,8 +703,8 @@ const Dashboard = () => {
         },
         specifications: formData.specifications as Record<string, string | number | boolean | string[]>,
         bilder: formData.bilder || [],
-        customerSignature: (formData as unknown as Record<string, string>).customer_signature || undefined,
-        signatureName: (formData as unknown as Record<string, string>).signature_name || undefined,
+        customerSignature: formData.customerSignature || undefined,
+        signatureName: formData.signatureName || undefined,
         abnahme: abnahmeData ? {
           ...abnahmeData,
           maengelBilder: abnahmeImages || []
@@ -861,82 +976,9 @@ const Dashboard = () => {
 
   // Generate mailto link with status-based email template
   const getEmailMailtoLink = (form: FormData): string => {
-    const kundenName = `${form.kundeVorname} ${form.kundeNachname}`.trim();
-    const status = getFormStatus(form);
-    const montageDatumFormatted = form.montageDatum
-      ? new Date(form.montageDatum).toLocaleDateString('de-DE')
-      : '________';
-
-    let subject = '';
-    let body = '';
-
-    switch (status) {
-      case 'anzahlung':
-        subject = 'Information zu Ihrer Bestellung/Anzahlung';
-        body = `Sehr geehrte/r ${kundenName},
-
-Ihre Anzahlung in Höhe von ______ Euro ist auf unserem Konto eingegangen. Sobald Ihre Bestellung in den Produktionsplan aufgenommen wurde, werden wir Sie zusätzlich informieren.
-
-Vielen Dank, dass Sie sich für Aylux entschieden haben. Unsere voraussichtliche Montagefrist beträgt ca. 8–10 Wochen. Wir danken Ihnen für Ihre Geduld. Diese E-Mail stellt keinen Montagetermin dar. Nachdem Ihre Bestellung speziell nach den Maßen Ihres Hauses produziert wurde, werden wir Sie zur Vereinbarung eines Montagetermins erneut kontaktieren. Bitte verfolgen Sie daher unsere Informations-E-Mails.
-
-Gerne beantworten wir Ihre Fragen, die Sie in dieser Zeit stellen möchten.
-
-Mit freundlichen Grüßen
-Aylux Team`;
-        break;
-
-      case 'bestellt':
-        subject = 'Information zu Ihrer Bestellung';
-        body = `Sehr geehrte/r ${kundenName},
-
-Vielen Dank, dass Sie sich für Aylux entschieden haben. Ihre Bestellung wurde in die Produktion aufgenommen. Die Produktionszeit beträgt etwa 4 Wochen. Wir werden uns so bald wie möglich erneut mit Ihnen in Verbindung setzen, um einen Montagetermin zu vereinbaren. Bitte verfolgen Sie daher unsere Informations-E-Mails. Vielen Dank für Ihre Geduld.
-
-Gerne beantworten wir Ihre Fragen, die Sie in dieser Zeit stellen möchten.
-
-Mit freundlichen Grüßen
-Aylux Team`;
-        break;
-
-      case 'montage_geplant':
-        subject = 'Information zum Montagetermin Ihrer Bestellung';
-        body = `Sehr geehrte/r ${kundenName},
-
-der Produktionsprozess des von Ihnen bestellten Produkts ist abgeschlossen, und der vorgesehene Montagetermin ist der ${montageDatumFormatted}.
-
-Bitte teilen Sie uns mit, ob der genannte Termin für Sie passend ist. Sollte der geplante Termin für Sie nicht geeignet sein, bitten wir Sie, uns die für Sie passenden Tage oder möglichen Zeiträume mitzuteilen. Nach Ihrer Bestätigung wird die Montageplanung finalisiert.
-
-Bei Fragen stehen wir Ihnen jederzeit gerne zur Verfügung.
-
-Vielen Dank für Ihr Interesse und Ihre Zusammenarbeit. Wir wünschen Ihnen einen schönen Tag.
-
-Mit freundlichen Grüßen
-Aylux Team`;
-        break;
-
-      case 'reklamation':
-        subject = 'Information zu Reklamation / Restarbeiten';
-        body = `Sehr geehrte/r ${kundenName},
-
-wir möchten Sie darüber informieren, dass die erforderlichen Arbeiten im Zusammenhang mit Ihrer Reklamation / den Restarbeiten durchgeführt wurden. Die vorgenommenen bzw. noch vorzunehmenden Anpassungen sind in dem beigefügten Dokument detailliert aufgeführt. Wir bitten Sie, dieses entsprechend zu prüfen.
-
-Wir werden Sie in kürzester Zeit bezüglich eines Montagetermins zur finalen Durchführung informieren. Bitte verfolgen Sie hierzu unsere weiteren Informations-E-Mails.
-
-Sollten Sie in der Zwischenzeit Fragen haben, stehen wir Ihnen jederzeit gerne zur Verfügung.
-
-Vielen Dank für Ihre Geduld und Ihr Verständnis.
-
-Mit freundlichen Grüßen
-Aylux Team`;
-        break;
-
-      default:
-        // No template for other statuses, just open empty email
-        return `mailto:${form.kundeEmail}`;
-    }
-
-    return `mailto:${form.kundeEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    const template = getEmailTemplate(form);
+    return buildMailtoLink(template.to, template.subject, template.body);
   };
-
   // Open stored PDF in new tab - regenerate if outdated
   const [, setPdfGenerating] = useState<number | null>(null);
 
@@ -949,12 +991,15 @@ Aylux Team`;
         getAbnahmeImages(formId)
       ]);
 
-      const hasSignature = !!(formData as unknown as Record<string, string>).customer_signature;
+      const hasSignature = !!formData.customerSignature;
 
       // Check if PDF needs regeneration
       const status = await getPdfStatus(formId);
 
-      if (status.needsRegeneration || hasSignature) {
+      // Use abnahmeOnly mode for abnahme/reklamation status forms
+      const isAbnahmeStatus = formData.status === 'abnahme' || formData.status === 'reklamation_eingegangen';
+
+      if (status.needsRegeneration || hasSignature || isAbnahmeStatus) {
         setPdfGenerating(formId);
 
         const pdfFormData = {
@@ -967,29 +1012,38 @@ Aylux Team`;
           },
           specifications: formData.specifications as Record<string, string | number | boolean | string[]>,
           bilder: formData.bilder || [],
-          customerSignature: (formData as unknown as Record<string, string>).customer_signature || null,
-          signatureName: (formData as unknown as Record<string, string>).signature_name || null,
+          customerSignature: formData.customerSignature || null,
+          signatureName: formData.signatureName || null,
           abnahme: abnahmeData ? {
             ...abnahmeData,
             maengelBilder: abnahmeImages || []
           } : undefined
         };
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await generatePDF(pdfFormData as any, { returnBlob: true });
+        const result = await generatePDF(pdfFormData as any, { returnBlob: true, abnahmeOnly: isAbnahmeStatus });
 
         if (result && result.blob) {
           await savePdf(formId, result.blob);
+          const blobUrl = URL.createObjectURL(result.blob);
+          window.open(blobUrl, '_blank');
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+          setPdfGenerating(null);
+          return;
         }
         setPdfGenerating(null);
       }
 
       // Open PDF in new tab
-      window.open(getPdfUrl(formId) + '&t=' + Date.now(), '_blank');
+      const pdfUrl = getPdfUrl(formId);
+      const cacheBustUrl = `${pdfUrl}${pdfUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+      window.open(cacheBustUrl, '_blank');
     } catch (err) {
       console.error('Error opening PDF:', err);
       setPdfGenerating(null);
       // Fallback - just try to open it
-      window.open(getPdfUrl(formId) + '&t=' + Date.now(), '_blank');
+      const pdfUrl = getPdfUrl(formId);
+      const cacheBustUrl = `${pdfUrl}${pdfUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+      window.open(cacheBustUrl, '_blank');
     }
   };
 
@@ -1294,6 +1348,14 @@ Aylux Team`;
                                 </div>
                               );
                             }
+                            if (form.abnahmeSignPending) {
+                              return (
+                                <div className="signature-status-badge pending">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                                  <span>Kundenunterschrift ausstehend</span>
+                                </div>
+                              );
+                            }
                             if (signedCount > 0) {
                               return (
                                 <div className="signature-status-badge signed">
@@ -1354,6 +1416,14 @@ Aylux Team`;
                                   >
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                                   </button>
+                                </div>
+                              );
+                            }
+                            if (form.abnahmeSignPending) {
+                              return (
+                                <div className="signature-status-badge pending">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                                  <span>Kundenunterschrift ausstehend</span>
                                 </div>
                               );
                             }
@@ -2353,11 +2423,11 @@ Aylux Team`;
                   type="hidden"
                   value={abnahmeData.kundeUnterschrift ? 'true' : 'false'}
                 />
-              </div>
+                              </div>
 
               <div className="modal-actions-modern">
                 <button className="modal-btn secondary" onClick={() => setAbnahmeModalOpen(false)}>
-                  {isAbnahmeLocked ? 'Schließen' : 'Abbrechen'}
+                  {isAbnahmeLocked ? 'Schliessen' : 'Abbrechen'}
                 </button>
                 {!isAbnahmeLocked && (
                   <button
@@ -2374,7 +2444,6 @@ Aylux Team`;
           </motion.div>
         )}
       </AnimatePresence>
-
       {/* Hidden file input for document/video upload */}
       <input
         type="file"
@@ -2389,3 +2458,4 @@ Aylux Team`;
 };
 
 export default Dashboard;
+

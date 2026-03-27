@@ -238,8 +238,9 @@ const isServerImage = (obj: unknown): obj is ServerImage => {
          typeof (obj as ServerImage).id === 'number';
 };
 
-export const generatePDF = async (formData: FormData, options?: { returnBlob?: boolean; forSignature?: boolean }): Promise<{ blob: Blob; fileName: string } | void> => {
+export const generatePDF = async (formData: FormData, options?: { returnBlob?: boolean; forSignature?: boolean; abnahmeOnly?: boolean }): Promise<{ blob: Blob; fileName: string } | void> => {
   const forSignature = options?.forSignature || false;
+  const abnahmeOnly = options?.abnahmeOnly || false;
   const pdf = new jsPDF();
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -270,9 +271,32 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
   pdf.setTextColor(0, 0, 0);
   pdf.setFontSize(20);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('AUFMASS - DATENBLATT', margin, 25);
+  pdf.text(abnahmeOnly ? 'ABNAHME-PROTOKOLL' : 'AUFMASS - DATENBLATT', margin, 25);
 
-  yPos = 45;
+  // Abnahme-only mode: add customer info header
+  if (abnahmeOnly) {
+    yPos = 38;
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setCharSpace(0);
+    const kundenName = `${formData.kundeVorname || ''} ${formData.kundeNachname || ''}`.trim() || '-';
+    pdf.text(`Kunde: ${kundenName}`, margin, yPos);
+    yPos += 5;
+    if (formData.kundenlokation) {
+      const addrLines = pdf.splitTextToSize(`Adresse: ${formData.kundenlokation}`, pageWidth - 2 * margin);
+      addrLines.forEach((line: string) => {
+        pdf.text(line, margin, yPos);
+        yPos += 5;
+      });
+    }
+    if (formData.datum) {
+      pdf.text(`Datum: ${new Date(formData.datum).toLocaleDateString('de-DE')}`, margin, yPos);
+      yPos += 5;
+    }
+    yPos += 5;
+  } else {
+    yPos = 45;
+  }
 
   // ============ ABNAHME SECTION - If exists (skip for signature PDF) ============
   if (formData.abnahme && !forSignature) {
@@ -367,7 +391,11 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     }
 
     // Abnahme Fotos - shown for both ARBEIT IST FERTIG and ES GIBT MÄNGEL
-    if ((abnahme.istFertig || abnahme.hatProbleme) && abnahme.maengelBilder && Array.isArray(abnahme.maengelBilder) && abnahme.maengelBilder.length > 0) {
+    // Support both server-fetched (maengelBilder) and inline base64 (maengelBilderBase64) images
+    const hasServerImages = abnahme.maengelBilder && Array.isArray(abnahme.maengelBilder) && abnahme.maengelBilder.length > 0;
+    const hasBase64Images = abnahme.maengelBilderBase64 && Array.isArray(abnahme.maengelBilderBase64) && abnahme.maengelBilderBase64.length > 0;
+
+    if ((abnahme.istFertig || abnahme.hatProbleme) && (hasServerImages || hasBase64Images)) {
       pdf.setFont('helvetica', 'bold');
       pdf.text('Abnahme Fotos:', margin + 2, yPos);
       yPos += 8;
@@ -377,51 +405,75 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
       const imagesPerRow = 3;
       const imgGap = 5;
 
-      for (let i = 0; i < abnahme.maengelBilder.length; i++) {
-        const img = abnahme.maengelBilder[i];
-        const col = i % imagesPerRow;
-        const xPos = margin + col * (imgWidth + imgGap);
+      if (hasBase64Images && abnahme.maengelBilderBase64) {
+        // Use inline base64 images (from public snapshot)
+        for (let i = 0; i < abnahme.maengelBilderBase64.length; i++) {
+          const photo = abnahme.maengelBilderBase64[i];
+          const col = i % imagesPerRow;
+          const xPos = margin + col * (imgWidth + imgGap);
 
-        // Check if we need a new page
-        if (yPos + imgHeight > pageHeight - margin) {
-          pdf.addPage();
-          yPos = margin;
-        }
-
-        try {
-          // Fetch image from server
-          const token = getStoredToken();
-          const imgUrl = getAbnahmeImageUrl(img.id);
-          const response = await fetch(imgUrl, {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-          });
-
-          if (response.ok) {
-            const blob = await response.blob();
-            const base64 = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob);
-            });
-
-            // Get image format
-            const format = img.file_type?.includes('png') ? 'PNG' : 'JPEG';
-            pdf.addImage(base64, format, xPos, yPos, imgWidth, imgHeight);
+          if (yPos + imgHeight > pageHeight - margin) {
+            pdf.addPage();
+            yPos = margin;
           }
-        } catch (err) {
-          // Skip image if fetch fails
-          console.error('Error loading abnahme image:', err);
+
+          try {
+            const format = photo.fileType?.includes('png') ? 'PNG' : 'JPEG';
+            pdf.addImage(photo.base64, format, xPos, yPos, imgWidth, imgHeight);
+          } catch (err) {
+            console.error('Error adding base64 abnahme image:', err);
+          }
+
+          if (col === imagesPerRow - 1) {
+            yPos += imgHeight + imgGap;
+          }
         }
 
-        // Move to next row after every 3 images
-        if (col === imagesPerRow - 1) {
+        if (abnahme.maengelBilderBase64!.length % imagesPerRow !== 0) {
           yPos += imgHeight + imgGap;
         }
-      }
+      } else if (hasServerImages && abnahme.maengelBilder) {
+        // Fetch images from server (authenticated)
+        for (let i = 0; i < abnahme.maengelBilder.length; i++) {
+          const img = abnahme.maengelBilder[i];
+          const col = i % imagesPerRow;
+          const xPos = margin + col * (imgWidth + imgGap);
 
-      // If last row was not complete, still move down
-      if (abnahme.maengelBilder.length % imagesPerRow !== 0) {
-        yPos += imgHeight + imgGap;
+          if (yPos + imgHeight > pageHeight - margin) {
+            pdf.addPage();
+            yPos = margin;
+          }
+
+          try {
+            const token = getStoredToken();
+            const imgUrl = getAbnahmeImageUrl(img.id);
+            const response = await fetch(imgUrl, {
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
+
+            if (response.ok) {
+              const blob = await response.blob();
+              const base64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+
+              const format = img.file_type?.includes('png') ? 'PNG' : 'JPEG';
+              pdf.addImage(base64, format, xPos, yPos, imgWidth, imgHeight);
+            }
+          } catch (err) {
+            console.error('Error loading abnahme image:', err);
+          }
+
+          if (col === imagesPerRow - 1) {
+            yPos += imgHeight + imgGap;
+          }
+        }
+
+        if (abnahme.maengelBilder!.length % imagesPerRow !== 0) {
+          yPos += imgHeight + imgGap;
+        }
       }
 
       yPos += 5;
@@ -471,6 +523,28 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     pdf.text(abnahme.kundeUnterschrift ? 'Ja, Kunde hat bestaetigt' : 'Nein, ausstehend', margin + 65, yPos);
     yPos += 6;
 
+    if (abnahme.signatureData) {
+      checkNewPage(45);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Kundenunterschrift:', margin + 2, yPos);
+      yPos += 4;
+
+      try {
+        const sigWidth = 55;
+        const sigHeight = 24;
+        pdf.addImage(abnahme.signatureData, 'PNG', margin + 2, yPos, sigWidth, sigHeight);
+        pdf.setDrawColor(150, 150, 150);
+        pdf.setLineWidth(0.3);
+        pdf.line(margin + 2, yPos + sigHeight + 2, margin + 2 + sigWidth, yPos + sigHeight + 2);
+        yPos += sigHeight + 8;
+      } catch (sigErr) {
+        console.error('Error embedding abnahme signature in PDF:', sigErr);
+        pdf.setFont('helvetica', 'italic');
+        pdf.text('Unterschrift konnte nicht geladen werden', margin + 2, yPos);
+        yPos += 8;
+      }
+    }
+
     // Abnahme date
     if (abnahme.abnahmeDatum) {
       pdf.setFont('helvetica', 'bold');
@@ -490,8 +564,8 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     yPos += 10;
   }
 
-  // ============ ANGEBOT SECTION - If exists ============
-  if (formData.angebot && formData.angebot.items && formData.angebot.items.length > 0) {
+  // ============ ANGEBOT SECTION - If exists (skip in abnahmeOnly mode) ============
+  if (!abnahmeOnly && formData.angebot && formData.angebot.items && formData.angebot.items.length > 0) {
     const angebot = formData.angebot;
 
     // Check if we need a new page
@@ -596,7 +670,8 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     yPos += 15;
   }
 
-  // ============ GRUNDDATEN ============
+  // ============ GRUNDDATEN (skip in abnahmeOnly mode) ============
+  if (!abnahmeOnly) {
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
   pdf.setFillColor(127, 169, 61);
@@ -1701,6 +1776,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
 
     // PDF attachments are accessible via the application dashboard, not embedded in this PDF
   }
+  } // end of !abnahmeOnly block
 
   // Footer - update page count after all pages are added
   const pageCount = (pdf as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
@@ -1725,7 +1801,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
   // Generate filename
   const customerName = `${formData.kundeVorname || ''}_${formData.kundeNachname || ''}`.trim().replace(/\s+/g, '_') || 'Kunde';
   const date = formData.datum || new Date().toISOString().split('T')[0];
-  const fileName = `Aufmass_${customerName}_${date}.pdf`;
+  const fileName = abnahmeOnly ? `Abnahme_${customerName}_${date}.pdf` : `Aufmass_${customerName}_${date}.pdf`;
 
   // Return blob for preview or save directly
   if (options?.returnBlob) {

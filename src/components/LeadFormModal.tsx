@@ -1,8 +1,32 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api, saveLeadPdf } from '../services/api';
+import { api, saveLeadPdf, saveAngebotPdf } from '../services/api';
 import { generateAngebotPDF } from '../utils/angebotPdfGenerator';
 import './LeadFormModal.css';
+
+interface AngebotData {
+  id: number;
+  angebot_nummer?: string;
+  subtotal?: number;
+  total_discount?: number;
+  total_price: number;
+  notes?: string;
+  items: EditLeadItem[];
+  extras: { description: string; price: number }[];
+}
+
+interface EditLeadItem {
+  product_name: string;
+  breite: number;
+  tiefe: number;
+  quantity: number;
+  unit_price: number;
+  discount?: number;
+  total_price: number;
+  pricing_type?: 'dimension' | 'unit';
+  unit_label?: string;
+  custom_field_values?: string | Record<string, string>;
+}
 
 interface EditLeadData {
   id: number;
@@ -15,19 +39,9 @@ interface EditLeadData {
   subtotal?: number;
   total_discount?: number;
   total_price: number;
-  items: {
-    product_name: string;
-    breite: number;
-    tiefe: number;
-    quantity: number;
-    unit_price: number;
-    discount?: number;
-    total_price: number;
-    pricing_type?: 'dimension' | 'unit';
-    unit_label?: string;
-    custom_field_values?: string | Record<string, string>;
-  }[];
+  items: EditLeadItem[];
   extras: { description: string; price: number }[];
+  angebote?: AngebotData[];
 }
 
 interface LeadFormModalProps {
@@ -35,6 +49,8 @@ interface LeadFormModalProps {
   onClose: () => void;
   onSuccess: () => void;
   editData?: EditLeadData | null;
+  editAngebotId?: number | null;
+  newAngebotForLeadId?: number | null;
 }
 
 interface ProductDimensions {
@@ -97,7 +113,7 @@ interface LeadExtra {
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: LeadFormModalProps) {
+export default function LeadFormModal({ isOpen, onClose, onSuccess, editData, editAngebotId, newAngebotForLeadId }: LeadFormModalProps) {
   // Customer info
   const [firstname, setFirstname] = useState('');
   const [lastname, setLastname] = useState('');
@@ -121,26 +137,44 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const isEditMode = !!editData;
+  const isEditMode = !!editData && !newAngebotForLeadId;
+  const isNewAngebotMode = !!newAngebotForLeadId;
 
   // Initialize form
   useEffect(() => {
     if (isOpen) {
       loadProductNames();
-      if (editData) {
+      if (isNewAngebotMode && editData) {
+        // New angebot mode: pre-fill customer info (readonly), clear products
+        setFirstname(editData.customer_firstname || '');
+        setLastname(editData.customer_lastname || '');
+        setEmail(editData.customer_email || '');
+        setPhone(editData.customer_phone || '');
+        setAddress(editData.customer_address || '');
+        setNotes('');
+        setTotalDiscount(0);
+        setProductRows([createEmptyRow()]);
+        setExtras([]);
+      } else if (editData) {
         // Populate form with existing data
         setFirstname(editData.customer_firstname || '');
         setLastname(editData.customer_lastname || '');
         setEmail(editData.customer_email || '');
         setPhone(editData.customer_phone || '');
         setAddress(editData.customer_address || '');
-        setNotes(editData.notes || '');
-        setTotalDiscount(editData.total_discount || 0);
+        // If editing a specific angebot, use that angebot's data
+        const targetAngebot = editAngebotId && editData.angebote
+          ? editData.angebote.find(a => a.id === editAngebotId)
+          : null;
+        const editItems = targetAngebot ? targetAngebot.items : editData.items;
+        const editExtras = targetAngebot ? targetAngebot.extras : editData.extras;
+        setNotes(targetAngebot ? (targetAngebot.notes || '') : (editData.notes || ''));
+        setTotalDiscount(targetAngebot ? (targetAngebot.total_discount || 0) : (editData.total_discount || 0));
 
         // Load product rows from edit data
         const loadEditRows = async () => {
           const rows: ProductRow[] = [];
-          for (const item of editData.items) {
+          for (const item of editItems) {
             const row = createEmptyRow();
             row.product_name = item.product_name;
             row.quantity = item.quantity;
@@ -175,15 +209,15 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
           }
           setProductRows(rows.length > 0 ? rows : [createEmptyRow()]);
           // Check if any items have discounts
-          if (editData.items.some(i => (i.discount || 0) > 0)) {
+          if (editItems.some(i => (i.discount || 0) > 0)) {
             setShowItemDiscounts(true);
           }
         };
         loadEditRows();
 
         // Load extras
-        if (editData.extras && editData.extras.length > 0) {
-          setExtras(editData.extras.map(e => ({
+        if (editExtras && editExtras.length > 0) {
+          setExtras(editExtras.map(e => ({
             id: generateId(),
             description: e.description,
             price: e.price
@@ -195,7 +229,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
         setProductRows([createEmptyRow()]);
       }
     }
-  }, [isOpen, editData]);
+  }, [isOpen, editData, editAngebotId, newAngebotForLeadId]);
 
   const createEmptyRow = (): ProductRow => ({
     id: generateId(),
@@ -493,6 +527,44 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
             console.error('Einzelangebot PDF failed:', pdfErr);
           }
         }
+      } else if (isNewAngebotMode && newAngebotForLeadId) {
+        // === NEW ANGEBOT MODE: Add angebot to existing lead ===
+        const angebotPayload = {
+          items: validItems.map(buildItemPayload),
+          extras: validExtras.map(e => ({ description: e.description.trim(), price: Number(e.price) })),
+          notes: notes.trim() || null,
+          total_discount: totalDiscount || 0,
+          subtotal: calculateSubtotal(),
+          total_price: calculateTotal()
+        };
+
+        const result = await api.post<{ id: number; angebot_nummer: string }>(`/leads/${newAngebotForLeadId}/angebote`, angebotPayload);
+
+        // Generate and save PDF for this angebot
+        try {
+          const itemDiscountsTotal = calculateItemDiscounts();
+          const pdfResult = await generateAngebotPDF({
+            customer_firstname: firstname.trim(),
+            customer_lastname: lastname.trim(),
+            customer_email: email.trim(),
+            customer_phone: phone.trim() || undefined,
+            customer_address: address.trim() || undefined,
+            notes: notes.trim() || undefined,
+            items: validItems.map(buildPdfItem),
+            extras: validExtras.map(e => ({ description: e.description.trim(), price: Number(e.price) })),
+            subtotal: calculateSubtotal(),
+            item_discounts: itemDiscountsTotal,
+            total_discount: totalDiscount || 0,
+            total_discount_percent: getTotalDiscountPercent(),
+            total_price: calculateTotal()
+          }, { returnBlob: true });
+
+          if (pdfResult?.blob) {
+            await saveAngebotPdf(newAngebotForLeadId, result.id, pdfResult.blob);
+          }
+        } catch (pdfErr) {
+          console.error('Angebot PDF generation failed:', pdfErr);
+        }
       } else {
         // === NORMAL MODE: Single lead with all products ===
         const payload = {
@@ -501,7 +573,8 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
           extras: validExtras.map(e => ({ description: e.description.trim(), price: Number(e.price) })),
           total_discount: totalDiscount || 0,
           subtotal: calculateSubtotal(),
-          total_price: calculateTotal()
+          total_price: calculateTotal(),
+          ...(editAngebotId ? { angebot_id: editAngebotId } : {})
         };
 
         const result = isEditMode
@@ -529,7 +602,12 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
           }, { returnBlob: true });
 
           if (pdfResult?.blob) {
-            await saveLeadPdf(leadId, pdfResult.blob);
+            if (editAngebotId) {
+              const { saveAngebotPdf } = await import('../services/api');
+              await saveAngebotPdf(leadId, editAngebotId, pdfResult.blob);
+            } else {
+              await saveLeadPdf(leadId, pdfResult.blob);
+            }
           }
         } catch (pdfErr) {
           console.error('Angebot PDF generation failed:', pdfErr);
@@ -584,7 +662,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
           onClick={e => e.stopPropagation()}
         >
           <div className="lead-modal-header">
-            <h2>{isEditMode ? 'Angebot bearbeiten' : 'Neues Angebot erstellen'}</h2>
+            <h2>{isNewAngebotMode ? 'Weiteres Angebot hinzufügen' : isEditMode ? 'Angebot bearbeiten' : 'Neues Angebot erstellen'}</h2>
             <button className="close-btn" onClick={onClose}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
@@ -597,7 +675,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
 
             {/* Customer Info Section */}
             <section className="lead-section">
-              <h3>Kundendaten</h3>
+              <h3>Kundendaten {isNewAngebotMode && <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 400 }}>(schreibgeschützt)</span>}</h3>
               <div className="lead-form-grid">
                 <div className="form-group">
                   <label>Vorname *</label>
@@ -606,6 +684,8 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
                     value={firstname}
                     onChange={e => setFirstname(e.target.value)}
                     placeholder="Vorname"
+                    readOnly={isNewAngebotMode}
+                    style={isNewAngebotMode ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
                   />
                 </div>
                 <div className="form-group">
@@ -615,6 +695,8 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
                     value={lastname}
                     onChange={e => setLastname(e.target.value)}
                     placeholder="Nachname"
+                    readOnly={isNewAngebotMode}
+                    style={isNewAngebotMode ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
                   />
                 </div>
                 <div className="form-group">
@@ -625,6 +707,8 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
                     onChange={e => setEmail(e.target.value)}
                     placeholder="email@beispiel.de"
                     required
+                    readOnly={isNewAngebotMode}
+                    style={isNewAngebotMode ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
                   />
                 </div>
                 <div className="form-group">
@@ -634,6 +718,8 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     placeholder="+49 123 456789"
+                    readOnly={isNewAngebotMode}
+                    style={isNewAngebotMode ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
                   />
                 </div>
                 <div className="form-group full-width">
@@ -643,6 +729,8 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
                     value={address}
                     onChange={e => setAddress(e.target.value)}
                     placeholder="Straße, PLZ, Ort"
+                    readOnly={isNewAngebotMode}
+                    style={isNewAngebotMode ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
                   />
                 </div>
               </div>
@@ -859,19 +947,6 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
                 <span>Artikel-Rabatte aktivieren</span>
               </label>
 
-              {!isEditMode && (
-                <label className="discount-toggle-label product-discount-toggle einzelangebote-toggle">
-                  <input
-                    type="checkbox"
-                    checked={einzelAngebote}
-                    onChange={e => setEinzelAngebote(e.target.checked)}
-                  />
-                  <span>Einzelangebote erstellen</span>
-                  {einzelAngebote && (
-                    <span className="einzelangebote-hint">Jedes Produkt wird als separates Angebot gespeichert</span>
-                  )}
-                </label>
-              )}
             </section>
 
             {/* Extras Section */}
@@ -994,7 +1069,7 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData }: 
           <div className="lead-modal-footer">
             <button className="btn-cancel" onClick={onClose}>Abbrechen</button>
             <button className="btn-save" onClick={handleSubmit} disabled={loading}>
-              {loading ? 'Speichern...' : (isEditMode ? 'Angebot aktualisieren' : (einzelAngebote ? `${getValidItems().length} Einzelangebote erstellen` : 'Angebot speichern'))}
+              {loading ? 'Speichern...' : (isEditMode ? 'Angebot aktualisieren' : 'Angebot speichern')}
             </button>
           </div>
         </motion.div>

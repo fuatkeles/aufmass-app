@@ -383,6 +383,30 @@
   background: var(--primary-hover);
 }
 
+.btn-new-angebot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.625rem 1rem;
+  background: transparent;
+  color: var(--primary-color, #7fa93d);
+  border: 2px solid var(--primary-color, #7fa93d);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-new-angebot svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-new-angebot:hover {
+  background: rgba(127, 169, 61, 0.15);
+}
+
 /* Delete Confirmation */
 .delete-confirm {
   position: absolute;
@@ -733,4 +757,211 @@
     font-size: 0.8rem;
     padding: 0.4rem 0.75rem;
   }
+}
+
+/* ============ MULTI-ANGEBOT STYLES ============ */
+
+.angebot-count-badge {
+  cursor: pointer;
+  color: #7fa93d !important;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+}
+
+.angebot-count-badge:hover {
+  opacity: 0.8;
+}
+
+.angebote-expanded {
+  border-top: 1px solid var(--border-color);
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+.angebot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  background: rgba(127, 169, 61, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(127, 169, 61, 0.15);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.angebot-row-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.angebot-row-nummer {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: rgba(127, 169, 61, 0.12);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.angebot-row-price {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #7fa93d;
+}
+
+.angebot-row-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.btn-icon-sm {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.btn-icon-sm svg {
+  width: 14px;
+  height: 14px;
+  stroke: var(--text-secondary);
+}
+
+.btn-icon-sm:hover {
+  border-color: #7fa93d;
+  background: rgba(127, 169, 61, 0.1);
+}
+
+.btn-icon-sm:hover svg {
+  stroke: #7fa93d;
+}
+
+.btn-icon-sm.delete:hover {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.btn-icon-sm.delete:hover svg {
+  stroke: #ef4444;
+}
+
+.btn-add-angebot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  background: transparent;
+  border: 1px dashed rgba(127, 169, 61, 0.4);
+  border-radius: 8px;
+  color: #7fa93d;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-add-angebot svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-add-angebot:hover {
+  background: rgba(127, 169, 61, 0.08);
+  border-color: #7fa93d;
+}
+
+.lead-add-angebot {
+  padding: 0 1.25rem 0.75rem;
+}
+
+.btn-add-angebot-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  background: transparent;
+  border: 1px dashed rgba(127, 169, 61, 0.3);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-add-angebot-inline svg {
+  width: 12px;
+  height: 12px;
+}
+
+.btn-add-angebot-inline:hover {
+  color: #7fa93d;
+  border-color: #7fa93d;
+  background: rgba(127, 169, 61, 0.05);
+}
+
+.inline-confirm {
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+/* Detail Modal Multi-Angebot */
+.detail-angebot-section {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  background: rgba(127, 169, 61, 0.03);
+}
+
+.detail-angebot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.detail-angebot-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #7fa93d;
+}
+
+.detail-angebot-price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #7fa93d;
+}
+
+.detail-angebot-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-sm {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.75rem;
 }

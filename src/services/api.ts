@@ -63,6 +63,9 @@ export interface FormData {
   pdf_files?: { id: number; file_name: string; file_type: string }[];
   media_files?: { id: number; file_name: string; file_type: string }[];
   lead_id?: number;
+  customerSignature?: string | null;
+  signatureName?: string | null;
+  abnahmeSignPending?: boolean;
 }
 
 export interface ApiForm {
@@ -93,6 +96,9 @@ export interface ApiForm {
   pdf_files?: { id: number; file_name: string; file_type: string }[];
   media_files?: { id: number; file_name: string; file_type: string }[];
   lead_id?: number;
+  customer_signature?: string | null;
+  signature_name?: string | null;
+  abnahme_sign_pending?: boolean;
 }
 
 export interface Stats {
@@ -327,7 +333,10 @@ function transformApiToFrontend(apiForm: ApiForm): FormData {
     pdf_count: apiForm.pdf_count,
     pdf_files: apiForm.pdf_files,
     media_files: apiForm.media_files,
-    lead_id: apiForm.lead_id
+    lead_id: apiForm.lead_id,
+    customerSignature: apiForm.customer_signature || null,
+    signatureName: apiForm.signature_name || null,
+    abnahmeSignPending: Boolean(apiForm.abnahme_sign_pending)
   };
 }
 
@@ -417,10 +426,12 @@ export interface AbnahmeData {
   problemBeschreibung?: string;
   maengelListe?: string[]; // Numbered list of defects (1, 2, 3, ...)
   maengelBilder?: AbnahmeImage[]; // Mängel photos
+  maengelBilderBase64?: { id: number; fileName: string; fileType: string; base64: string }[]; // Inline base64 photos for public PDF
   baustelleSauber?: 'ja' | 'nein' | null; // Baustelle wurde sauber und aufgeräumt gelassen
   monteurNote?: number | null; // Schulnote 1-6
   kundeName?: string;
   kundeUnterschrift: boolean;
+  signatureData?: string | null;
   abnahmeDatum?: string;
   bemerkungen?: string;
   createdAt?: string;
@@ -440,6 +451,93 @@ export async function saveAbnahme(formId: number, data: Partial<AbnahmeData>): P
   });
   if (!response.ok) throw new Error('Failed to save abnahme');
   return response.json();
+}
+
+export interface AbnahmeSignSnapshot {
+  form: {
+    id: number;
+    datum: string;
+    aufmasser: string;
+    kundeVorname: string;
+    kundeNachname: string;
+    kundeEmail?: string;
+    kundeTelefon?: string;
+    kundenlokation: string;
+    category: string;
+    productType: string;
+    model: string;
+    bemerkungen?: string;
+  };
+  abnahme: {
+    istFertig: boolean;
+    hatProbleme: boolean;
+    problemBeschreibung?: string;
+    maengelListe?: string[];
+    baustelleSauber?: 'ja' | 'nein' | null;
+    monteurNote?: number | null;
+    kundeName?: string;
+    kundeUnterschrift: boolean;
+    abnahmeDatum?: string;
+    bemerkungen?: string;
+    signatureData?: string | null;
+  };
+  photos?: { id: number; fileName: string; fileType: string; base64: string }[];
+}
+
+export interface AbnahmeSignRequestResponse {
+  id: number;
+  signUrl: string;
+  expiresAt: string;
+}
+
+export interface PublicAbnahmeSignRequest {
+  id: number;
+  formId: number;
+  status: 'pending' | 'signed' | 'expired' | 'replaced';
+  signerName?: string | null;
+  signedAt?: string | null;
+  expiresAt: string;
+  snapshot: AbnahmeSignSnapshot;
+}
+
+export async function createAbnahmeSignRequest(formId: number): Promise<AbnahmeSignRequestResponse> {
+  const response = await authFetch(`${API_BASE_URL}/forms/${formId}/abnahme/sign-request`, {
+    method: 'POST'
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to create sign link' }));
+    throw new Error(error.error || 'Failed to create sign link');
+  }
+  return response.json();
+}
+
+export async function getPublicAbnahmeSignRequest(token: string): Promise<PublicAbnahmeSignRequest> {
+  const response = await fetch(`${API_BASE_URL}/public/abnahme-sign/${token}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to load sign request' }));
+    throw new Error(error.error || 'Failed to load sign request');
+  }
+  return response.json();
+}
+
+export async function submitPublicAbnahmeSignature(
+  token: string,
+  payload: { signerName: string; signatureData: string }
+): Promise<{ success: boolean; formId: number; status: string }> {
+  const response = await fetch(`${API_BASE_URL}/public/abnahme-sign/${token}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to submit signature' }));
+    throw new Error(error.error || 'Failed to submit signature');
+  }
+  return response.json();
+}
+
+export function getPublicAbnahmePdfUrl(token: string): string {
+  return `${API_BASE_URL}/public/abnahme-sign/${token}/pdf`;
 }
 
 // Upload images
@@ -944,6 +1042,27 @@ export async function saveLeadPdf(leadId: number, pdfBlob: Blob): Promise<{ mess
 export function getLeadPdfUrl(leadId: number): string {
   const token = getStoredToken();
   return `${API_BASE_URL}/leads/${leadId}/pdf${token ? `?token=${token}` : ''}`;
+}
+
+// Get angebot-specific PDF URL
+export function getAngebotPdfUrl(leadId: number, angebotId: number): string {
+  const token = getStoredToken();
+  return `${API_BASE_URL}/leads/${leadId}/angebote/${angebotId}/pdf${token ? `?token=${token}` : ''}`;
+}
+
+// Save angebot-specific PDF
+export async function saveAngebotPdf(leadId: number, angebotId: number, pdfBlob: Blob): Promise<{ message: string }> {
+  const formData = new window.FormData();
+  formData.append('pdf', pdfBlob, `angebot_${leadId}_${angebotId}.pdf`);
+
+  const token = getStoredToken();
+  const response = await fetch(`${API_BASE_URL}/leads/${leadId}/angebote/${angebotId}/pdf`, {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData
+  });
+  if (!response.ok) throw new Error('Failed to save angebot PDF');
+  return response.json();
 }
 
 // ============ GENERIC API HELPER ============

@@ -8,6 +8,7 @@ import FormPage from './pages/FormPage';
 import Montageteam from './pages/Montageteam';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import AbnahmeSignPage from './pages/AbnahmeSignPage';
 import EsignatureAdmin from './components/EsignatureAdmin';
 import ProductPricing from './pages/ProductPricing';
 // isAdminBranch used in future feature flags
@@ -519,17 +520,20 @@ function AppWrapper() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    );
-  }
-
-  return <ProtectedContent />;
+  return (
+    <Routes>
+      <Route path="/abnahme/sign/:token" element={<AbnahmeSignPage />} />
+      {!isAuthenticated ? (
+        <>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </>
+      ) : (
+        <Route path="/*" element={<ProtectedContent />} />
+      )}
+    </Routes>
+  );
 }
 
 export default AppWrapper;

@@ -3,7 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AufmassForm } from '../App';
 import { FormData } from '../types';
 import { DynamicFormData } from '../types/productConfig';
-import { getForm, createForm, updateForm, uploadImages, savePdf, updateLeadStatus, FormData as ApiFormData } from '../services/api';
+import { getForm, createForm, updateForm, uploadImages, savePdf, updateLeadStatus, getAbnahme, getAbnahmeImages, FormData as ApiFormData } from '../services/api';
 import { generatePDF } from '../utils/pdfGenerator';
 import { useToast } from '../components/Toast';
 
@@ -72,6 +72,88 @@ const FormPage = () => {
     } catch (err) {
       console.error('Error updating status:', err);
       toast.error('Fehler', 'Status konnte nicht aktualisiert werden.');
+    }
+  };
+
+  const buildPdfPayload = async (formId: number) => {
+    const freshData = await getForm(formId);
+    let abnahmeData = null;
+    let abnahmeImages: { id: number; file_name: string; file_type: string }[] = [];
+
+    try {
+      [abnahmeData, abnahmeImages] = await Promise.all([
+        getAbnahme(formId),
+        getAbnahmeImages(formId)
+      ]);
+    } catch (err) {
+      console.log('Could not fetch abnahme data for PDF generation:', err);
+    }
+
+    return {
+      id: String(freshData.id),
+      datum: freshData.datum || '',
+      aufmasser: freshData.aufmasser || '',
+      kundeVorname: freshData.kundeVorname || '',
+      kundeNachname: freshData.kundeNachname || '',
+      kundeEmail: freshData.kundeEmail || '',
+      kundeTelefon: freshData.kundeTelefon || '',
+      kundenlokation: freshData.kundenlokation || '',
+      productSelection: {
+        category: freshData.category || '',
+        productType: freshData.productType || '',
+        model: freshData.model || ''
+      },
+      specifications: (freshData.specifications || {}) as Record<string, string | number | boolean | string[]>,
+      weitereProdukte: freshData.weitereProdukte || [],
+      bilder: freshData.bilder || [],
+      bemerkungen: freshData.bemerkungen || '',
+      status: (freshData.status as 'draft' | 'completed' | 'archived') || 'draft',
+      customerSignature: freshData.customerSignature || null,
+      signatureName: freshData.signatureName || null,
+      abnahme: abnahmeData ? {
+        ...abnahmeData,
+        maengelBilder: abnahmeImages || []
+      } : undefined
+    };
+  };
+
+  const persistStoredPdf = async (formId: number) => {
+    const pdfData = await buildPdfPayload(formId);
+    const pdfResult = await generatePDF(pdfData, { returnBlob: true });
+    if (pdfResult?.blob) {
+      await savePdf(formId, pdfResult.blob);
+      return true;
+    }
+    return false;
+  };
+
+  const persistStoredPdfFromLocalData = async (formId: number, data: FormData) => {
+    const pdfResult = await generatePDF({
+      ...data,
+      id: String(formId)
+    }, { returnBlob: true });
+
+    if (pdfResult?.blob) {
+      await savePdf(formId, pdfResult.blob);
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleSignaturePersist = async (signatureData: string, sigName: string): Promise<void> => {
+    if (!id || id === 'new') return;
+
+    try {
+      const formId = parseInt(id);
+      await updateForm(formId, {
+        customerSignature: signatureData,
+        signatureName: sigName
+      } as Partial<ApiFormData> & { customerSignature: string; signatureName: string });
+      await persistStoredPdf(formId);
+    } catch (err) {
+      console.error('Error persisting signature:', err);
+      toast.warning('PDF', 'Unterschrift lokal eklendi, fakat sofortiges PDF-Update başarısız oldu. Absenden ile tekrar kaydedebilirsiniz.');
     }
   };
 
@@ -160,8 +242,8 @@ const FormPage = () => {
             status: (apiData.status as 'draft' | 'completed' | 'archived') || 'draft',
             createdAt: apiData.created_at,
             updatedAt: apiData.updated_at,
-            customerSignature: (apiData as unknown as Record<string, string>).customer_signature || undefined,
-            signatureName: (apiData as unknown as Record<string, string>).signature_name || undefined
+            customerSignature: apiData.customerSignature || null,
+            signatureName: apiData.signatureName || null
           };
 
           setInitialData(formData);
@@ -199,16 +281,11 @@ const FormPage = () => {
         bemerkungen: data.bemerkungen || '',
       };
 
-      // Add signature if present
-      console.log('=== SAVE DEBUG ===');
-      console.log('data.customerSignature exists:', !!data.customerSignature);
-      console.log('data.customerSignature length:', data.customerSignature?.length);
-      console.log('data.signatureName:', data.signatureName);
-      if (data.customerSignature) {
-        (apiData as Record<string, unknown>).customerSignature = data.customerSignature;
-        (apiData as Record<string, unknown>).signatureName = data.signatureName;
+      // Always include signature fields to preserve them during edits
+      if (data.customerSignature !== undefined) {
+        (apiData as Record<string, unknown>).customerSignature = data.customerSignature || null;
+        (apiData as Record<string, unknown>).signatureName = data.signatureName || null;
       }
-      console.log('apiData.customerSignature exists:', !!(apiData as Record<string, unknown>).customerSignature);
 
       // Only set status to 'neu' for new forms, promote drafts on full save
       if (id === 'new') {
@@ -249,44 +326,18 @@ const FormPage = () => {
         }
       }
 
-      // Generate and save PDF in background AFTER images are uploaded
-      const bgFormId = formId;
-      (async () => {
-        try {
-          // Small delay to ensure DB has committed the image records
-          await new Promise(resolve => setTimeout(resolve, 500));
-          const freshData = await getForm(bgFormId);
-          const pdfData = {
-            id: String(freshData.id),
-            datum: freshData.datum || '',
-            aufmasser: freshData.aufmasser || '',
-            kundeVorname: freshData.kundeVorname || '',
-            kundeNachname: freshData.kundeNachname || '',
-            kundeEmail: freshData.kundeEmail || '',
-            kundeTelefon: freshData.kundeTelefon || '',
-            kundenlokation: freshData.kundenlokation || '',
-            productSelection: {
-              category: freshData.category || '',
-              productType: freshData.productType || '',
-              model: freshData.model || ''
-            },
-            specifications: (freshData.specifications || {}) as Record<string, string | number | boolean | string[]>,
-            weitereProdukte: freshData.weitereProdukte || [],
-            bilder: freshData.bilder || [],
-            bemerkungen: freshData.bemerkungen || '',
-            status: (freshData.status as 'draft' | 'completed' | 'archived') || 'draft',
-            customerSignature: (freshData as unknown as Record<string, string>).customer_signature || null,
-            signatureName: (freshData as unknown as Record<string, string>).signature_name || null
-          };
-          const pdfResult = await generatePDF(pdfData, { returnBlob: true });
-          if (pdfResult?.blob) {
-            await savePdf(bgFormId, pdfResult.blob);
-            console.log('PDF generated and saved successfully');
-          }
-        } catch (pdfErr) {
-          console.error('PDF generation failed:', pdfErr);
+      try {
+        const pdfSaved = await persistStoredPdfFromLocalData(formId, {
+          ...data,
+          id: String(formId)
+        });
+        if (!pdfSaved) {
+          toast.warning('PDF', 'Form kaydedildi ama PDF oluşturulamadı.');
         }
-      })();
+      } catch (pdfErr) {
+        console.error('PDF generation failed:', pdfErr);
+        toast.warning('PDF', 'Form kaydedildi ancak PDF kaydı başarısız oldu.');
+      }
 
       return formId;
     } catch (err) {
@@ -392,6 +443,7 @@ const FormPage = () => {
       initialData={initialData}
       onSave={handleSave}
       onDraftSave={handleDraftSave}
+      onSignaturePersist={handleSignaturePersist}
       onCancel={handleCancel}
       formStatus={formStatus}
       onStatusChange={handleStatusChange}

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import './App.css';
 import GrunddatenSection from './components/GrunddatenSection';
@@ -13,7 +13,7 @@ import StepIcon from './components/StepIcon';
 import { FormData, ServerImage, WeiteresProdukt } from './types';
 import { generatePDF } from './utils/pdfGenerator';
 import productConfigData from './config/productConfig.json';
-import { getStoredUser, getPdfBlob, getPdfStatus, getAbnahme, getAbnahmeImages } from './services/api';
+import { getStoredUser, getPdfBlob, getPdfStatus, getAbnahme, getAbnahmeImages, savePdf } from './services/api';
 
 // Status options for breadcrumb - matches Dashboard STATUS_OPTIONS
 const STATUS_STEPS = [
@@ -42,13 +42,14 @@ interface AufmassFormProps {
   initialData?: FormData | null;
   onSave?: (data: FormData) => Promise<number | void> | void;
   onDraftSave?: (data: FormData) => Promise<void>;
+  onSignaturePersist?: (signatureData: string, signatureName: string) => Promise<void> | void;
   onCancel?: () => void;
   formStatus?: string;
   onStatusChange?: (status: string) => void;
   isExistingForm?: boolean;
 }
 
-function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, onStatusChange, isExistingForm }: AufmassFormProps) {
+function AufmassForm({ initialData, onSave, onDraftSave, onSignaturePersist, onCancel, formStatus, onStatusChange, isExistingForm }: AufmassFormProps) {
   const [formData, setFormData] = useState<FormData>(initialData || {
     datum: new Date().toISOString().split('T')[0],
     aufmasser: '',
@@ -67,9 +68,25 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
     bilder: [],
     bemerkungen: ''
   });
+  const formDataRef = useRef(formData);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
+
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
+
+  // Sync initialData changes (e.g. when form is loaded for editing with signature)
+  useEffect(() => {
+    if (initialData) {
+      setFormData(prev => ({
+        ...prev,
+        customerSignature: initialData.customerSignature ?? prev.customerSignature,
+        signatureName: initialData.signatureName ?? prev.signatureName,
+      }));
+    }
+  }, [initialData]);
 
   // Warn before leaving unsaved form
   useEffect(() => {
@@ -1119,17 +1136,18 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
 
   // PDF indir - önce stored PDF'i dene, yoksa generate et
   const handleExport = async () => {
-    const formId = formData.id ? parseInt(formData.id) : null;
+    const currentData = formDataRef.current;
+    const formId = currentData.id ? parseInt(currentData.id) : null;
 
     // Eğer form ID varsa ve imza yoksa, stored PDF'i dene
     // İmza varsa her zaman yeniden generate et (imza güncel olmalı)
-    if (formId && !formData.customerSignature) {
+    if (formId && !currentData.customerSignature) {
       try {
         const pdfStatus = await getPdfStatus(formId);
         if (pdfStatus.hasPdf && !pdfStatus.isOutdated) {
           // Stored PDF var, indir
           const pdfBlob = await getPdfBlob(formId);
-          const fileName = `Aufmass_${formData.kundeNachname}_${formData.kundeVorname}.pdf`;
+          const fileName = `Aufmass_${currentData.kundeNachname}_${currentData.kundeVorname}.pdf`;
           const link = document.createElement('a');
           link.href = URL.createObjectURL(pdfBlob);
           link.download = fileName;
@@ -1159,28 +1177,44 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
       }
     }
 
-    await generatePDF({
-      ...formData,
+    const pdfResult = await generatePDF({
+      ...currentData,
       abnahme: abnahmeData ? {
         ...abnahmeData,
         maengelBilder: abnahmeImages || []
       } : undefined
-    });
+    }, formId ? { returnBlob: true } : undefined);
+
+    if (pdfResult?.blob) {
+      if (formId) {
+        await savePdf(formId, pdfResult.blob);
+      }
+
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(pdfResult.blob);
+      link.download = pdfResult.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }
   };
 
   const handleSaveOnly = async () => {
     if (onSave) {
-      const savedFormId = await onSave(formData);
+      const currentData = formDataRef.current;
+      const savedFormId = await onSave(currentData);
       // Update formData with the returned form ID (for new forms)
-      if (savedFormId && !formData.id) {
+      if (savedFormId && !currentData.id) {
         setFormData(prev => ({ ...prev, id: String(savedFormId) }));
+        formDataRef.current = { ...currentData, id: String(savedFormId) };
       }
     }
   };
 
   const handleNewForm = () => {
     // Reset form to initial state
-    setFormData({
+    const resetData = {
       datum: new Date().toISOString().split('T')[0],
       aufmasser: '',
       kundeVorname: '',
@@ -1195,7 +1229,9 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
       weitereProdukte: [],
       bilder: [],
       bemerkungen: ''
-    });
+    };
+    setFormData(resetData);
+    formDataRef.current = resetData;
     setCurrentStep(0);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1300,11 +1336,20 @@ function AufmassForm({ initialData, onSave, onDraftSave, onCancel, formStatus, o
               console.log('=== SIGNATURE SAVE ===');
               console.log('sigData length:', sigData.length);
               console.log('sigName:', sigName);
+              const nextData = {
+                ...formDataRef.current,
+                customerSignature: sigData,
+                signatureName: sigName
+              };
+              formDataRef.current = nextData;
               setFormData(prev => ({
                 ...prev,
                 customerSignature: sigData,
                 signatureName: sigName
               }));
+              if (nextData.id && onSignaturePersist) {
+                void onSignaturePersist(sigData, sigName);
+              }
             }}
             kundeVorname={formData.kundeVorname}
             kundeNachname={formData.kundeNachname}

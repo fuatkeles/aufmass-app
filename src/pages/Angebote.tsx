@@ -1,9 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api, getLeadPdfUrl } from '../services/api';
+import { api, getLeadPdfUrl, getAngebotPdfUrl } from '../services/api';
 import LeadFormModal from '../components/LeadFormModal';
 import './Angebote.css';
+
+interface Angebot {
+  id: number;
+  lead_id: number;
+  angebot_nummer: string;
+  subtotal: number;
+  total_discount: number;
+  total_price: number;
+  notes: string;
+  status: string;
+  created_at: string;
+  items: LeadItem[];
+  extras: LeadExtra[];
+}
 
 interface Lead {
   id: number;
@@ -20,6 +34,7 @@ interface Lead {
   created_by_name: string;
   created_at: string;
   angebot_nummer?: string;
+  angebot_count?: number;
 }
 
 interface LeadItem {
@@ -44,6 +59,7 @@ interface LeadExtra {
 interface LeadDetail extends Lead {
   items: LeadItem[];
   extras: LeadExtra[];
+  angebote?: Angebot[];
 }
 
 const LEAD_STATUS_OPTIONS = [
@@ -68,9 +84,14 @@ export default function Angebote() {
   const [loading, setLoading] = useState(true);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
   const [editLeadData, setEditLeadData] = useState<LeadDetail | null>(null);
+  const [editAngebotId, setEditAngebotId] = useState<number | null>(null);
+  const [newAngebotLeadId, setNewAngebotLeadId] = useState<number | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LeadDetail | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [deleteAngebotConfirm, setDeleteAngebotConfirm] = useState<{ leadId: number; angebotId: number } | null>(null);
+  const [expandedLeadId, setExpandedLeadId] = useState<number | null>(null);
+  const [expandedAngebote, setExpandedAngebote] = useState<Record<number, Angebot[]>>({});
   const [filterStatus, setFilterStatus] = useState('alle');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -99,19 +120,32 @@ export default function Angebote() {
     }
   };
 
-  const handleEditLead = async (id: number) => {
+  const handleEditLead = async (id: number, angebotId?: number) => {
     try {
       const data = await api.get<LeadDetail>(`/leads/${id}`);
       setEditLeadData(data);
+      setEditAngebotId(angebotId || null);
+      setNewAngebotLeadId(null);
       setLeadModalOpen(true);
     } catch (err) {
       console.error('Failed to load lead for editing:', err);
     }
   };
 
+  const handleAddAngebot = async (leadId: number) => {
+    try {
+      const data = await api.get<LeadDetail>(`/leads/${leadId}`);
+      setEditLeadData(data);
+      setEditAngebotId(null);
+      setNewAngebotLeadId(leadId);
+      setLeadModalOpen(true);
+    } catch (err) {
+      console.error('Failed to load lead for new angebot:', err);
+    }
+  };
+
   const handleCreateAufmass = async (lead: Lead | LeadDetail) => {
     try {
-      // Fetch full lead details if not already loaded
       let leadDetail: LeadDetail;
       if ('items' in lead) {
         leadDetail = lead;
@@ -119,7 +153,6 @@ export default function Angebote() {
         leadDetail = await api.get<LeadDetail>(`/leads/${lead.id}`);
       }
 
-      // Navigate to form with lead data pre-filled including products
       navigate('/form/new', {
         state: {
           fromLead: true,
@@ -149,6 +182,40 @@ export default function Angebote() {
     }
   };
 
+  const handleDeleteAngebot = async (leadId: number, angebotId: number) => {
+    try {
+      await api.delete(`/leads/${leadId}/angebote/${angebotId}`);
+      setDeleteAngebotConfirm(null);
+      // Refresh lead data
+      loadLeads();
+      if (expandedLeadId === leadId) {
+        loadAngebote(leadId);
+      }
+    } catch (err) {
+      console.error('Failed to delete angebot:', err);
+    }
+  };
+
+  const loadAngebote = async (leadId: number) => {
+    try {
+      const data = await api.get<LeadDetail>(`/leads/${leadId}`);
+      setExpandedAngebote(prev => ({ ...prev, [leadId]: data.angebote || [] }));
+    } catch (err) {
+      console.error('Failed to load angebote:', err);
+    }
+  };
+
+  const toggleExpand = async (leadId: number) => {
+    if (expandedLeadId === leadId) {
+      setExpandedLeadId(null);
+    } else {
+      setExpandedLeadId(leadId);
+      if (!expandedAngebote[leadId]) {
+        await loadAngebote(leadId);
+      }
+    }
+  };
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(price);
   };
@@ -172,6 +239,8 @@ export default function Angebote() {
     return matchesStatus && matchesSearch;
   });
 
+  const getAngebotCount = (lead: Lead) => parseInt(String(lead.angebot_count || 0));
+
   return (
     <div className="angebote-page">
       <header className="page-header">
@@ -181,7 +250,7 @@ export default function Angebote() {
         <div className="header-right">
           <motion.button
             className="btn-primary"
-            onClick={() => setLeadModalOpen(true)}
+            onClick={() => { setEditLeadData(null); setEditAngebotId(null); setNewAngebotLeadId(null); setLeadModalOpen(true); }}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
@@ -316,8 +385,22 @@ export default function Angebote() {
 
               <div className="lead-footer">
                 <div className="lead-price">
-                  <span className="price-label">Gesamtsumme</span>
-                  <span className="price-value">{formatPrice(lead.total_price)}</span>
+                  {getAngebotCount(lead) > 1 ? (
+                    <>
+                      <span className="price-label">ANGEBOTE</span>
+                      <span className="price-value angebot-count-badge" onClick={() => toggleExpand(lead.id)}>
+                        {getAngebotCount(lead)} Angebote
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16, marginLeft: 4, transform: expandedLeadId === lead.id ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="price-label">GESAMTSUMME</span>
+                      <span className="price-value">{formatPrice(lead.total_price)}</span>
+                    </>
+                  )}
                 </div>
                 <div className="lead-actions">
                   <button
@@ -361,6 +444,15 @@ export default function Angebote() {
                     </svg>
                   </button>
                   <button
+                    className="btn-new-angebot"
+                    onClick={() => handleAddAngebot(lead.id)}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    Angebot
+                  </button>
+                  <button
                     className="btn-aufmass"
                     onClick={() => handleCreateAufmass(lead)}
                   >
@@ -373,6 +465,52 @@ export default function Angebote() {
                   </button>
                 </div>
               </div>
+
+              {/* Expanded Angebote List */}
+              <AnimatePresence>
+                {expandedLeadId === lead.id && expandedAngebote[lead.id] && (
+                  <motion.div
+                    className="angebote-expanded"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    {expandedAngebote[lead.id].map((ang, idx) => (
+                      <div key={ang.id} className="angebot-row">
+                        <div className="angebot-row-info">
+                          <span className="angebot-row-nummer">{ang.angebot_nummer || `Angebot ${idx + 1}`}</span>
+                          <span className="angebot-row-price">{formatPrice(ang.total_price)}</span>
+                        </div>
+                        <div className="angebot-row-actions">
+                          <button className="btn-icon-sm" title="PDF" onClick={() => window.open(getAngebotPdfUrl(lead.id, ang.id), '_blank')}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                          </button>
+                          <button className="btn-icon-sm" title="Bearbeiten" onClick={() => handleEditLead(lead.id, ang.id)}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                          </button>
+                          <button className="btn-icon-sm delete" title="Löschen" onClick={() => setDeleteAngebotConfirm({ leadId: lead.id, angebotId: ang.id })}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                          </button>
+                        </div>
+                        {deleteAngebotConfirm?.leadId === lead.id && deleteAngebotConfirm?.angebotId === ang.id && (
+                          <div className="delete-confirm inline-confirm">
+                            <p>Dieses Angebot löschen?</p>
+                            <div className="confirm-actions">
+                              <button className="btn-cancel" onClick={() => setDeleteAngebotConfirm(null)}>Abbrechen</button>
+                              <button className="btn-delete" onClick={() => handleDeleteAngebot(lead.id, ang.id)}>Löschen</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <button className="btn-add-angebot" onClick={() => handleAddAngebot(lead.id)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
+                      Neues Angebot hinzufügen
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Delete Confirmation */}
               {deleteConfirmId === lead.id && (
@@ -392,13 +530,18 @@ export default function Angebote() {
       {/* Lead Form Modal */}
       <LeadFormModal
         isOpen={leadModalOpen}
-        onClose={() => { setLeadModalOpen(false); setEditLeadData(null); }}
+        onClose={() => { setLeadModalOpen(false); setEditLeadData(null); setEditAngebotId(null); setNewAngebotLeadId(null); }}
         onSuccess={() => {
           setLeadModalOpen(false);
           setEditLeadData(null);
+          setEditAngebotId(null);
+          setNewAngebotLeadId(null);
           loadLeads();
+          if (expandedLeadId) loadAngebote(expandedLeadId);
         }}
         editData={editLeadData}
+        editAngebotId={editAngebotId}
+        newAngebotForLeadId={newAngebotLeadId}
       />
 
       {/* Detail Modal */}
@@ -428,11 +571,6 @@ export default function Angebote() {
               </div>
 
               <div className="modal-body">
-                {selectedLead.angebot_nummer && (
-                  <div className="detail-nummer">
-                    <span className="angebot-nummer">{selectedLead.angebot_nummer}</span>
-                  </div>
-                )}
                 <section className="detail-section">
                   <h3>Kunde</h3>
                   <p><strong>{selectedLead.customer_firstname} {selectedLead.customer_lastname}</strong></p>
@@ -441,41 +579,98 @@ export default function Angebote() {
                   {selectedLead.customer_address && <p>{selectedLead.customer_address}</p>}
                 </section>
 
-                {selectedLead.items.length > 0 && (
-                  <section className="detail-section">
-                    <h3>Produkte</h3>
-                    <div className="items-table">
-                      {selectedLead.items.map(item => (
-                        <div key={item.id} className="item-row">
-                          <div className="item-info">
-                            <span className="item-name">{item.product_name}</span>
-                            <span className="item-dims">
-                              {item.pricing_type === 'unit'
-                                ? (item.unit_label || 'Einheit')
-                                : `${item.breite} x ${item.tiefe} cm`
-                              }
-                            </span>
-                            <span className="item-qty">x {item.quantity}</span>
-                          </div>
-                          <span className="item-price">{formatPrice(item.total_price)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
+                {/* Show each angebot separately */}
+                {selectedLead.angebote && selectedLead.angebote.length > 0 ? (
+                  selectedLead.angebote.map((ang, idx) => (
+                    <div key={ang.id} className="detail-angebot-section">
+                      <div className="detail-angebot-header">
+                        <h3>{ang.angebot_nummer || `Angebot ${idx + 1}`}</h3>
+                        <span className="detail-angebot-price">{formatPrice(ang.total_price)}</span>
+                      </div>
 
-                {selectedLead.extras.length > 0 && (
-                  <section className="detail-section">
-                    <h3>Zusatzleistungen</h3>
-                    <div className="items-table">
-                      {selectedLead.extras.map(extra => (
-                        <div key={extra.id} className="item-row">
-                          <span className="item-name">{extra.description}</span>
-                          <span className="item-price">{formatPrice(extra.price)}</span>
-                        </div>
-                      ))}
+                      {ang.items.length > 0 && (
+                        <section className="detail-section">
+                          <h4>Produkte</h4>
+                          <div className="items-table">
+                            {ang.items.map(item => (
+                              <div key={item.id} className="item-row">
+                                <div className="item-info">
+                                  <span className="item-name">{item.product_name}</span>
+                                  <span className="item-dims">
+                                    {item.pricing_type === 'unit'
+                                      ? (item.unit_label || 'Einheit')
+                                      : `${item.breite} x ${item.tiefe} cm`
+                                    }
+                                  </span>
+                                  <span className="item-qty">x {item.quantity}</span>
+                                </div>
+                                <span className="item-price">{formatPrice(item.total_price)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+
+                      {ang.extras.length > 0 && (
+                        <section className="detail-section">
+                          <h4>Zusatzleistungen</h4>
+                          <div className="items-table">
+                            {ang.extras.map(extra => (
+                              <div key={extra.id} className="item-row">
+                                <span className="item-name">{extra.description}</span>
+                                <span className="item-price">{formatPrice(extra.price)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+
+                      <div className="detail-angebot-footer">
+                        <button className="btn-secondary btn-sm" onClick={() => window.open(getAngebotPdfUrl(selectedLead.id, ang.id), '_blank')}>
+                          PDF anzeigen
+                        </button>
+                      </div>
                     </div>
-                  </section>
+                  ))
+                ) : (
+                  <>
+                    {selectedLead.items.length > 0 && (
+                      <section className="detail-section">
+                        <h3>Produkte</h3>
+                        <div className="items-table">
+                          {selectedLead.items.map(item => (
+                            <div key={item.id} className="item-row">
+                              <div className="item-info">
+                                <span className="item-name">{item.product_name}</span>
+                                <span className="item-dims">
+                                  {item.pricing_type === 'unit'
+                                    ? (item.unit_label || 'Einheit')
+                                    : `${item.breite} x ${item.tiefe} cm`
+                                  }
+                                </span>
+                                <span className="item-qty">x {item.quantity}</span>
+                              </div>
+                              <span className="item-price">{formatPrice(item.total_price)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
+                    {selectedLead.extras.length > 0 && (
+                      <section className="detail-section">
+                        <h3>Zusatzleistungen</h3>
+                        <div className="items-table">
+                          {selectedLead.extras.map(extra => (
+                            <div key={extra.id} className="item-row">
+                              <span className="item-name">{extra.description}</span>
+                              <span className="item-price">{formatPrice(extra.price)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+                  </>
                 )}
 
                 {selectedLead.notes && (

@@ -1,0 +1,560 @@
+.abnahme-sign-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(127, 169, 61, 0.15), transparent 40%),
+    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.08), transparent 40%),
+    linear-gradient(180deg, #0c1220 0%, #111827 50%, #0f172a 100%);
+  color: #e5e7eb;
+}
+
+/* Card - full width, no outer padding */
+.abnahme-sign-card {
+  max-width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+/* Header - compact with side-by-side logo and info */
+.abnahme-sign-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 32px;
+  background: linear-gradient(135deg, rgba(127, 169, 61, 0.1) 0%, rgba(15, 23, 42, 0.95) 60%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.abnahme-logo {
+  display: inline-flex;
+  flex-direction: column;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: #1a2332;
+  border: 1px solid rgba(127, 169, 61, 0.3);
+  flex-shrink: 0;
+}
+
+.abnahme-logo .logo-text {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #7fa93d;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+.abnahme-logo .logo-sub {
+  font-size: 0.42rem;
+  color: #94a3b8;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.abnahme-logo-bar {
+  display: contents;
+}
+
+.header-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.eyebrow {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(127, 169, 61, 0.14);
+  color: #b5d66e;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.abnahme-sign-header h1 {
+  margin: 4px 0 2px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.header-desc {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+/* Content area - two column layout on desktop */
+.abnahme-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  min-height: calc(100vh - 80px);
+}
+
+.abnahme-left-col,
+.abnahme-right-col {
+  padding: 20px 28px;
+}
+
+.abnahme-left-col {
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Sections - compact */
+.abnahme-sign-section {
+  margin-bottom: 16px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #cbd5e1;
+}
+
+.section-title svg {
+  color: #7fa93d;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.section-title h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: #e2e8f0;
+}
+
+/* Info cards grid - compact */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.info-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.info-label {
+  display: block;
+  margin-bottom: 3px;
+  color: #64748b;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.info-card strong {
+  font-size: 0.85rem;
+  color: #e2e8f0;
+}
+
+/* Status cards */
+.status-positive {
+  border-color: rgba(16, 185, 129, 0.2);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.status-negative {
+  border-color: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.status-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-green {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.dot-red {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+.note-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(127, 169, 61, 0.15);
+  color: #b5d66e;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+/* Mängel & Bemerkungen boxes */
+.summary-box {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.maengel-box {
+  border-color: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.04);
+}
+
+.maengel-list {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  list-style: decimal;
+}
+
+.maengel-list li {
+  padding: 2px 0;
+  color: #fca5a5;
+  font-size: 0.85rem;
+}
+
+.maengel-list li::marker {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.bemerkungen-box p {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  color: #cbd5e1;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* Photos grid */
+.photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.photo-card {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  aspect-ratio: 1;
+}
+
+.photo-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Right column - signature area */
+.signature-section-inner {
+  position: sticky;
+  top: 20px;
+}
+
+/* Signer input */
+.signer-box {
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.signer-box label {
+  display: block;
+  margin-bottom: 6px;
+  color: #94a3b8;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.signer-box input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.8);
+  color: #f1f5f9;
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.signer-box input:focus {
+  outline: none;
+  border-color: #7fa93d;
+  box-shadow: 0 0 0 3px rgba(127, 169, 61, 0.15);
+}
+
+/* Signature preview */
+.signature-preview-card {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.signature-preview-card img {
+  width: 100%;
+  max-width: 320px;
+  background: #fff;
+  border-radius: 10px;
+  display: block;
+  margin-bottom: 10px;
+}
+
+/* Buttons */
+.sign-btn,
+.submit-btn {
+  margin-top: 12px;
+  padding: 11px 18px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.sign-btn.primary,
+.submit-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #7fa93d, #6b9332);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(127, 169, 61, 0.25);
+}
+
+.sign-btn.primary:hover,
+.submit-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8bb94a, #7fa93d);
+  box-shadow: 0 4px 12px rgba(127, 169, 61, 0.35);
+  transform: translateY(-1px);
+}
+
+.sign-btn.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sign-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.submit-btn:disabled,
+.sign-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Success state */
+.submit-success {
+  padding: 28px 20px;
+  border-radius: 14px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  text-align: center;
+}
+
+.success-checkmark {
+  margin-bottom: 12px;
+}
+
+.success-checkmark svg {
+  animation: checkmark-pop 0.4s ease-out;
+}
+
+@keyframes checkmark-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.submit-success h3 {
+  font-size: 1.1rem;
+  color: #10b981;
+  margin: 0 0 6px;
+}
+
+.submit-success p {
+  color: #94a3b8;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.pdf-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #7fa93d, #6b9332);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(127, 169, 61, 0.25);
+}
+
+.pdf-download-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8bb94a, #7fa93d);
+  box-shadow: 0 4px 12px rgba(127, 169, 61, 0.35);
+  transform: translateY(-1px);
+}
+
+.pdf-download-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pdf-download-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Error states */
+.abnahme-error-state {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.expired-icon {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.abnahme-error-state h1 {
+  font-size: 1.3rem;
+  margin: 0 0 6px;
+}
+
+.abnahme-error-state p {
+  color: #94a3b8;
+}
+
+/* Loading */
+.abnahme-loading {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.abnahme-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(127, 169, 61, 0.2);
+  border-top-color: #7fa93d;
+  border-radius: 50%;
+  margin: 0 auto 14px;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.abnahme-loading p {
+  color: #94a3b8;
+}
+
+/* Footer */
+.abnahme-footer {
+  padding: 14px 32px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  text-align: center;
+}
+
+.abnahme-footer span {
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+/* Responsive - tablet and below go single column */
+@media (max-width: 900px) {
+  .abnahme-content {
+    grid-template-columns: 1fr;
+  }
+
+  .abnahme-left-col {
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .abnahme-sign-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .abnahme-sign-header h1 {
+    font-size: 1.1rem;
+  }
+
+  .abnahme-left-col,
+  .abnahme-right-col {
+    padding: 16px;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .abnahme-footer {
+    padding: 12px 16px;
+  }
+}
+
+@media (max-width: 400px) {
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

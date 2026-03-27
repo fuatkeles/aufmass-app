@@ -318,6 +318,9 @@
   margin-left: 280px;
   padding: 0;
   min-height: 100vh;
+  overflow-x: hidden;
+  width: calc(100vw - 280px);
+  box-sizing: border-box;
 }
 
 .content-header {
@@ -710,6 +713,13 @@
 }
 
 /* 1920px and below - 3 columns (default is already 3) */
+
+/* Laptop/mid screens where 3 cards don't fit - 2 columns */
+@media (max-width: 1919px) and (min-width: 1025px) {
+  .forms-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
 
 /* Tablet - 2 columns */
 @media (max-width: 1024px) and (min-width: 769px) {
@@ -1937,6 +1947,7 @@
 
   .dashboard-content {
     margin-left: 240px;
+    width: calc(100vw - 240px);
   }
 
   .content-header,
@@ -1961,6 +1972,7 @@
 
   .dashboard-content {
     margin-left: 0;
+    width: 100vw;
   }
 
   .quick-stats {

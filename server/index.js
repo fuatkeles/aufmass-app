@@ -104,6 +104,29 @@ async function initializeTables() {
     await pool.query(`ALTER TABLE aufmass_abnahme ADD COLUMN IF NOT EXISTS maengel_liste TEXT`);
     await pool.query(`ALTER TABLE aufmass_abnahme ADD COLUMN IF NOT EXISTS baustelle_sauber VARCHAR(10)`);
     await pool.query(`ALTER TABLE aufmass_abnahme ADD COLUMN IF NOT EXISTS monteur_note INT`);
+    await pool.query(`ALTER TABLE aufmass_abnahme ADD COLUMN IF NOT EXISTS signature_data TEXT`);
+
+    // Public abnahme sign link requests
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS aufmass_abnahme_sign_requests (
+        id SERIAL PRIMARY KEY,
+        form_id INT NOT NULL,
+        branch_id VARCHAR(50),
+        token_hash VARCHAR(128) NOT NULL UNIQUE,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        snapshot_json TEXT NOT NULL,
+        signer_name VARCHAR(255),
+        signature_data TEXT,
+        signed_at TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL,
+        created_by INT,
+        used_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ix_abnahme_sign_requests_form_id ON aufmass_abnahme_sign_requests(form_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ix_abnahme_sign_requests_status ON aufmass_abnahme_sign_requests(status)`);
 
     // User columns
     await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS branch_id VARCHAR(50)`);
@@ -183,6 +206,47 @@ async function initializeTables() {
 
     // Angebot nummer column
     await pool.query(`ALTER TABLE aufmass_leads ADD COLUMN IF NOT EXISTS angebot_nummer VARCHAR(20)`);
+
+    // ============ MULTI-ANGEBOT SUPPORT ============
+    // Create angebote table for multiple quotes per lead
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS aufmass_lead_angebote (
+        id SERIAL PRIMARY KEY,
+        lead_id INT NOT NULL REFERENCES aufmass_leads(id) ON DELETE CASCADE,
+        angebot_nummer VARCHAR(20),
+        subtotal DECIMAL(10,2) DEFAULT 0,
+        total_discount DECIMAL(10,2) DEFAULT 0,
+        total_price DECIMAL(10,2) DEFAULT 0,
+        notes TEXT,
+        status VARCHAR(20) DEFAULT 'offen',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ix_lead_angebote_lead_id ON aufmass_lead_angebote(lead_id)`);
+
+    // Add angebot_id column to lead_items and lead_extras
+    await pool.query(`ALTER TABLE aufmass_lead_items ADD COLUMN IF NOT EXISTS angebot_id INT REFERENCES aufmass_lead_angebote(id) ON DELETE CASCADE`);
+    await pool.query(`ALTER TABLE aufmass_lead_extras ADD COLUMN IF NOT EXISTS angebot_id INT REFERENCES aufmass_lead_angebote(id) ON DELETE CASCADE`);
+
+    // Migrate existing leads: create angebot record for leads that have items but no angebote
+    const leadsWithoutAngebote = await pool.query(`
+      SELECT l.id, l.angebot_nummer, l.subtotal, l.total_discount, l.total_price, l.notes, l.status
+      FROM aufmass_leads l
+      WHERE NOT EXISTS (SELECT 1 FROM aufmass_lead_angebote a WHERE a.lead_id = l.id)
+      AND EXISTS (SELECT 1 FROM aufmass_lead_items i WHERE i.lead_id = l.id)
+    `);
+    for (const lead of leadsWithoutAngebote.rows) {
+      const angebotResult = await pool.query(
+        `INSERT INTO aufmass_lead_angebote (lead_id, angebot_nummer, subtotal, total_discount, total_price, notes, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [lead.id, lead.angebot_nummer, lead.subtotal || 0, lead.total_discount || 0, lead.total_price || 0, lead.notes, lead.status || 'offen']
+      );
+      const angebotId = angebotResult.rows[0].id;
+      await pool.query(`UPDATE aufmass_lead_items SET angebot_id = $1 WHERE lead_id = $2 AND angebot_id IS NULL`, [angebotId, lead.id]);
+      await pool.query(`UPDATE aufmass_lead_extras SET angebot_id = $1 WHERE lead_id = $2 AND angebot_id IS NULL`, [angebotId, lead.id]);
+    }
+    console.log(`Multi-angebot migration: ${leadsWithoutAngebote.rows.length} leads migrated`);
 
     // Check if admin exists, create default admin if not
     const adminCheck = await pool.query(
@@ -283,6 +347,74 @@ async function verifyFormBranch(formId, branchId) {
     [formId, branchId]
   );
   return result.rows.length > 0;
+}
+
+function hashPublicToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+async function buildAbnahmeSignSnapshot(formId) {
+  const formResult = await pool.query(
+    `SELECT id, datum, aufmasser, kunde_vorname, kunde_nachname, kunde_email, kunde_telefon,
+            kundenlokation, category, product_type, model, bemerkungen
+     FROM aufmass_forms
+     WHERE id = $1`,
+    [formId]
+  );
+
+  if (formResult.rows.length === 0) {
+    return null;
+  }
+
+  const abnahmeResult = await pool.query('SELECT * FROM aufmass_abnahme WHERE form_id = $1', [formId]);
+  if (abnahmeResult.rows.length === 0) {
+    return null;
+  }
+
+  const form = formResult.rows[0];
+  const abnahme = abnahmeResult.rows[0];
+
+  // Fetch abnahme photos as base64
+  const photosResult = await pool.query(
+    'SELECT id, file_name, file_type, file_data FROM aufmass_abnahme_bilder WHERE form_id = $1 ORDER BY created_at',
+    [formId]
+  );
+  const photos = photosResult.rows.map(p => ({
+    id: p.id,
+    fileName: p.file_name,
+    fileType: p.file_type,
+    base64: `data:${p.file_type};base64,${p.file_data.toString('base64')}`
+  }));
+
+  return {
+    form: {
+      id: form.id,
+      datum: form.datum,
+      aufmasser: form.aufmasser,
+      kundeVorname: form.kunde_vorname,
+      kundeNachname: form.kunde_nachname,
+      kundeEmail: form.kunde_email,
+      kundeTelefon: form.kunde_telefon,
+      kundenlokation: form.kundenlokation,
+      category: form.category,
+      productType: form.product_type,
+      model: form.model,
+      bemerkungen: form.bemerkungen
+    },
+    abnahme: {
+      istFertig: abnahme.ist_fertig,
+      hatProbleme: abnahme.hat_probleme,
+      problemBeschreibung: abnahme.problem_beschreibung,
+      maengelListe: abnahme.maengel_liste ? JSON.parse(abnahme.maengel_liste) : [],
+      baustelleSauber: abnahme.baustelle_sauber,
+      monteurNote: abnahme.monteur_note,
+      kundeName: abnahme.kunde_name,
+      kundeUnterschrift: abnahme.kunde_unterschrift,
+      abnahmeDatum: abnahme.abnahme_datum,
+      bemerkungen: abnahme.bemerkungen
+    },
+    photos
+  };
 }
 
 // ============ AUTH ROUTES ============
@@ -719,6 +851,13 @@ app.get('/api/forms', authenticateToken, async (req, res) => {
           f.kundenlokation, f.category, f.product_type, f.model, f.specifications,
           f.markise_data, f.bemerkungen, f.status, f.created_by, f.created_at, f.updated_at,
           f.montage_datum, f.status_date, f.pdf_generated_at, f.branch_id, f.papierkorb_date, f.lead_id,
+          EXISTS(
+            SELECT 1
+            FROM aufmass_abnahme_sign_requests sr
+            WHERE sr.form_id = f.id
+              AND sr.status = 'pending'
+              AND (sr.expires_at IS NULL OR sr.expires_at > NOW())
+          ) as abnahme_sign_pending,
           (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND file_type LIKE 'image/%') as image_count,
           (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND (file_type = 'application/pdf' OR file_name LIKE '%.pdf')) as pdf_count
         FROM aufmass_forms f
@@ -733,6 +872,13 @@ app.get('/api/forms', authenticateToken, async (req, res) => {
           f.kundenlokation, f.category, f.product_type, f.model, f.specifications,
           f.markise_data, f.bemerkungen, f.status, f.created_by, f.created_at, f.updated_at,
           f.montage_datum, f.status_date, f.pdf_generated_at, f.branch_id, f.papierkorb_date, f.lead_id,
+          EXISTS(
+            SELECT 1
+            FROM aufmass_abnahme_sign_requests sr
+            WHERE sr.form_id = f.id
+              AND sr.status = 'pending'
+              AND (sr.expires_at IS NULL OR sr.expires_at > NOW())
+          ) as abnahme_sign_pending,
           (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND file_type LIKE 'image/%') as image_count,
           (SELECT COUNT(*) FROM aufmass_bilder WHERE form_id = f.id AND (file_type = 'application/pdf' OR file_name LIKE '%.pdf')) as pdf_count
         FROM aufmass_forms f
@@ -1229,6 +1375,7 @@ app.get('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
       monteurNote: abnahme.monteur_note,
       kundeName: abnahme.kunde_name,
       kundeUnterschrift: abnahme.kunde_unterschrift,
+      signatureData: abnahme.signature_data,
       abnahmeDatum: abnahme.abnahme_datum,
       bemerkungen: abnahme.bemerkungen,
       createdAt: abnahme.created_at,
@@ -1244,7 +1391,7 @@ app.get('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
 app.post('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { istFertig, hatProbleme, problemBeschreibung, maengelListe, baustelleSauber, monteurNote, kundeName, kundeUnterschrift, bemerkungen } = req.body;
+    const { istFertig, hatProbleme, problemBeschreibung, maengelListe, baustelleSauber, monteurNote, kundeName, kundeUnterschrift, bemerkungen, signatureData } = req.body;
 
     // Serialize maengelListe to JSON
     const maengelListeJson = maengelListe ? JSON.stringify(maengelListe) : null;
@@ -1259,25 +1406,25 @@ app.post('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
           ist_fertig = $1, hat_probleme = $2, problem_beschreibung = $3,
           maengel_liste = $4, baustelle_sauber = $5, monteur_note = $6,
           kunde_name = $7, kunde_unterschrift = $8, abnahme_datum = $9,
-          bemerkungen = $10, updated_at = NOW()
-         WHERE form_id = $11`,
+          bemerkungen = $10, signature_data = COALESCE($11, signature_data), updated_at = NOW()
+         WHERE form_id = $12`,
         [
           istFertig ? true : false, hatProbleme ? true : false, problemBeschreibung || null,
           maengelListeJson, baustelleSauber || null, monteurNote || null,
           kundeName || null, kundeUnterschrift ? true : false, new Date(),
-          bemerkungen || null, id
+          bemerkungen || null, signatureData || null, id
         ]
       );
     } else {
       // Create new
       await pool.query(
-        `INSERT INTO aufmass_abnahme (form_id, ist_fertig, hat_probleme, problem_beschreibung, maengel_liste, baustelle_sauber, monteur_note, kunde_name, kunde_unterschrift, abnahme_datum, bemerkungen)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        `INSERT INTO aufmass_abnahme (form_id, ist_fertig, hat_probleme, problem_beschreibung, maengel_liste, baustelle_sauber, monteur_note, kunde_name, kunde_unterschrift, abnahme_datum, bemerkungen, signature_data)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           id, istFertig ? true : false, hatProbleme ? true : false, problemBeschreibung || null,
           maengelListeJson, baustelleSauber || null, monteurNote || null,
           kundeName || null, kundeUnterschrift ? true : false, new Date(),
-          bemerkungen || null
+          bemerkungen || null, signatureData || null
         ]
       );
     }
@@ -1292,6 +1439,188 @@ app.post('/api/forms/:id/abnahme', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error saving abnahme:', err);
     res.status(500).json({ error: 'Failed to save abnahme data' });
+  }
+});
+
+// Create public abnahme sign link
+app.post('/api/forms/:id/abnahme/sign-request', authenticateToken, requireAdminOrOffice, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!await verifyFormBranch(id, req.branchId)) {
+      return res.status(404).json({ error: 'Form not found' });
+    }
+
+    const snapshot = await buildAbnahmeSignSnapshot(id);
+    if (!snapshot) {
+      return res.status(400).json({ error: 'Abnahme data must be saved before creating a sign link' });
+    }
+
+    const rawToken = crypto.randomBytes(24).toString('hex');
+    const tokenHash = hashPublicToken(rawToken);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    await pool.query(
+      `UPDATE aufmass_abnahme_sign_requests
+       SET status = 'replaced', updated_at = NOW()
+       WHERE form_id = $1 AND status = 'pending'`,
+      [id]
+    );
+
+    const insertResult = await pool.query(
+      `INSERT INTO aufmass_abnahme_sign_requests
+       (form_id, branch_id, token_hash, snapshot_json, expires_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, expires_at`,
+      [id, req.branchId || null, tokenHash, JSON.stringify(snapshot), expiresAt, req.user.id]
+    );
+
+    const appBaseUrl = req.headers.origin || process.env.PUBLIC_APP_URL || 'http://localhost:5173';
+    const signUrl = `${appBaseUrl}/abnahme/sign/${rawToken}`;
+
+    res.json({
+      id: insertResult.rows[0].id,
+      signUrl,
+      expiresAt: insertResult.rows[0].expires_at
+    });
+  } catch (err) {
+    console.error('Error creating abnahme sign request:', err);
+    res.status(500).json({ error: 'Failed to create sign link' });
+  }
+});
+
+// Get public abnahme sign request
+app.get('/api/public/abnahme-sign/:token', async (req, res) => {
+  try {
+    const tokenHash = hashPublicToken(req.params.token);
+    const result = await pool.query(
+      `SELECT id, form_id, status, snapshot_json, signer_name, signed_at, expires_at
+       FROM aufmass_abnahme_sign_requests
+       WHERE token_hash = $1`,
+      [tokenHash]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Sign request not found' });
+    }
+
+    const request = result.rows[0];
+    const isExpired = request.expires_at && new Date(request.expires_at) < new Date();
+
+    res.json({
+      id: request.id,
+      formId: request.form_id,
+      status: isExpired && request.status === 'pending' ? 'expired' : request.status,
+      signerName: request.signer_name,
+      signedAt: request.signed_at,
+      expiresAt: request.expires_at,
+      snapshot: JSON.parse(request.snapshot_json)
+    });
+  } catch (err) {
+    console.error('Error getting public abnahme sign request:', err);
+    res.status(500).json({ error: 'Failed to load sign request' });
+  }
+});
+
+// Submit public abnahme signature
+app.post('/api/public/abnahme-sign/:token', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const tokenHash = hashPublicToken(req.params.token);
+    const { signerName, signatureData } = req.body;
+
+    if (!signerName || !signatureData) {
+      return res.status(400).json({ error: 'Signer name and signature are required' });
+    }
+
+    const requestResult = await client.query(
+      `SELECT id, form_id, status, snapshot_json, expires_at
+       FROM aufmass_abnahme_sign_requests
+       WHERE token_hash = $1`,
+      [tokenHash]
+    );
+
+    if (requestResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Sign request not found' });
+    }
+
+    const signRequest = requestResult.rows[0];
+    if (signRequest.status === 'signed') {
+      return res.status(409).json({ error: 'This sign request has already been completed' });
+    }
+    if (signRequest.expires_at && new Date(signRequest.expires_at) < new Date()) {
+      return res.status(410).json({ error: 'This sign request has expired' });
+    }
+
+    const snapshot = JSON.parse(signRequest.snapshot_json);
+    const targetStatus = snapshot?.abnahme?.hatProbleme ? 'reklamation_eingegangen' : 'abnahme';
+
+    await client.query('BEGIN');
+
+    await client.query(
+      `UPDATE aufmass_abnahme_sign_requests
+       SET status = 'signed', signer_name = $1, signature_data = $2, signed_at = NOW(), used_at = NOW(), updated_at = NOW()
+       WHERE id = $3`,
+      [signerName.trim(), signatureData, signRequest.id]
+    );
+
+    await client.query(
+      `UPDATE aufmass_abnahme
+       SET kunde_name = $1, kunde_unterschrift = true, abnahme_datum = NOW(), signature_data = $2, updated_at = NOW()
+       WHERE form_id = $3`,
+      [signerName.trim(), signatureData, signRequest.form_id]
+    );
+
+    await client.query(
+      `UPDATE aufmass_forms
+       SET status = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [targetStatus, signRequest.form_id]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({ success: true, formId: signRequest.form_id, status: targetStatus });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error submitting public abnahme signature:', err);
+    res.status(500).json({ error: 'Failed to submit signature' });
+  } finally {
+    client.release();
+  }
+});
+
+// Public PDF download for signed abnahme
+app.get('/api/public/abnahme-sign/:token/pdf', async (req, res) => {
+  try {
+    const tokenHash = hashPublicToken(req.params.token);
+    const result = await pool.query(
+      `SELECT form_id, status FROM aufmass_abnahme_sign_requests WHERE token_hash = $1`,
+      [tokenHash]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Sign request not found' });
+    }
+
+    const { form_id, status } = result.rows[0];
+    if (status !== 'signed') {
+      return res.status(403).json({ error: 'PDF is only available after signing' });
+    }
+
+    const pdfPath = path.join(PDF_DIR, `${form_id}.pdf`);
+    if (!fs.existsSync(pdfPath)) {
+      return res.status(404).json({ error: 'PDF not yet generated' });
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="Abnahme-Protokoll.pdf"`);
+    res.setHeader('Cache-Control', 'no-cache');
+    fs.createReadStream(pdfPath).pipe(res);
+  } catch (err) {
+    console.error('Error serving public abnahme PDF:', err);
+    res.status(500).json({ error: 'Failed to serve PDF' });
   }
 });
 
@@ -3858,15 +4187,23 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
 
     const leadId = leadResult.rows[0].id;
 
-    // Insert items with discount
+    // Create first angebot record
+    const angebotResult = await pool.query(
+      `INSERT INTO aufmass_lead_angebote (lead_id, angebot_nummer, subtotal, total_discount, total_price, notes, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'offen') RETURNING id`,
+      [leadId, angebotNummer, subtotal || 0, total_discount || 0, finalTotal, notes || null]
+    );
+    const angebotId = angebotResult.rows[0].id;
+
+    // Insert items with discount (linked to angebot)
     if (items && items.length > 0) {
       for (const item of items) {
         const itemDiscount = item.discount || 0;
         const itemTotal = (item.unit_price * (item.quantity || 1)) - itemDiscount;
         await pool.query(
-          `INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label, custom_field_values)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [leadId, item.product_id || null, item.product_name, item.breite || null, item.tiefe || null,
+          `INSERT INTO aufmass_lead_items (lead_id, angebot_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label, custom_field_values)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          [leadId, angebotId, item.product_id || null, item.product_name, item.breite || null, item.tiefe || null,
            item.quantity || 1, item.unit_price, itemDiscount, itemTotal,
            item.pricing_type || 'dimension', item.unit_label || null,
            item.custom_field_values ? (typeof item.custom_field_values === 'string' ? item.custom_field_values : JSON.stringify(item.custom_field_values)) : null]
@@ -3874,12 +4211,12 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
       }
     }
 
-    // Insert extras
+    // Insert extras (linked to angebot)
     if (extras && extras.length > 0) {
       for (const extra of extras) {
         await pool.query(
-          `INSERT INTO aufmass_lead_extras (lead_id, description, price) VALUES ($1, $2, $3)`,
-          [leadId, extra.description, extra.price]
+          `INSERT INTO aufmass_lead_extras (lead_id, angebot_id, description, price) VALUES ($1, $2, $3, $4)`,
+          [leadId, angebotId, extra.description, extra.price]
         );
       }
     }
@@ -3899,14 +4236,16 @@ app.get('/api/leads', authenticateToken, async (req, res) => {
   try {
     let query, params;
     if (req.branchId) {
-      query = `SELECT l.*, u.name as created_by_name
+      query = `SELECT l.*, u.name as created_by_name,
+               (SELECT COUNT(*) FROM aufmass_lead_angebote WHERE lead_id = l.id) as angebot_count
                FROM aufmass_leads l
                LEFT JOIN aufmass_users u ON l.created_by = u.id
                WHERE l.branch_id = $1
                ORDER BY l.created_at DESC`;
       params = [req.branchId];
     } else {
-      query = `SELECT l.*, u.name as created_by_name
+      query = `SELECT l.*, u.name as created_by_name,
+               (SELECT COUNT(*) FROM aufmass_lead_angebote WHERE lead_id = l.id) as angebot_count
                FROM aufmass_leads l
                LEFT JOIN aufmass_users u ON l.created_by = u.id
                ORDER BY l.created_at DESC`;
@@ -3942,10 +4281,20 @@ app.get('/api/leads/:id', authenticateToken, async (req, res) => {
     const itemsResult = await pool.query('SELECT * FROM aufmass_lead_items WHERE lead_id = $1', [id]);
     const extrasResult = await pool.query('SELECT * FROM aufmass_lead_extras WHERE lead_id = $1', [id]);
 
+    // Fetch angebote with their items and extras
+    const angeboteResult = await pool.query('SELECT * FROM aufmass_lead_angebote WHERE lead_id = $1 ORDER BY created_at ASC', [id]);
+    const angebote = [];
+    for (const ang of angeboteResult.rows) {
+      const angItems = await pool.query('SELECT * FROM aufmass_lead_items WHERE angebot_id = $1', [ang.id]);
+      const angExtras = await pool.query('SELECT * FROM aufmass_lead_extras WHERE angebot_id = $1', [ang.id]);
+      angebote.push({ ...ang, items: angItems.rows, extras: angExtras.rows });
+    }
+
     res.json({
       ...leadResult.rows[0],
       items: itemsResult.rows,
-      extras: extrasResult.rows
+      extras: extrasResult.rows,
+      angebote
     });
   } catch (err) {
     console.error('Get lead error:', err);
@@ -3953,24 +4302,26 @@ app.get('/api/leads/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Update lead (full edit)
+// Update lead (full edit - updates customer info + first angebot items/extras)
 app.put('/api/leads/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, items, extras, subtotal, total_discount, total_price } = req.body;
+    const { customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, items, extras, subtotal, total_discount, total_price, angebot_id } = req.body;
 
+    // Update customer info on lead
     let result;
     if (req.branchId) {
       result = await pool.query(
         `UPDATE aufmass_leads
          SET customer_firstname = $1, customer_lastname = $2,
              customer_email = $3, customer_phone = $4,
-             customer_address = $5, notes = $6,
-             subtotal = $7, total_discount = $8, total_price = $9,
+             customer_address = $5,
+             subtotal = $6, total_discount = $7, total_price = $8,
              updated_at = NOW()
-         WHERE id = $10 AND branch_id = $11`,
+         WHERE id = $9 AND branch_id = $10`,
         [customer_firstname, customer_lastname, customer_email || null, customer_phone || null,
-         customer_address || null, notes || null, subtotal || 0, total_discount || 0, total_price,
+         customer_address || null,
+         subtotal || 0, total_discount || 0, total_price,
          id, req.branchId]
       );
     } else {
@@ -3978,12 +4329,13 @@ app.put('/api/leads/:id', authenticateToken, async (req, res) => {
         `UPDATE aufmass_leads
          SET customer_firstname = $1, customer_lastname = $2,
              customer_email = $3, customer_phone = $4,
-             customer_address = $5, notes = $6,
-             subtotal = $7, total_discount = $8, total_price = $9,
+             customer_address = $5,
+             subtotal = $6, total_discount = $7, total_price = $8,
              updated_at = NOW()
-         WHERE id = $10`,
+         WHERE id = $9`,
         [customer_firstname, customer_lastname, customer_email || null, customer_phone || null,
-         customer_address || null, notes || null, subtotal || 0, total_discount || 0, total_price,
+         customer_address || null,
+         subtotal || 0, total_discount || 0, total_price,
          id]
       );
     }
@@ -3992,33 +4344,82 @@ app.put('/api/leads/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Lead not found' });
     }
 
-    // Delete old items and extras, then re-insert
-    await pool.query('DELETE FROM aufmass_lead_items WHERE lead_id = $1', [id]);
-    await pool.query('DELETE FROM aufmass_lead_extras WHERE lead_id = $1', [id]);
-
-    // Insert updated items
-    if (items && items.length > 0) {
-      for (const item of items) {
-        const itemDiscount = item.discount || 0;
-        const itemTotal = (item.unit_price * (item.quantity || 1)) - itemDiscount;
-        await pool.query(
-          `INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label, custom_field_values)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [id, item.product_id || null, item.product_name, item.breite || null, item.tiefe || null,
-           item.quantity || 1, item.unit_price, itemDiscount, itemTotal,
-           item.pricing_type || 'dimension', item.unit_label || null,
-           item.custom_field_values ? (typeof item.custom_field_values === 'string' ? item.custom_field_values : JSON.stringify(item.custom_field_values)) : null]
-        );
-      }
+    // Determine which angebot to update (explicit angebot_id or first angebot)
+    let targetAngebotId = angebot_id;
+    if (!targetAngebotId) {
+      const firstAng = await pool.query('SELECT id FROM aufmass_lead_angebote WHERE lead_id = $1 ORDER BY created_at ASC LIMIT 1', [id]);
+      targetAngebotId = firstAng.rows.length > 0 ? firstAng.rows[0].id : null;
     }
 
-    // Insert updated extras
-    if (extras && extras.length > 0) {
-      for (const extra of extras) {
-        await pool.query(
-          `INSERT INTO aufmass_lead_extras (lead_id, description, price) VALUES ($1, $2, $3)`,
-          [id, extra.description, extra.price]
-        );
+    if (targetAngebotId) {
+      // Update angebot totals
+      await pool.query(
+        `UPDATE aufmass_lead_angebote SET subtotal = $1, total_discount = $2, total_price = $3, notes = $4, updated_at = NOW() WHERE id = $5`,
+        [subtotal || 0, total_discount || 0, total_price, notes || null, targetAngebotId]
+      );
+
+      // Delete old items and extras for this angebot, then re-insert
+      await pool.query('DELETE FROM aufmass_lead_items WHERE angebot_id = $1', [targetAngebotId]);
+      await pool.query('DELETE FROM aufmass_lead_extras WHERE angebot_id = $1', [targetAngebotId]);
+
+      // Insert updated items
+      if (items && items.length > 0) {
+        for (const item of items) {
+          const itemDiscount = item.discount || 0;
+          const itemTotal = (item.unit_price * (item.quantity || 1)) - itemDiscount;
+          await pool.query(
+            `INSERT INTO aufmass_lead_items (lead_id, angebot_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label, custom_field_values)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [id, targetAngebotId, item.product_id || null, item.product_name, item.breite || null, item.tiefe || null,
+             item.quantity || 1, item.unit_price, itemDiscount, itemTotal,
+             item.pricing_type || 'dimension', item.unit_label || null,
+             item.custom_field_values ? (typeof item.custom_field_values === 'string' ? item.custom_field_values : JSON.stringify(item.custom_field_values)) : null]
+          );
+        }
+      }
+
+      // Insert updated extras
+      if (extras && extras.length > 0) {
+        for (const extra of extras) {
+          await pool.query(
+            `INSERT INTO aufmass_lead_extras (lead_id, angebot_id, description, price) VALUES ($1, $2, $3, $4)`,
+            [id, targetAngebotId, extra.description, extra.price]
+          );
+        }
+      }
+
+      // Recalculate lead total_price as sum of all angebote
+      await pool.query(
+        `UPDATE aufmass_leads SET total_price = (SELECT COALESCE(SUM(total_price), 0) FROM aufmass_lead_angebote WHERE lead_id = $1), updated_at = NOW() WHERE id = $1`,
+        [id]
+      );
+    } else {
+      // Legacy: no angebote exist, work with lead-level items (backward compat)
+      await pool.query('DELETE FROM aufmass_lead_items WHERE lead_id = $1 AND angebot_id IS NULL', [id]);
+      await pool.query('DELETE FROM aufmass_lead_extras WHERE lead_id = $1 AND angebot_id IS NULL', [id]);
+
+      if (items && items.length > 0) {
+        for (const item of items) {
+          const itemDiscount = item.discount || 0;
+          const itemTotal = (item.unit_price * (item.quantity || 1)) - itemDiscount;
+          await pool.query(
+            `INSERT INTO aufmass_lead_items (lead_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label, custom_field_values)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            [id, item.product_id || null, item.product_name, item.breite || null, item.tiefe || null,
+             item.quantity || 1, item.unit_price, itemDiscount, itemTotal,
+             item.pricing_type || 'dimension', item.unit_label || null,
+             item.custom_field_values ? (typeof item.custom_field_values === 'string' ? item.custom_field_values : JSON.stringify(item.custom_field_values)) : null]
+          );
+        }
+      }
+
+      if (extras && extras.length > 0) {
+        for (const extra of extras) {
+          await pool.query(
+            `INSERT INTO aufmass_lead_extras (lead_id, description, price) VALUES ($1, $2, $3)`,
+            [id, extra.description, extra.price]
+          );
+        }
       }
     }
 
@@ -4076,6 +4477,223 @@ app.delete('/api/leads/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Delete lead error:', err);
     res.status(500).json({ error: 'Failed to delete lead' });
+  }
+});
+
+// ============ MULTI-ANGEBOT ENDPOINTS ============
+
+// Add new angebot to existing lead
+app.post('/api/leads/:id/angebote', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { items, extras, notes, subtotal, total_discount, total_price } = req.body;
+
+    // Verify lead exists
+    const leadCheck = req.branchId
+      ? await pool.query('SELECT id, branch_id FROM aufmass_leads WHERE id = $1 AND branch_id = $2', [id, req.branchId])
+      : await pool.query('SELECT id, branch_id FROM aufmass_leads WHERE id = $1', [id]);
+
+    if (leadCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+
+    // Generate angebot_nummer
+    const year = new Date().getFullYear();
+    const countResult = await pool.query(
+      `SELECT COUNT(*) as cnt FROM aufmass_lead_angebote a
+       JOIN aufmass_leads l ON a.lead_id = l.id
+       WHERE EXTRACT(YEAR FROM a.created_at) = $1
+       AND (l.branch_id = $2 OR ($2 IS NULL AND l.branch_id IS NULL))`,
+      [year, req.branchId || null]
+    );
+    const nextNum = parseInt(countResult.rows[0].cnt) + 1;
+    const branchPrefixMap = {
+      'koblenz': 'KOB', 'ayluxtr': 'AYT', 'aylux': 'AYL', 'ayluxus': 'AYU',
+      'ayluxgkmu': 'GKM', 'ayluxmau': 'MAU', 'ayluxa': 'AYA'
+    };
+    const branchPrefix = req.branchId ? (branchPrefixMap[req.branchId] || req.branchId.substring(0, 3).toUpperCase()) : 'ANG';
+    const angebotNummer = `${branchPrefix}-${year}-${String(nextNum).padStart(3, '0')}`;
+
+    // Insert angebot
+    const angebotResult = await pool.query(
+      `INSERT INTO aufmass_lead_angebote (lead_id, angebot_nummer, subtotal, total_discount, total_price, notes, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'offen') RETURNING id, angebot_nummer`,
+      [id, angebotNummer, subtotal || 0, total_discount || 0, total_price || 0, notes || null]
+    );
+    const angebotId = angebotResult.rows[0].id;
+
+    // Insert items
+    if (items && items.length > 0) {
+      for (const item of items) {
+        const itemDiscount = item.discount || 0;
+        const itemTotal = (item.unit_price * (item.quantity || 1)) - itemDiscount;
+        await pool.query(
+          `INSERT INTO aufmass_lead_items (lead_id, angebot_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label, custom_field_values)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          [id, angebotId, item.product_id || null, item.product_name, item.breite || null, item.tiefe || null,
+           item.quantity || 1, item.unit_price, itemDiscount, itemTotal,
+           item.pricing_type || 'dimension', item.unit_label || null,
+           item.custom_field_values ? (typeof item.custom_field_values === 'string' ? item.custom_field_values : JSON.stringify(item.custom_field_values)) : null]
+        );
+      }
+    }
+
+    // Insert extras
+    if (extras && extras.length > 0) {
+      for (const extra of extras) {
+        await pool.query(
+          `INSERT INTO aufmass_lead_extras (lead_id, angebot_id, description, price) VALUES ($1, $2, $3, $4)`,
+          [id, angebotId, extra.description, extra.price]
+        );
+      }
+    }
+
+    // Update lead total_price as sum of all angebote
+    await pool.query(
+      `UPDATE aufmass_leads SET total_price = (SELECT COALESCE(SUM(total_price), 0) FROM aufmass_lead_angebote WHERE lead_id = $1), updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    res.status(201).json({ id: angebotId, angebot_nummer: angebotNummer, message: 'Angebot added successfully' });
+  } catch (err) {
+    console.error('Create angebot error:', err);
+    res.status(500).json({ error: 'Failed to create angebot', details: err.message });
+  }
+});
+
+// Update a specific angebot
+app.put('/api/leads/:id/angebote/:angebotId', authenticateToken, async (req, res) => {
+  try {
+    const { id, angebotId } = req.params;
+    const { items, extras, notes, subtotal, total_discount, total_price } = req.body;
+
+    // Update angebot totals
+    const result = await pool.query(
+      `UPDATE aufmass_lead_angebote SET subtotal = $1, total_discount = $2, total_price = $3, notes = $4, updated_at = NOW()
+       WHERE id = $5 AND lead_id = $6`,
+      [subtotal || 0, total_discount || 0, total_price || 0, notes || null, angebotId, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Angebot not found' });
+    }
+
+    // Replace items and extras
+    await pool.query('DELETE FROM aufmass_lead_items WHERE angebot_id = $1', [angebotId]);
+    await pool.query('DELETE FROM aufmass_lead_extras WHERE angebot_id = $1', [angebotId]);
+
+    if (items && items.length > 0) {
+      for (const item of items) {
+        const itemDiscount = item.discount || 0;
+        const itemTotal = (item.unit_price * (item.quantity || 1)) - itemDiscount;
+        await pool.query(
+          `INSERT INTO aufmass_lead_items (lead_id, angebot_id, product_id, product_name, breite, tiefe, quantity, unit_price, discount, total_price, pricing_type, unit_label, custom_field_values)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          [id, angebotId, item.product_id || null, item.product_name, item.breite || null, item.tiefe || null,
+           item.quantity || 1, item.unit_price, itemDiscount, itemTotal,
+           item.pricing_type || 'dimension', item.unit_label || null,
+           item.custom_field_values ? (typeof item.custom_field_values === 'string' ? item.custom_field_values : JSON.stringify(item.custom_field_values)) : null]
+        );
+      }
+    }
+
+    if (extras && extras.length > 0) {
+      for (const extra of extras) {
+        await pool.query(
+          `INSERT INTO aufmass_lead_extras (lead_id, angebot_id, description, price) VALUES ($1, $2, $3, $4)`,
+          [id, angebotId, extra.description, extra.price]
+        );
+      }
+    }
+
+    // Recalculate lead total
+    await pool.query(
+      `UPDATE aufmass_leads SET total_price = (SELECT COALESCE(SUM(total_price), 0) FROM aufmass_lead_angebote WHERE lead_id = $1), updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    res.json({ id: parseInt(angebotId), message: 'Angebot updated successfully' });
+  } catch (err) {
+    console.error('Update angebot error:', err);
+    res.status(500).json({ error: 'Failed to update angebot', details: err.message });
+  }
+});
+
+// Delete a specific angebot
+app.delete('/api/leads/:id/angebote/:angebotId', authenticateToken, async (req, res) => {
+  try {
+    const { id, angebotId } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM aufmass_lead_angebote WHERE id = $1 AND lead_id = $2',
+      [angebotId, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Angebot not found' });
+    }
+
+    // Recalculate lead total
+    await pool.query(
+      `UPDATE aufmass_leads SET total_price = (SELECT COALESCE(SUM(total_price), 0) FROM aufmass_lead_angebote WHERE lead_id = $1), updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+
+    // Delete angebot PDF if exists
+    const angebotPdfPath = path.join(PDF_DIR, 'leads', `${id}_${angebotId}.pdf`);
+    if (fs.existsSync(angebotPdfPath)) {
+      fs.unlinkSync(angebotPdfPath);
+    }
+
+    res.json({ message: 'Angebot deleted successfully' });
+  } catch (err) {
+    console.error('Delete angebot error:', err);
+    res.status(500).json({ error: 'Failed to delete angebot' });
+  }
+});
+
+// Save PDF for a specific angebot
+app.post('/api/leads/:id/angebote/:angebotId/pdf', authenticateToken, upload.single('pdf'), async (req, res) => {
+  try {
+    const { id, angebotId } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No PDF file provided' });
+
+    // Verify angebot exists
+    const check = await pool.query('SELECT id FROM aufmass_lead_angebote WHERE id = $1 AND lead_id = $2', [angebotId, id]);
+    if (check.rows.length === 0) return res.status(404).json({ error: 'Angebot not found' });
+
+    const pdfPath = path.join(LEAD_PDF_DIR, `${id}_${angebotId}.pdf`);
+    fs.writeFileSync(pdfPath, req.file.buffer);
+    res.json({ message: 'Angebot PDF saved successfully' });
+  } catch (err) {
+    console.error('Error saving angebot PDF:', err);
+    res.status(500).json({ error: 'Failed to save angebot PDF' });
+  }
+});
+
+// Get PDF for a specific angebot
+app.get('/api/leads/:id/angebote/:angebotId/pdf', authenticateToken, async (req, res) => {
+  try {
+    const { id, angebotId } = req.params;
+
+    // Try angebot-specific PDF first, fall back to lead-level PDF
+    const angebotPdfPath = path.join(LEAD_PDF_DIR, `${id}_${angebotId}.pdf`);
+    const leadPdfPath = path.join(LEAD_PDF_DIR, `${id}.pdf`);
+
+    const pdfPath = fs.existsSync(angebotPdfPath) ? angebotPdfPath : (fs.existsSync(leadPdfPath) ? leadPdfPath : null);
+    if (!pdfPath) return res.status(404).json({ error: 'No PDF generated for this angebot' });
+
+    const stats = fs.statSync(pdfPath);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="angebot_${id}_${angebotId}.pdf"`,
+      'Content-Length': stats.size,
+      'Cache-Control': 'no-cache'
+    });
+    fs.createReadStream(pdfPath).pipe(res);
+  } catch (err) {
+    console.error('Error getting angebot PDF:', err);
+    res.status(500).json({ error: 'Failed to get angebot PDF' });
   }
 });
 

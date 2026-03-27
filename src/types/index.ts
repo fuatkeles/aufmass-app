@@ -24,10 +24,12 @@ export interface AbnahmeData {
   problemBeschreibung?: string;
   maengelListe?: string[]; // Numbered list of defects (1, 2, 3, ...)
   maengelBilder?: AbnahmeImage[]; // Mängel photos
+  maengelBilderBase64?: { id: number; fileName: string; fileType: string; base64: string }[]; // Inline base64 photos for public PDF
   baustelleSauber?: 'ja' | 'nein' | null; // Baustelle wurde sauber und aufgeräumt gelassen
   monteurNote?: number | null; // Schulnote 1-6
   kundeName?: string;
   kundeUnterschrift: boolean;
+  signatureData?: string | null;
   abnahmeDatum?: string;
   bemerkungen?: string;
   createdAt?: string;
@@ -75,6 +77,7 @@ export interface FormData {
   // Customer signature
   customerSignature?: string | null;
   signatureName?: string | null;
+  abnahmeSignPending?: boolean;
 
   // Abnahme (acceptance) data - optional, only when status is 'abnahme'
   abnahme?: AbnahmeData;
