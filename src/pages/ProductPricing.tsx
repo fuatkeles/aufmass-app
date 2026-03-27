@@ -519,9 +519,12 @@ export default function ProductPricing() {
   };
 
   // Get available product types for selected category (only if not custom category)
-  const availableProductTypes = !customCategoryMode && newProductCategory
-    ? Object.keys(productConfig[newProductCategory] || {})
-    : [];
+  const availableProductTypes: string[] = useMemo(() => {
+    if (customCategoryMode || !newProductCategory) return [] as string[];
+    const configTypes = Object.keys(productConfig[newProductCategory] || {});
+    const dbTypes = filterOptions.getProductTypes(newProductCategory).filter(t => !configTypes.includes(t));
+    return [...configTypes, ...dbTypes.sort()];
+  }, [customCategoryMode, newProductCategory, filterOptions]);
 
   // Get available models for selected category + product type (only if not custom)
   const availableModels = !customCategoryMode && !customProductTypeMode && newProductCategory && newProductType
@@ -1515,9 +1518,13 @@ export default function ProductPricing() {
                       }}
                     >
                       <option value="">Kategorie wählen...</option>
-                      {Object.keys(productConfig).map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
+                      {(() => {
+                        const configCats = Object.keys(productConfig);
+                        const dbCats = filterOptions.categories.filter(c => c !== '__uncategorized__' && !configCats.includes(c));
+                        return [...configCats, ...dbCats.sort()].map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ));
+                      })()}
                       <option value="__custom__">➕ Andere eingeben...</option>
                     </select>
                   )}
@@ -1569,7 +1576,7 @@ export default function ProductPricing() {
                         }}
                       >
                         <option value="">Produkttyp wählen...</option>
-                        {availableProductTypes.map(pt => (
+                        {availableProductTypes.map((pt: string) => (
                           <option key={pt} value={pt}>{pt}</option>
                         ))}
                         <option value="__custom__">➕ Andere eingeben...</option>
