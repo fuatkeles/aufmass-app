@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api, getLeadPdfUrl, getAngebotPdfUrl } from '../services/api';
+import { api, getLeadPdfUrl, getAngebotPdfUrl, getStoredUser, saveLeadPdf, saveAngebotPdf } from '../services/api';
+import { generateAngebotPDF } from '../utils/angebotPdfGenerator';
 import LeadFormModal from '../components/LeadFormModal';
+import { useToast } from '../components/Toast';
 import './Angebote.css';
 
 interface Angebot {
@@ -34,7 +36,17 @@ interface Lead {
   created_by_name: string;
   created_at: string;
   angebot_nummer?: string;
+  kunden_nummer?: string;
   angebot_count?: number;
+}
+
+interface ProductCustomField {
+  id: string;
+  label: string;
+  type: 'text' | 'number' | 'select';
+  unit?: string;
+  options?: string[];
+  required?: boolean;
 }
 
 interface LeadItem {
@@ -48,6 +60,10 @@ interface LeadItem {
   total_price: number;
   pricing_type?: 'dimension' | 'unit';
   unit_label?: string;
+  // Enriched on the backend (GET /api/leads/:id) so we can render PRODUKTDETAILS
+  description?: string;
+  custom_fields?: ProductCustomField[];
+  custom_field_values?: Record<string, string>;
 }
 
 interface LeadExtra {
@@ -64,9 +80,22 @@ interface LeadDetail extends Lead {
 
 const LEAD_STATUS_OPTIONS = [
   { value: 'alle', label: 'Alle Angebote', color: '#7fa93d' },
-  { value: 'offen', label: 'Offen', color: '#fbbf24' },
+  { value: 'unbearbeitet', label: 'Unbearbeitet', color: '#6b7280' },
+  { value: 'wiedervorlage', label: 'Wiedervorlage', color: '#f59e0b' },
+  { value: 'aufmass_termin', label: 'Aufmaß Termin', color: '#8b5cf6' },
+  { value: 'showroom_termin', label: 'Showroom Termin', color: '#a78bfa' },
+  { value: 'tag1_nicht_erreicht', label: '1.Tag nicht Erreicht', color: '#fb923c' },
+  { value: 'tag2_nicht_erreicht', label: '2.Tag nicht Erreicht', color: '#f97316' },
+  { value: 'tag3_nicht_erreicht', label: '3.Tag nicht Erreicht', color: '#ea580c' },
+  { value: 'tag4_email', label: '4.Tag E-Mail Geschrieben', color: '#c2410c' },
+  { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
   { value: 'aufmass_erstellt', label: 'Aufmaß Erstellt', color: '#10b981' },
+  { value: 'abgelehnt', label: 'Abgelehnt', color: '#ef4444' },
+  { value: 'komplett_raus', label: 'Komplett Raus', color: '#71717a' },
+  { value: 'offen', label: 'Offen', color: '#fbbf24' },
 ];
+
+const LEAD_STATUS_ORDER = LEAD_STATUS_OPTIONS.filter(o => o.value !== 'alle').map(o => o.value);
 
 const getLeadStatusLabel = (status: string) => {
   const opt = LEAD_STATUS_OPTIONS.find(o => o.value === status);
@@ -78,11 +107,22 @@ const getLeadStatusColor = (status: string) => {
   return opt?.color || '#6b7280';
 };
 
+const isAdminOrOffice = () => {
+  const user = getStoredUser();
+  return user?.role === 'admin' || user?.role === 'office';
+};
+
+const isLeadStatusBackward = (current: string, next: string): boolean => {
+  return LEAD_STATUS_ORDER.indexOf(next) < LEAD_STATUS_ORDER.indexOf(current);
+};
+
 export default function Angebote() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState<number | null>(null);
   const [editLeadData, setEditLeadData] = useState<LeadDetail | null>(null);
   const [editAngebotId, setEditAngebotId] = useState<number | null>(null);
   const [newAngebotLeadId, setNewAngebotLeadId] = useState<number | null>(null);
@@ -98,6 +138,14 @@ export default function Angebote() {
   useEffect(() => {
     loadLeads();
   }, []);
+
+  // Close status dropdown on outside click
+  useEffect(() => {
+    if (!statusDropdownOpen) return;
+    const close = () => setStatusDropdownOpen(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [statusDropdownOpen]);
 
   const loadLeads = async () => {
     try {
@@ -172,6 +220,26 @@ export default function Angebote() {
     }
   };
 
+  const handleLeadStatusChange = async (leadId: number, newStatus: string) => {
+    const lead = leads.find(l => l.id === leadId);
+    const currentStatus = lead?.status || 'offen';
+
+    if (!isAdminOrOffice() && isLeadStatusBackward(currentStatus, newStatus)) {
+      toast.warning('Nicht erlaubt', 'Status kann nur von einem Admin zurückgesetzt werden.');
+      setStatusDropdownOpen(null);
+      return;
+    }
+
+    try {
+      await api.put(`/leads/${leadId}/status`, { status: newStatus });
+      setLeads(leads.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
+      setStatusDropdownOpen(null);
+    } catch (err) {
+      console.error('Failed to update lead status:', err);
+      toast.error('Fehler', 'Status konnte nicht aktualisiert werden.');
+    }
+  };
+
   const handleDelete = async (id: number) => {
     try {
       await api.delete(`/leads/${id}`);
@@ -218,6 +286,285 @@ export default function Angebote() {
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(price);
+  };
+
+  const getLatestAngebot = (lead: LeadDetail) => {
+    if (!lead.angebote || lead.angebote.length === 0) return null;
+    return [...lead.angebote].sort((a, b) => {
+      const dateDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      return dateDiff !== 0 ? dateDiff : b.id - a.id;
+    })[0];
+  };
+
+  const buildPdfPayload = (lead: LeadDetail, angebot?: Angebot | null) => {
+    const items = angebot?.items || lead.items || [];
+    const extras = angebot?.extras || lead.extras || [];
+    const itemDiscounts = items.reduce((sum, item) => sum + (item.discount || 0), 0);
+    const subtotalFromItems = items.reduce((sum, item) => sum + ((item.unit_price || 0) * (item.quantity || 0)), 0) + extras.reduce((sum, extra) => sum + (extra.price || 0), 0);
+    const subtotal = angebot?.subtotal ?? lead.subtotal ?? subtotalFromItems;
+    const totalDiscount = angebot?.total_discount ?? lead.total_discount ?? 0;
+    const totalDiscountPercent = subtotal > 0 ? Math.round(((itemDiscounts + totalDiscount) / subtotal) * 100) : 0;
+
+    return {
+      customer_firstname: lead.customer_firstname,
+      customer_lastname: lead.customer_lastname,
+      customer_email: lead.customer_email,
+      customer_phone: lead.customer_phone || undefined,
+      customer_address: lead.customer_address || undefined,
+      notes: angebot?.notes || lead.notes || undefined,
+      kunden_nummer: lead.kunden_nummer || undefined,
+      angebot_nummer: angebot?.angebot_nummer || lead.angebot_nummer || undefined,
+      created_at: angebot?.created_at || lead.created_at,
+      items: items.map(item => ({
+        product_name: item.product_name,
+        breite: item.breite,
+        tiefe: item.tiefe,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+        discount: item.discount || 0,
+        discount_percent: item.discount && item.unit_price && item.quantity
+          ? Math.round((item.discount / (item.unit_price * item.quantity)) * 100)
+          : 0,
+        pricing_type: item.pricing_type,
+        unit_label: item.unit_label,
+        description: item.description || undefined,
+        custom_fields: item.custom_fields || undefined,
+        custom_field_values: item.custom_field_values || undefined
+      })),
+      extras: extras.map(extra => ({
+        description: extra.description,
+        price: extra.price
+      })),
+      subtotal,
+      item_discounts: itemDiscounts,
+      total_discount: totalDiscount,
+      total_discount_percent: totalDiscountPercent,
+      total_price: angebot?.total_price ?? lead.total_price
+    };
+  };
+
+  const ensurePdfWindow = () => {
+    const pdfWindow = window.open('', '_blank');
+    if (pdfWindow) {
+      pdfWindow.document.write('PDF wird geladen...');
+    }
+    return pdfWindow;
+  };
+
+  const openLeadPdfWithFallback = async (leadId: number, preload?: LeadDetail | null) => {
+    const pdfWindow = ensurePdfWindow();
+    if (!pdfWindow) return;
+
+    try {
+      // Always fetch latest lead detail so we know whether angebote exist
+      const leadDetail = preload?.id === leadId ? preload : await api.get<LeadDetail>(`/leads/${leadId}`);
+      const latestAngebot = getLatestAngebot(leadDetail);
+
+      // Prefer angebot-level PDF when available — lead-level cache can be stale after edits
+      if (latestAngebot) {
+        // Always regenerate from current lead/angebot data to guarantee fresh content (Beschreibung etc.)
+        const pdfResult = await generateAngebotPDF(buildPdfPayload(leadDetail, latestAngebot), { returnBlob: true });
+        if (!pdfResult?.blob) {
+          throw new Error('PDF blob could not be generated');
+        }
+        await saveAngebotPdf(leadId, latestAngebot.id, pdfResult.blob);
+        pdfWindow.location.href = getAngebotPdfUrl(leadId, latestAngebot.id);
+        return;
+      }
+
+      // Legacy fallback: lead has no angebote (should be rare)
+      const pdfUrl = getLeadPdfUrl(leadId);
+      const existingResponse = await fetch(pdfUrl, { cache: 'no-store' });
+      if (existingResponse.ok) {
+        pdfWindow.location.href = pdfUrl;
+        return;
+      }
+
+      const pdfResult = await generateAngebotPDF(buildPdfPayload(leadDetail), { returnBlob: true });
+      if (!pdfResult?.blob) {
+        throw new Error('PDF blob could not be generated');
+      }
+      await saveLeadPdf(leadId, pdfResult.blob);
+      pdfWindow.location.href = pdfUrl;
+    } catch (err) {
+      pdfWindow.close();
+      console.error('Lead PDF fallback failed:', err);
+      toast.error('Fehler', 'PDF konnte nicht erstellt werden.');
+    }
+  };
+
+  const openAngebotPdfWithFallback = async (leadId: number, angebotId: number, preload?: LeadDetail | null) => {
+    const pdfUrl = getAngebotPdfUrl(leadId, angebotId);
+    const pdfWindow = ensurePdfWindow();
+    if (!pdfWindow) return;
+
+    try {
+      // Always regenerate to ensure freshness (Beschreibung, prices, etc. reflect latest edits)
+      const leadDetail = preload?.id === leadId ? preload : await api.get<LeadDetail>(`/leads/${leadId}`);
+      const angebot = leadDetail.angebote?.find(item => item.id === angebotId);
+      if (!angebot) {
+        throw new Error(`Angebot ${angebotId} not found`);
+      }
+
+      const pdfResult = await generateAngebotPDF(buildPdfPayload(leadDetail, angebot), { returnBlob: true });
+      if (!pdfResult?.blob) {
+        throw new Error('PDF blob could not be generated');
+      }
+
+      await saveAngebotPdf(leadId, angebotId, pdfResult.blob);
+      pdfWindow.location.href = pdfUrl;
+    } catch (err) {
+      pdfWindow.close();
+      console.error('Angebot PDF fallback failed:', err);
+      toast.error('Fehler', 'Angebot-PDF konnte nicht erstellt werden.');
+    }
+  };
+
+  // Trigger browser download of a PDF blob
+  const downloadPdfBlob = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  // Build mailto URL with prefilled subject/body for an angebot
+  const buildAngebotMailto = (
+    customerEmail: string,
+    customerName: string,
+    angebotNummer: string | undefined
+  ) => {
+    const nrPart = angebotNummer ? ` Nr. ${angebotNummer}` : '';
+    const subject = `Ihr Angebot${nrPart} - AYLUX Sonnenschutzsysteme`;
+    const greeting = customerName ? `Sehr geehrte/r ${customerName},` : 'Sehr geehrte Damen und Herren,';
+    const body =
+      `${greeting}\n\n` +
+      `vielen Dank für Ihre Anfrage. In der Anlage erhalten Sie unser Angebot${nrPart}.\n\n` +
+      `Bei Rückfragen stehen wir Ihnen gerne zur Verfügung.\n\n` +
+      `Mit freundlichen Grüßen\n` +
+      `Ihr AYLUX Team`;
+    return `mailto:${encodeURIComponent(customerEmail)}` +
+      `?subject=${encodeURIComponent(subject)}` +
+      `&body=${encodeURIComponent(body)}`;
+  };
+
+  // Send the latest angebot for a lead by e-mail (downloads PDF + opens mail client)
+  const handleSendLeadByEmail = async (lead: Lead | LeadDetail) => {
+    if (!lead.customer_email) {
+      toast.warning('Keine E-Mail', 'Für diesen Kunden ist keine E-Mail-Adresse hinterlegt.');
+      return;
+    }
+    try {
+      const leadDetail: LeadDetail = 'items' in lead
+        ? lead
+        : await api.get<LeadDetail>(`/leads/${lead.id}`);
+      const latestAngebot = getLatestAngebot(leadDetail);
+      const pdfResult = await generateAngebotPDF(
+        buildPdfPayload(leadDetail, latestAngebot),
+        { returnBlob: true }
+      );
+      if (!pdfResult?.blob) throw new Error('PDF blob could not be generated');
+
+      // Persist freshly-generated PDF so the cache stays in sync
+      if (latestAngebot) {
+        await saveAngebotPdf(leadDetail.id, latestAngebot.id, pdfResult.blob);
+      } else {
+        await saveLeadPdf(leadDetail.id, pdfResult.blob);
+      }
+
+      downloadPdfBlob(pdfResult.blob, pdfResult.fileName);
+
+      const customerName = `${leadDetail.customer_firstname || ''} ${leadDetail.customer_lastname || ''}`.trim();
+      const mailto = buildAngebotMailto(
+        leadDetail.customer_email,
+        customerName,
+        latestAngebot?.angebot_nummer || leadDetail.angebot_nummer
+      );
+      window.location.href = mailto;
+
+      toast.success(
+        'PDF heruntergeladen',
+        'Bitte fügen Sie die heruntergeladene PDF als Anhang in Ihrer E-Mail hinzu.'
+      );
+    } catch (err) {
+      console.error('Send lead by e-mail failed:', err);
+      toast.error('Fehler', 'E-Mail konnte nicht vorbereitet werden.');
+    }
+  };
+
+  // Send a specific angebot by e-mail (used from the per-angebot row)
+  const handleSendAngebotByEmail = async (leadId: number, angebotId: number) => {
+    try {
+      const leadDetail = await api.get<LeadDetail>(`/leads/${leadId}`);
+      if (!leadDetail.customer_email) {
+        toast.warning('Keine E-Mail', 'Für diesen Kunden ist keine E-Mail-Adresse hinterlegt.');
+        return;
+      }
+      const angebot = leadDetail.angebote?.find(a => a.id === angebotId);
+      if (!angebot) throw new Error(`Angebot ${angebotId} not found`);
+
+      const pdfResult = await generateAngebotPDF(
+        buildPdfPayload(leadDetail, angebot),
+        { returnBlob: true }
+      );
+      if (!pdfResult?.blob) throw new Error('PDF blob could not be generated');
+
+      await saveAngebotPdf(leadId, angebotId, pdfResult.blob);
+      downloadPdfBlob(pdfResult.blob, pdfResult.fileName);
+
+      const customerName = `${leadDetail.customer_firstname || ''} ${leadDetail.customer_lastname || ''}`.trim();
+      const mailto = buildAngebotMailto(
+        leadDetail.customer_email,
+        customerName,
+        angebot.angebot_nummer
+      );
+      window.location.href = mailto;
+
+      toast.success(
+        'PDF heruntergeladen',
+        'Bitte fügen Sie die heruntergeladene PDF als Anhang in Ihrer E-Mail hinzu.'
+      );
+    } catch (err) {
+      console.error('Send angebot by e-mail failed:', err);
+      toast.error('Fehler', 'E-Mail konnte nicht vorbereitet werden.');
+    }
+  };
+
+  // Render PRODUKTDETAILS (custom field values) under an item in the detail modal.
+  // Uses the product's custom_fields schema (enriched on backend) so labels are human-readable;
+  // falls back to the field id when no schema is available.
+  const renderItemProduktdetails = (item: LeadItem) => {
+    const values = item.custom_field_values;
+    if (!values || Object.keys(values).length === 0) return null;
+    const schemaById: Record<string, ProductCustomField> = {};
+    if (Array.isArray(item.custom_fields)) {
+      for (const f of item.custom_fields) schemaById[f.id] = f;
+    }
+    const entries = Object.entries(values).filter(([, v]) => v != null && String(v).trim() !== '');
+    if (entries.length === 0) return null;
+    return (
+      <div className="item-produktdetails">
+        <span className="item-produktdetails-title">PRODUKTDETAILS</span>
+        <div className="item-produktdetails-list">
+          {entries.map(([fieldId, val]) => {
+            const field = schemaById[fieldId];
+            const label = field?.label || fieldId;
+            const suffix = field?.type === 'number' && field.unit ? ` ${field.unit}` : '';
+            return (
+              <div key={fieldId} className="item-produktdetails-row">
+                <span className="item-produktdetails-label">{label}:</span>
+                <span className="item-produktdetails-value">{String(val)}{suffix}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   const formatDate = (dateStr: string) => {
@@ -337,20 +684,55 @@ export default function Angebote() {
                 <div className="lead-customer">
                   <h3>{lead.customer_firstname} {lead.customer_lastname}</h3>
                   <div className="lead-meta">
-                    {lead.angebot_nummer && <span className="angebot-nummer">{lead.angebot_nummer}</span>}
+                    {lead.kunden_nummer && <span className="kunden-nummer">Kd: {lead.kunden_nummer}</span>}
+                    {/* Lead-level angebot badge only for single-angebot leads.
+                        For multi-angebot leads the individual numbers live in the expanded
+                        dropdown (and the count shows in the footer "X Angebote" toggle),
+                        so showing lead.angebot_nummer here would visually duplicate the
+                        first angebot. */}
+                    {lead.angebot_nummer && getAngebotCount(lead) <= 1 && (
+                      <span className="angebot-nummer">Ang: {lead.angebot_nummer}</span>
+                    )}
                     <span className="lead-email">{lead.customer_email}</span>
                   </div>
                 </div>
-                <div className="lead-status">
+                <div className="lead-status" style={{ position: 'relative' }}>
                   <span
-                    className="status-badge"
+                    className="status-badge status-badge-clickable"
                     style={{
                       background: `${getLeadStatusColor(lead.status)}20`,
-                      color: getLeadStatusColor(lead.status)
+                      color: getLeadStatusColor(lead.status),
+                      cursor: 'pointer'
                     }}
+                    onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen(statusDropdownOpen === lead.id ? null : lead.id); }}
                   >
                     {getLeadStatusLabel(lead.status)}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 12, height: 12, marginLeft: 4 }}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
                   </span>
+                  <AnimatePresence>
+                    {statusDropdownOpen === lead.id && (
+                      <motion.div
+                        className="lead-status-dropdown"
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {LEAD_STATUS_OPTIONS.filter(o => o.value !== 'alle').map(option => (
+                          <button
+                            key={option.value}
+                            className={`lead-status-option ${lead.status === option.value ? 'selected' : ''}`}
+                            onClick={() => handleLeadStatusChange(lead.id, option.value)}
+                          >
+                            <span className="lead-status-dot" style={{ backgroundColor: option.color }} />
+                            <span>{option.label}</span>
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
 
@@ -406,11 +788,21 @@ export default function Angebote() {
                   <button
                     className="btn-icon"
                     title="PDF anzeigen"
-                    onClick={() => window.open(getLeadPdfUrl(lead.id), '_blank')}
+                    onClick={() => openLeadPdfWithFallback(lead.id)}
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
                       <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                  </button>
+                  <button
+                    className="btn-icon"
+                    title="Per E-Mail senden"
+                    onClick={() => handleSendLeadByEmail(lead)}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                      <polyline points="22,6 12,13 2,6" />
                     </svg>
                   </button>
                   <button
@@ -483,8 +875,11 @@ export default function Angebote() {
                           <span className="angebot-row-price">{formatPrice(ang.total_price)}</span>
                         </div>
                         <div className="angebot-row-actions">
-                          <button className="btn-icon-sm" title="PDF" onClick={() => window.open(getAngebotPdfUrl(lead.id, ang.id), '_blank')}>
+                          <button className="btn-icon-sm" title="PDF" onClick={() => openAngebotPdfWithFallback(lead.id, ang.id)}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                          </button>
+                          <button className="btn-icon-sm" title="Per E-Mail senden" onClick={() => handleSendAngebotByEmail(lead.id, ang.id)}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
                           </button>
                           <button className="btn-icon-sm" title="Bearbeiten" onClick={() => handleEditLead(lead.id, ang.id)}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
@@ -605,6 +1000,7 @@ export default function Angebote() {
                                   <span className="item-qty">x {item.quantity}</span>
                                 </div>
                                 <span className="item-price">{formatPrice(item.total_price)}</span>
+                                {renderItemProduktdetails(item)}
                               </div>
                             ))}
                           </div>
@@ -626,7 +1022,7 @@ export default function Angebote() {
                       )}
 
                       <div className="detail-angebot-footer">
-                        <button className="btn-secondary btn-sm" onClick={() => window.open(getAngebotPdfUrl(selectedLead.id, ang.id), '_blank')}>
+                        <button className="btn-secondary btn-sm" onClick={() => openAngebotPdfWithFallback(selectedLead.id, ang.id, selectedLead)}>
                           PDF anzeigen
                         </button>
                       </div>
@@ -649,6 +1045,7 @@ export default function Angebote() {
                                   }
                                 </span>
                                 <span className="item-qty">x {item.quantity}</span>
+                                {renderItemProduktdetails(item)}
                               </div>
                               <span className="item-price">{formatPrice(item.total_price)}</span>
                             </div>
@@ -675,7 +1072,7 @@ export default function Angebote() {
 
                 {selectedLead.notes && (
                   <section className="detail-section">
-                    <h3>Notizen</h3>
+                    <h3>Beschreibung</h3>
                     <p className="notes-text">{selectedLead.notes}</p>
                   </section>
                 )}
@@ -709,7 +1106,7 @@ export default function Angebote() {
                 <button className="btn-cancel" onClick={() => setDetailModalOpen(false)}>Schließen</button>
                 <button
                   className="btn-secondary"
-                  onClick={() => window.open(getLeadPdfUrl(selectedLead.id), '_blank')}
+                  onClick={() => openLeadPdfWithFallback(selectedLead.id, selectedLead)}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16 }}>
                     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
@@ -718,6 +1115,16 @@ export default function Angebote() {
                     <line x1="16" y1="17" x2="8" y2="17" />
                   </svg>
                   PDF anzeigen
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => handleSendLeadByEmail(selectedLead)}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16 }}>
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
+                  </svg>
+                  Per E-Mail senden
                 </button>
                 <button className="btn-primary" onClick={() => {
                   setDetailModalOpen(false);

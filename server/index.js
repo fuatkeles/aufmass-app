@@ -248,6 +248,117 @@ async function initializeTables() {
     }
     console.log(`Multi-angebot migration: ${leadsWithoutAngebote.rows.length} leads migrated`);
 
+    // ============ PRODUCT RENAME: Premiumline → Arona ============
+    const renameResult1 = await pool.query(`UPDATE aufmass_forms SET model = 'Arona' WHERE model = 'Premiumline'`);
+    const renameResult2 = await pool.query(`UPDATE aufmass_lead_products SET product_name = REPLACE(product_name, 'Premiumline', 'Arona') WHERE product_name LIKE '%Premiumline%'`);
+    const renameResult3 = await pool.query(`UPDATE aufmass_lead_items SET product_name = REPLACE(product_name, 'Premiumline', 'Arona') WHERE product_name LIKE '%Premiumline%'`);
+    if (renameResult1.rowCount > 0 || renameResult2.rowCount > 0 || renameResult3.rowCount > 0) {
+      console.log(`Premiumline → Arona rename: forms=${renameResult1.rowCount}, products=${renameResult2.rowCount}, items=${renameResult3.rowCount}`);
+    }
+
+    // ============ ANGEBOT/KUNDEN NUMBER COUNTERS (race-safe, monotonic) ============
+    // Replaces the old COUNT(*)-based numbering which produced duplicates after deletes
+    // and across the leads/lead_angebote tables (different sources of truth).
+    // The counter table is the single source of truth for next number per branch+year.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS aufmass_angebot_counters (
+        branch_key VARCHAR(20) NOT NULL,
+        year INTEGER NOT NULL,
+        last_num INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (branch_key, year)
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS aufmass_kunden_counters (
+        branch_key VARCHAR(20) NOT NULL,
+        year INTEGER NOT NULL,
+        last_num INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (branch_key, year)
+      )
+    `);
+    console.log('aufmass_angebot_counters / aufmass_kunden_counters tables ready');
+
+    // Seed counters from existing max values so new numbers continue past current ones.
+    // We take the MAX over BOTH leads.angebot_nummer AND lead_angebote.angebot_nummer to be safe.
+    // Existing 3-digit numbers are left untouched; new numbers will be 5+ digits, so they
+    // never collide with legacy ones lexicographically.
+    const angebotSeed = await pool.query(`
+      WITH all_nrs AS (
+        SELECT angebot_nummer FROM aufmass_leads         WHERE angebot_nummer IS NOT NULL
+        UNION ALL
+        SELECT angebot_nummer FROM aufmass_lead_angebote WHERE angebot_nummer IS NOT NULL
+      ),
+      parsed AS (
+        SELECT
+          SPLIT_PART(angebot_nummer, '-', 1) AS branch_key,
+          NULLIF(SPLIT_PART(angebot_nummer, '-', 2), '')::int AS year,
+          NULLIF(SPLIT_PART(angebot_nummer, '-', 3), '')::int AS num
+        FROM all_nrs
+        WHERE angebot_nummer ~ '^[A-Z]+-[0-9]{4}-[0-9]+$'
+      )
+      INSERT INTO aufmass_angebot_counters (branch_key, year, last_num)
+      SELECT branch_key, year, MAX(num)
+      FROM parsed
+      GROUP BY branch_key, year
+      ON CONFLICT (branch_key, year)
+      DO UPDATE SET last_num = GREATEST(aufmass_angebot_counters.last_num, EXCLUDED.last_num)
+    `);
+    console.log(`aufmass_angebot_counters seeded (${angebotSeed.rowCount} rows)`);
+
+    // Partial UNIQUE index for new format only (5+ digits) — guarantees no future collision
+    // without touching existing 3-digit duplicates.
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_aufmass_lead_angebote_nummer_new
+        ON aufmass_lead_angebote (angebot_nummer)
+        WHERE angebot_nummer ~ '^[A-Z]+-[0-9]{4}-[0-9]{5,}$'
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_aufmass_leads_angebot_nummer_new
+        ON aufmass_leads (angebot_nummer)
+        WHERE angebot_nummer ~ '^[A-Z]+-[0-9]{4}-[0-9]{5,}$'
+    `);
+    console.log('Partial UNIQUE indexes (new 5+ digit format) ready');
+
+    // ============ KUNDENNUMMER COLUMN ============
+    await pool.query(`ALTER TABLE aufmass_leads ADD COLUMN IF NOT EXISTS kunden_nummer VARCHAR(20)`);
+    console.log('aufmass_leads.kunden_nummer column ready');
+
+    // Seed kunden counters from existing kunden_nummer values
+    const kundenSeed = await pool.query(`
+      WITH parsed AS (
+        SELECT
+          SPLIT_PART(kunden_nummer, '-', 1) AS branch_key,
+          NULLIF(SPLIT_PART(kunden_nummer, '-', 3), '')::int AS year,
+          NULLIF(SPLIT_PART(kunden_nummer, '-', 4), '')::int AS num
+        FROM aufmass_leads
+        WHERE kunden_nummer ~ '^[A-Z]+-K-[0-9]{4}-[0-9]+$'
+      )
+      INSERT INTO aufmass_kunden_counters (branch_key, year, last_num)
+      SELECT branch_key, year, MAX(num)
+      FROM parsed
+      GROUP BY branch_key, year
+      ON CONFLICT (branch_key, year)
+      DO UPDATE SET last_num = GREATEST(aufmass_kunden_counters.last_num, EXCLUDED.last_num)
+    `);
+    console.log(`aufmass_kunden_counters seeded (${kundenSeed.rowCount} rows)`);
+
+    // Backfill kunden_nummer for existing leads that don't have one
+    const leadsWithoutKN = await pool.query(`SELECT id, branch_id, created_at FROM aufmass_leads WHERE kunden_nummer IS NULL ORDER BY created_at ASC`);
+    if (leadsWithoutKN.rows.length > 0) {
+      const branchPrefixMap = { 'koblenz': 'KOB', 'ayluxtr': 'AYT', 'aylux': 'AYL', 'ayluxus': 'AYU', 'ayluxgkmu': 'GKM', 'ayluxmau': 'MAU', 'ayluxa': 'AYA' };
+      // Count per branch+year for numbering
+      const counters = {};
+      for (const lead of leadsWithoutKN.rows) {
+        const yr = new Date(lead.created_at).getFullYear();
+        const bp = lead.branch_id ? (branchPrefixMap[lead.branch_id] || lead.branch_id.substring(0, 3).toUpperCase()) : 'ANG';
+        const key = `${bp}-${yr}`;
+        counters[key] = (counters[key] || 0) + 1;
+        const kn = `${bp}-K-${yr}-${String(counters[key]).padStart(3, '0')}`;
+        await pool.query(`UPDATE aufmass_leads SET kunden_nummer = $1 WHERE id = $2`, [kn, lead.id]);
+      }
+      console.log(`Backfilled kunden_nummer for ${leadsWithoutKN.rows.length} leads`);
+    }
+
     // Check if admin exists, create default admin if not
     const adminCheck = await pool.query(
       "SELECT COUNT(*) as count FROM aufmass_users WHERE role = 'admin'"
@@ -834,13 +945,18 @@ app.get('/api/forms', authenticateToken, async (req, res) => {
     console.log('Origin:', req.headers.origin);
     console.log('Host:', req.headers.host);
 
-    // Auto-delete forms in Papierkorb older than 30 days
-    await pool.query(`
+    // Auto-delete forms in Papierkorb older than 60 days (with logging)
+    const deletedRows = await pool.query(`
       DELETE FROM aufmass_forms
       WHERE status = 'papierkorb'
       AND papierkorb_date IS NOT NULL
-      AND papierkorb_date < CURRENT_DATE - INTERVAL '30 days'
+      AND papierkorb_date < CURRENT_DATE - INTERVAL '60 days'
+      RETURNING id, kunde_vorname, kunde_nachname, branch_id, papierkorb_date
     `);
+    if (deletedRows.rows.length > 0) {
+      console.log(`[PAPIERKORB-CLEANUP] ${deletedRows.rows.length} form(s) permanently deleted:`);
+      deletedRows.rows.forEach(r => console.log(`  ID:${r.id} ${r.kunde_vorname} ${r.kunde_nachname} (${r.branch_id}) papierkorb:${r.papierkorb_date}`));
+    }
 
     // Build query with optional branch filter
     let query, params;
@@ -4160,29 +4276,20 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
       finalTotal -= (total_discount || 0);
     }
 
-    // Generate angebot_nummer: ANG-YYYY-NNN (per branch, per year)
-    const year = new Date().getFullYear();
-    const countResult = await pool.query(
-      `SELECT COUNT(*) as cnt FROM aufmass_leads
-       WHERE EXTRACT(YEAR FROM created_at) = $1
-       AND (branch_id = $2 OR ($2 IS NULL AND branch_id IS NULL))`,
-      [year, req.branchId || null]
-    );
-    const nextNum = parseInt(countResult.rows[0].cnt) + 1;
-    const branchPrefixMap = {
-      'koblenz': 'KOB', 'ayluxtr': 'AYT', 'aylux': 'AYL', 'ayluxus': 'AYU',
-      'ayluxgkmu': 'GKM', 'ayluxmau': 'MAU', 'ayluxa': 'AYA'
-    };
-    const branchPrefix = req.branchId ? (branchPrefixMap[req.branchId] || req.branchId.substring(0, 3).toUpperCase()) : 'ANG';
-    const angebotNummer = `${branchPrefix}-${year}-${String(nextNum).padStart(3, '0')}`;
+    // Generate angebot_nummer + kunden_nummer using race-safe counter tables
+    // (replaces the legacy COUNT(*)+1 logic which produced duplicates after deletes
+    //  and across the leads/lead_angebote tables). Format is now BRANCH-YYYY-NNNNN
+    // (5-digit minimum, auto-grows to 6+ digits if a branch exceeds 99999 in one year).
+    const angebotNummer = await generateNextAngebotNummer(req.branchId);
+    const kundenNummer  = await generateNextKundenNummer(req.branchId);
 
-    // Insert lead with discount fields and angebot_nummer
+    // Insert lead with discount fields, angebot_nummer and kunden_nummer
     const leadResult = await pool.query(
-      `INSERT INTO aufmass_leads (customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, subtotal, total_discount, total_price, status, branch_id, created_by, angebot_nummer)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'offen', $10, $11, $12) RETURNING id, angebot_nummer`,
+      `INSERT INTO aufmass_leads (customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, subtotal, total_discount, total_price, status, branch_id, created_by, angebot_nummer, kunden_nummer)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'unbearbeitet', $10, $11, $12, $13) RETURNING id, angebot_nummer, kunden_nummer`,
       [customer_firstname, customer_lastname, customer_email || null, customer_phone || null,
        customer_address || null, notes || null, subtotal || 0, total_discount || 0, finalTotal,
-       req.branchId || null, req.user.id, angebotNummer]
+       req.branchId || null, req.user.id, angebotNummer, kundenNummer]
     );
 
     const leadId = leadResult.rows[0].id;
@@ -4190,7 +4297,7 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
     // Create first angebot record
     const angebotResult = await pool.query(
       `INSERT INTO aufmass_lead_angebote (lead_id, angebot_nummer, subtotal, total_discount, total_price, notes, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'offen') RETURNING id`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'unbearbeitet') RETURNING id`,
       [leadId, angebotNummer, subtotal || 0, total_discount || 0, finalTotal, notes || null]
     );
     const angebotId = angebotResult.rows[0].id;
@@ -4221,7 +4328,7 @@ app.post('/api/leads', authenticateToken, async (req, res) => {
       }
     }
 
-    res.status(201).json({ id: leadId, message: 'Lead created successfully' });
+    res.status(201).json({ id: leadId, angebot_nummer: angebotNummer, kunden_nummer: kundenNummer, message: 'Lead created successfully' });
   } catch (err) {
     console.error('=== CREATE LEAD ERROR ===');
     console.error('Error message:', err.message);
@@ -4259,6 +4366,120 @@ app.get('/api/leads', authenticateToken, async (req, res) => {
   }
 });
 
+// ============ ANGEBOT / KUNDEN NUMBER GENERATION ============
+// Single source of truth for branch prefix mapping (used by both number generators)
+const BRANCH_PREFIX_MAP = {
+  'koblenz': 'KOB', 'ayluxtr': 'AYT', 'aylux': 'AYL', 'ayluxus': 'AYU',
+  'ayluxgkmu': 'GKM', 'ayluxmau': 'MAU', 'ayluxa': 'AYA'
+};
+function branchPrefixFor(branchId) {
+  if (!branchId) return 'ANG';
+  return BRANCH_PREFIX_MAP[branchId] || branchId.substring(0, 3).toUpperCase();
+}
+// Format with auto-grow: minimum 5 digits, but if the counter exceeds 99999
+// padStart becomes a no-op so the number naturally grows to 6+ digits.
+function padNumber(n) {
+  return String(n).padStart(5, '0');
+}
+// Atomic, race-safe next number for angebot. Uses UPSERT on the counter table:
+// concurrent inserts are serialized by Postgres at row level, eliminating the
+// COUNT(*)+1 race that produced duplicates in the legacy code.
+async function generateNextAngebotNummer(branchId) {
+  const year = new Date().getFullYear();
+  const branchKey = branchPrefixFor(branchId);
+  const result = await pool.query(
+    `INSERT INTO aufmass_angebot_counters (branch_key, year, last_num)
+     VALUES ($1, $2, 1)
+     ON CONFLICT (branch_key, year)
+     DO UPDATE SET last_num = aufmass_angebot_counters.last_num + 1
+     RETURNING last_num`,
+    [branchKey, year]
+  );
+  return `${branchKey}-${year}-${padNumber(result.rows[0].last_num)}`;
+}
+async function generateNextKundenNummer(branchId) {
+  const year = new Date().getFullYear();
+  const branchKey = branchPrefixFor(branchId);
+  const result = await pool.query(
+    `INSERT INTO aufmass_kunden_counters (branch_key, year, last_num)
+     VALUES ($1, $2, 1)
+     ON CONFLICT (branch_key, year)
+     DO UPDATE SET last_num = aufmass_kunden_counters.last_num + 1
+     RETURNING last_num`,
+    [branchKey, year]
+  );
+  return `${branchKey}-K-${year}-${padNumber(result.rows[0].last_num)}`;
+}
+
+// Helper: enrich lead items with description + custom_fields schema from product master,
+// and parse custom_field_values JSON. Used so the frontend can render PRODUKTDETAILS labels.
+//
+// IMPORTANT: aufmass_lead_products has many duplicate rows per product_name (some with
+// custom_fields populated, some null, some with dummy/test labels). We pick one canonical
+// row per product_name using DISTINCT ON, preferring rows that:
+//   1. have non-null custom_fields,
+//   2. have non-null description,
+//   3. have the smallest id (typically the first/original insert is the real one).
+async function enrichItemsWithProductMeta(items, branchId) {
+  if (!items || items.length === 0) return items;
+  const names = [...new Set(items.map(i => i.product_name).filter(Boolean))];
+  if (names.length === 0) return items.map(parseItemCustomFieldValues);
+
+  const productQuery = branchId
+    ? `SELECT DISTINCT ON (product_name)
+              product_name, description, custom_fields
+       FROM aufmass_lead_products
+       WHERE product_name = ANY($1::text[]) AND branch_id = $2
+       ORDER BY product_name,
+                (custom_fields IS NOT NULL)::int DESC,
+                (description IS NOT NULL)::int DESC,
+                id ASC`
+    : `SELECT DISTINCT ON (product_name)
+              product_name, description, custom_fields
+       FROM aufmass_lead_products
+       WHERE product_name = ANY($1::text[])
+       ORDER BY product_name,
+                (custom_fields IS NOT NULL)::int DESC,
+                (description IS NOT NULL)::int DESC,
+                id ASC`;
+  const productParams = branchId ? [names, branchId] : [names];
+  const productResult = await pool.query(productQuery, productParams);
+
+  const metaByName = {};
+  for (const row of productResult.rows) {
+    let customFields = null;
+    if (row.custom_fields) {
+      try {
+        customFields = typeof row.custom_fields === 'string'
+          ? JSON.parse(row.custom_fields)
+          : row.custom_fields;
+      } catch (e) {
+        customFields = null;
+      }
+    }
+    metaByName[row.product_name] = { description: row.description || null, custom_fields: customFields };
+  }
+
+  return items.map(item => {
+    const meta = metaByName[item.product_name];
+    return {
+      ...parseItemCustomFieldValues(item),
+      description: meta?.description ?? null,
+      custom_fields: meta?.custom_fields ?? null
+    };
+  });
+}
+
+function parseItemCustomFieldValues(item) {
+  if (!item.custom_field_values) return item;
+  if (typeof item.custom_field_values !== 'string') return item;
+  try {
+    return { ...item, custom_field_values: JSON.parse(item.custom_field_values) };
+  } catch (e) {
+    return item;
+  }
+}
+
 // Get single lead with items and extras
 app.get('/api/leads/:id', authenticateToken, async (req, res) => {
   try {
@@ -4278,8 +4499,11 @@ app.get('/api/leads/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Lead not found' });
     }
 
+    const lead = leadResult.rows[0];
     const itemsResult = await pool.query('SELECT * FROM aufmass_lead_items WHERE lead_id = $1', [id]);
     const extrasResult = await pool.query('SELECT * FROM aufmass_lead_extras WHERE lead_id = $1', [id]);
+
+    const enrichedLeadItems = await enrichItemsWithProductMeta(itemsResult.rows, lead.branch_id);
 
     // Fetch angebote with their items and extras
     const angeboteResult = await pool.query('SELECT * FROM aufmass_lead_angebote WHERE lead_id = $1 ORDER BY created_at ASC', [id]);
@@ -4287,12 +4511,13 @@ app.get('/api/leads/:id', authenticateToken, async (req, res) => {
     for (const ang of angeboteResult.rows) {
       const angItems = await pool.query('SELECT * FROM aufmass_lead_items WHERE angebot_id = $1', [ang.id]);
       const angExtras = await pool.query('SELECT * FROM aufmass_lead_extras WHERE angebot_id = $1', [ang.id]);
-      angebote.push({ ...ang, items: angItems.rows, extras: angExtras.rows });
+      const enrichedAngItems = await enrichItemsWithProductMeta(angItems.rows, lead.branch_id);
+      angebote.push({ ...ang, items: enrichedAngItems, extras: angExtras.rows });
     }
 
     res.json({
-      ...leadResult.rows[0],
-      items: itemsResult.rows,
+      ...lead,
+      items: enrichedLeadItems,
       extras: extrasResult.rows,
       angebote
     });
@@ -4308,19 +4533,19 @@ app.put('/api/leads/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { customer_firstname, customer_lastname, customer_email, customer_phone, customer_address, notes, items, extras, subtotal, total_discount, total_price, angebot_id } = req.body;
 
-    // Update customer info on lead
+    // Update customer info on lead (including notes/Beschreibung — was previously omitted)
     let result;
     if (req.branchId) {
       result = await pool.query(
         `UPDATE aufmass_leads
          SET customer_firstname = $1, customer_lastname = $2,
              customer_email = $3, customer_phone = $4,
-             customer_address = $5,
-             subtotal = $6, total_discount = $7, total_price = $8,
+             customer_address = $5, notes = $6,
+             subtotal = $7, total_discount = $8, total_price = $9,
              updated_at = NOW()
-         WHERE id = $9 AND branch_id = $10`,
+         WHERE id = $10 AND branch_id = $11`,
         [customer_firstname, customer_lastname, customer_email || null, customer_phone || null,
-         customer_address || null,
+         customer_address || null, notes || null,
          subtotal || 0, total_discount || 0, total_price,
          id, req.branchId]
       );
@@ -4329,12 +4554,12 @@ app.put('/api/leads/:id', authenticateToken, async (req, res) => {
         `UPDATE aufmass_leads
          SET customer_firstname = $1, customer_lastname = $2,
              customer_email = $3, customer_phone = $4,
-             customer_address = $5,
-             subtotal = $6, total_discount = $7, total_price = $8,
+             customer_address = $5, notes = $6,
+             subtotal = $7, total_discount = $8, total_price = $9,
              updated_at = NOW()
-         WHERE id = $9`,
+         WHERE id = $10`,
         [customer_firstname, customer_lastname, customer_email || null, customer_phone || null,
-         customer_address || null,
+         customer_address || null, notes || null,
          subtotal || 0, total_discount || 0, total_price,
          id]
       );
@@ -4434,10 +4659,20 @@ app.put('/api/leads/:id', authenticateToken, async (req, res) => {
 app.put('/api/leads/:id/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, previousStatus } = req.body;
 
     if (!status) {
       return res.status(400).json({ error: 'Status is required' });
+    }
+
+    // Role check: only admin/office can move status backward
+    if (previousStatus && req.user.role !== 'admin' && req.user.role !== 'office') {
+      const statusOrder = ['unbearbeitet','wiedervorlage','aufmass_termin','showroom_termin','tag1_nicht_erreicht','tag2_nicht_erreicht','tag3_nicht_erreicht','tag4_email','auftrag_erteilt','aufmass_erstellt','abgelehnt','komplett_raus','offen'];
+      const prevIdx = statusOrder.indexOf(previousStatus);
+      const newIdx = statusOrder.indexOf(status);
+      if (prevIdx >= 0 && newIdx >= 0 && newIdx < prevIdx) {
+        return res.status(403).json({ error: 'Only admin or office can revert status' });
+      }
     }
 
     let result;
@@ -4497,27 +4732,17 @@ app.post('/api/leads/:id/angebote', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Lead not found' });
     }
 
-    // Generate angebot_nummer
-    const year = new Date().getFullYear();
-    const countResult = await pool.query(
-      `SELECT COUNT(*) as cnt FROM aufmass_lead_angebote a
-       JOIN aufmass_leads l ON a.lead_id = l.id
-       WHERE EXTRACT(YEAR FROM a.created_at) = $1
-       AND (l.branch_id = $2 OR ($2 IS NULL AND l.branch_id IS NULL))`,
-      [year, req.branchId || null]
-    );
-    const nextNum = parseInt(countResult.rows[0].cnt) + 1;
-    const branchPrefixMap = {
-      'koblenz': 'KOB', 'ayluxtr': 'AYT', 'aylux': 'AYL', 'ayluxus': 'AYU',
-      'ayluxgkmu': 'GKM', 'ayluxmau': 'MAU', 'ayluxa': 'AYA'
-    };
-    const branchPrefix = req.branchId ? (branchPrefixMap[req.branchId] || req.branchId.substring(0, 3).toUpperCase()) : 'ANG';
-    const angebotNummer = `${branchPrefix}-${year}-${String(nextNum).padStart(3, '0')}`;
+    // Generate angebot_nummer using race-safe counter (same logic as POST /api/leads).
+    // We resolve the branch from the lead itself to avoid losing branch context if the
+    // caller is an admin without a branch header — the legacy code occasionally produced
+    // ANG-prefixed numbers for branch-owned leads because of this exact issue.
+    const branchForNumber = leadCheck.rows[0].branch_id || req.branchId || null;
+    const angebotNummer = await generateNextAngebotNummer(branchForNumber);
 
     // Insert angebot
     const angebotResult = await pool.query(
       `INSERT INTO aufmass_lead_angebote (lead_id, angebot_nummer, subtotal, total_discount, total_price, notes, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'offen') RETURNING id, angebot_nummer`,
+       VALUES ($1, $2, $3, $4, $5, $6, 'unbearbeitet') RETURNING id, angebot_nummer`,
       [id, angebotNummer, subtotal || 0, total_discount || 0, total_price || 0, notes || null]
     );
     const angebotId = angebotResult.rows[0].id;
@@ -4756,16 +4981,34 @@ app.get('/api/leads/:id/pdf', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Lead not found' });
     }
 
-    const pdfPath = path.join(LEAD_PDF_DIR, `${id}.pdf`);
+    let pdfPath = path.join(LEAD_PDF_DIR, `${id}.pdf`);
+    let fileName = `angebot_${id}.pdf`;
 
     if (!fs.existsSync(pdfPath)) {
-      return res.status(404).json({ error: 'No PDF generated for this lead' });
+      const angeboteResult = await pool.query(
+        'SELECT id FROM aufmass_lead_angebote WHERE lead_id = $1 ORDER BY created_at DESC, id DESC',
+        [id]
+      );
+
+      const fallbackPdf = angeboteResult.rows
+        .map((angebot) => ({
+          pdfPath: path.join(LEAD_PDF_DIR, `${id}_${angebot.id}.pdf`),
+          fileName: `angebot_${id}_${angebot.id}.pdf`
+        }))
+        .find((candidate) => fs.existsSync(candidate.pdfPath));
+
+      if (!fallbackPdf) {
+        return res.status(404).json({ error: 'No PDF generated for this lead' });
+      }
+
+      pdfPath = fallbackPdf.pdfPath;
+      fileName = fallbackPdf.fileName;
     }
 
     const stats = fs.statSync(pdfPath);
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="angebot_${id}.pdf"`,
+      'Content-Disposition': `inline; filename="${fileName}"`,
       'Content-Length': stats.size,
       'Cache-Control': 'no-cache'
     });

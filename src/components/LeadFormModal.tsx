@@ -42,6 +42,8 @@ interface EditLeadData {
   items: EditLeadItem[];
   extras: { description: string; price: number }[];
   angebote?: AngebotData[];
+  angebot_nummer?: string;
+  kunden_nummer?: string;
 }
 
 interface LeadFormModalProps {
@@ -550,6 +552,8 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData, ed
             customer_phone: phone.trim() || undefined,
             customer_address: address.trim() || undefined,
             notes: notes.trim() || undefined,
+            kunden_nummer: editData?.kunden_nummer || undefined,
+            angebot_nummer: result.angebot_nummer || undefined,
             items: validItems.map(buildPdfItem),
             extras: validExtras.map(e => ({ description: e.description.trim(), price: Number(e.price) })),
             subtotal: calculateSubtotal(),
@@ -578,9 +582,11 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData, ed
         };
 
         const result = isEditMode
-          ? await api.put<{ id: number }>(`/leads/${editData!.id}`, payload)
-          : await api.post<{ id: number }>('/leads', payload);
+          ? await api.put<{ id: number; angebot_nummer?: string; kunden_nummer?: string }>(`/leads/${editData!.id}`, payload)
+          : await api.post<{ id: number; angebot_nummer?: string; kunden_nummer?: string }>('/leads', payload);
         const leadId = isEditMode ? editData!.id : result.id;
+        const resAngebotNummer = (result as { angebot_nummer?: string }).angebot_nummer || editData?.angebot_nummer;
+        const resKundenNummer = (result as { kunden_nummer?: string }).kunden_nummer || editData?.kunden_nummer;
 
         // Generate and save Angebot PDF
         try {
@@ -592,6 +598,8 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData, ed
             customer_phone: phone.trim() || undefined,
             customer_address: address.trim() || undefined,
             notes: notes.trim() || undefined,
+            kunden_nummer: resKundenNummer || undefined,
+            angebot_nummer: resAngebotNummer || undefined,
             items: validItems.map(buildPdfItem),
             extras: validExtras.map(e => ({ description: e.description.trim(), price: Number(e.price) })),
             subtotal: calculateSubtotal(),
@@ -1003,13 +1011,13 @@ export default function LeadFormModal({ isOpen, onClose, onSuccess, editData, ed
               </button>
             </section>
 
-            {/* Notes */}
+            {/* Beschreibung */}
             <section className="lead-section">
-              <h3>Notizen</h3>
+              <h3>Beschreibung</h3>
               <textarea
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                placeholder="Zusätzliche Bemerkungen..."
+                placeholder="Beschreibung des Angebots / zusätzliche Bemerkungen..."
                 rows={4}
               />
             </section>

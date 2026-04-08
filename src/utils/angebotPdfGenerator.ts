@@ -29,6 +29,8 @@ export interface AngebotPdfData {
   customer_phone?: string;
   customer_address?: string;
   notes?: string;
+  kunden_nummer?: string;
+  angebot_nummer?: string;
 
   // Products
   items: AngebotPdfItem[];
@@ -89,20 +91,27 @@ export const generateAngebotPDF = async (
   pdf.setFontSize(7);
   pdf.text('SONNENSCHUTZSYSTEME', pageWidth - 65, 28);
 
-  // Title
+  // Title — auto-fit to available width left of logo
   pdf.setTextColor(0, 0, 0);
-  pdf.setFontSize(22);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('ANGEBOT', margin, 28);
+  const titleText = 'ANGEBOTS- & AUFTRAGSFORMULAR / KAUFVERTRAG';
+  const availableTitleWidth = (pageWidth - 70) - margin - 4; // 4mm gap before logo block
+  let titleSize = 14;
+  pdf.setFontSize(titleSize);
+  while (pdf.getTextWidth(titleText) > availableTitleWidth && titleSize > 8) {
+    titleSize -= 0.5;
+    pdf.setFontSize(titleSize);
+  }
+  pdf.text(titleText, margin, 24);
 
-  // Angebot number and date
+  // Date below title
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(100, 100, 100);
   const dateStr = data.created_at
     ? new Date(data.created_at).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
     : new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  pdf.text(`Datum: ${dateStr}`, margin, 36);
+  pdf.text(`Datum: ${dateStr}`, margin, 32);
 
   yPos = 50;
 
@@ -118,10 +127,11 @@ export const generateAngebotPDF = async (
   pdf.setTextColor(0, 0, 0);
   pdf.setFontSize(10);
 
-  const customerFields: [string, string][] = [
-    ['Name:', `${data.customer_firstname} ${data.customer_lastname}`],
-    ['E-Mail:', data.customer_email],
-  ];
+  const customerFields: [string, string][] = [];
+  if (data.kunden_nummer) customerFields.push(['Kundennr.:', data.kunden_nummer]);
+  if (data.angebot_nummer) customerFields.push(['Angebot Nr.:', data.angebot_nummer]);
+  customerFields.push(['Name:', `${data.customer_firstname} ${data.customer_lastname}`]);
+  customerFields.push(['E-Mail:', data.customer_email]);
   if (data.customer_phone) customerFields.push(['Telefon:', data.customer_phone]);
   if (data.customer_address) customerFields.push(['Adresse:', data.customer_address]);
 
@@ -216,13 +226,21 @@ export const generateAngebotPDF = async (
       pdf.text(`${formatPrice(item.total_price)} EUR`, colX.gesamt, yPos);
       yPos += 7;
 
-      // Product description (below product row)
-      if (item.description) {
+      // Description below product row.
+      // Prefer the angebot-level Beschreibung (data.notes) when present — that's where
+      // the user-typed Beschreibung from the form lands. Falls back to the product master
+      // description otherwise. Wrapped to fit table width so long text never overflows.
+      const descText = (data.notes && data.notes.trim()) ? data.notes.trim() : item.description;
+      if (descText) {
         pdf.setFontSize(8.5);
         pdf.setTextColor(80, 80, 80);
-        checkNewPage(6);
-        pdf.text(item.description, colX.produkt + 3, yPos);
-        yPos += 5;
+        const descMaxWidth = (margin + tableWidth) - (colX.produkt + 3) - 3;
+        const descLines = pdf.splitTextToSize(descText, descMaxWidth);
+        for (const line of descLines) {
+          checkNewPage(6);
+          pdf.text(line, colX.produkt + 3, yPos);
+          yPos += 5;
+        }
         pdf.setFontSize(10);
         pdf.setTextColor(0, 0, 0);
         yPos += 1;
@@ -290,78 +308,6 @@ export const generateAngebotPDF = async (
     yPos += 5;
   }
 
-  // ============ TOTAL ============
-  const hasAnyDiscounts = (data.item_discounts && data.item_discounts > 0) || (data.total_discount && data.total_discount > 0);
-  const totalDiscountAmount = (data.item_discounts || 0) + (data.total_discount || 0);
-
-  checkNewPage(hasAnyDiscounts ? 60 : 30);
-  yPos += 5;
-
-  // Summary section
-  const summaryX = pageWidth - margin - 100;
-
-  if (hasAnyDiscounts && data.subtotal) {
-    // Subtotal
-    pdf.setTextColor(80, 80, 80);
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text('Zwischensumme:', summaryX, yPos);
-    pdf.text(`${formatPrice(data.subtotal)} EUR`, summaryX + 60, yPos);
-    yPos += 7;
-
-    // Item discounts
-    if (data.item_discounts && data.item_discounts > 0) {
-      pdf.setTextColor(220, 38, 38);
-      pdf.text('Artikel-Rabatt:', summaryX, yPos);
-      pdf.text(`-${formatPrice(data.item_discounts)} EUR`, summaryX + 60, yPos);
-      yPos += 7;
-    }
-
-    // Total discount
-    if (data.total_discount && data.total_discount > 0) {
-      pdf.setTextColor(220, 38, 38);
-      pdf.text('Gesamt-Rabatt:', summaryX, yPos);
-      pdf.text(`-${formatPrice(data.total_discount)} EUR`, summaryX + 60, yPos);
-      yPos += 7;
-    }
-
-    // Total savings with percentage
-    if (totalDiscountAmount > 0 && data.total_discount_percent) {
-      pdf.setTextColor(220, 38, 38);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text(`Sie sparen: ${formatPrice(totalDiscountAmount)} EUR (${data.total_discount_percent}%)`, summaryX, yPos);
-      yPos += 10;
-    }
-
-    pdf.setTextColor(0, 0, 0);
-  }
-
-  // Total box
-  const totalBoxWidth = 80;
-  const totalBoxX = pageWidth - margin - totalBoxWidth;
-  pdf.setFillColor(127, 169, 61);
-  pdf.roundedRect(totalBoxX, yPos - 5, totalBoxWidth, 20, 3, 3, 'F');
-
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFontSize(10);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text('Gesamtsumme:', totalBoxX + 5, yPos + 2);
-  pdf.setFontSize(14);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(`${formatPrice(data.total_price)} EUR`, totalBoxX + 5, yPos + 11);
-
-  // Netto/MwSt breakdown to the left
-  const nettoPrice = data.total_price / 1.19;
-  const mwstPrice = data.total_price - nettoPrice;
-
-  pdf.setTextColor(100, 100, 100);
-  pdf.setFontSize(9);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(`Netto: ${formatPrice(nettoPrice)} EUR`, totalBoxX - 55, yPos + 2);
-  pdf.text(`MwSt. (19%): ${formatPrice(mwstPrice)} EUR`, totalBoxX - 55, yPos + 9);
-
-  yPos += 30;
-
   // ============ MEASUREMENT DATA (if available) ============
   if (data.hasMeasurements && data.measurements) {
     checkNewPage(40);
@@ -424,28 +370,100 @@ export const generateAngebotPDF = async (
     yPos += 10;
   }
 
-  // ============ NOTES ============
-  if (data.notes && data.notes.trim()) {
-    checkNewPage(25);
+  // ============ TOTAL ============
+  const hasAnyDiscounts = (data.item_discounts && data.item_discounts > 0) || (data.total_discount && data.total_discount > 0);
+  const totalDiscountAmount = (data.item_discounts || 0) + (data.total_discount || 0);
 
-    pdf.setFontSize(12);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFillColor(127, 169, 61);
-    pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
-    pdf.setTextColor(255, 255, 255);
-    pdf.text('NOTIZEN', margin + 3, yPos);
-    yPos += 12;
+  checkNewPage(hasAnyDiscounts ? 60 : 30);
+  yPos += 5;
 
+  // Summary section
+  const summaryX = pageWidth - margin - 100;
+
+  if (hasAnyDiscounts && data.subtotal) {
+    // Subtotal
     pdf.setTextColor(80, 80, 80);
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
-    const noteLines = pdf.splitTextToSize(data.notes, pageWidth - 2 * margin - 6);
-    noteLines.forEach((line: string) => {
-      checkNewPage();
-      pdf.text(line, margin + 3, yPos);
-      yPos += 5;
-    });
+    pdf.text('Zwischensumme:', summaryX, yPos);
+    pdf.text(`${formatPrice(data.subtotal)} EUR`, summaryX + 60, yPos);
+    yPos += 7;
+
+    // Item discounts
+    if (data.item_discounts && data.item_discounts > 0) {
+      pdf.setTextColor(220, 38, 38);
+      pdf.text('Artikel-Rabatt:', summaryX, yPos);
+      pdf.text(`-${formatPrice(data.item_discounts)} EUR`, summaryX + 60, yPos);
+      yPos += 7;
+    }
+
+    // Total discount
+    if (data.total_discount && data.total_discount > 0) {
+      pdf.setTextColor(220, 38, 38);
+      pdf.text('Gesamt-Rabatt:', summaryX, yPos);
+      pdf.text(`-${formatPrice(data.total_discount)} EUR`, summaryX + 60, yPos);
+      yPos += 7;
+    }
+
+    // Total savings with percentage
+    if (totalDiscountAmount > 0 && data.total_discount_percent) {
+      pdf.setTextColor(220, 38, 38);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`Sie sparen: ${formatPrice(totalDiscountAmount)} EUR (${data.total_discount_percent}%)`, summaryX, yPos);
+      yPos += 10;
+    }
+
+    pdf.setTextColor(0, 0, 0);
   }
+
+  // Total box (green) — KEPT per user instruction
+  const totalBoxWidth = 80;
+  const totalBoxX = pageWidth - margin - totalBoxWidth;
+  pdf.setFillColor(127, 169, 61);
+  pdf.roundedRect(totalBoxX, yPos - 5, totalBoxWidth, 20, 3, 3, 'F');
+
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(10);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text('Gesamtsumme:', totalBoxX + 5, yPos + 2);
+  pdf.setFontSize(14);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text(`${formatPrice(data.total_price)} EUR`, totalBoxX + 5, yPos + 11);
+
+  // Netto + 19% MwSt below the green box, left-aligned to the same x as the main
+  // "2.227,00 EUR" price inside the green box (totalBoxX + 5)
+  const nettoPrice = data.total_price / 1.19;
+  const mwstPrice = data.total_price - nettoPrice;
+  pdf.setTextColor(100, 100, 100);
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`Netto: ${formatPrice(nettoPrice)} EUR`, totalBoxX + 5, yPos + 22);
+  pdf.text(`19% MwSt.: ${formatPrice(mwstPrice)} EUR`, totalBoxX + 5, yPos + 28);
+
+  yPos += 38;
+
+  // ============ VERBINDLICHE AUFTRAGSERTEILUNG ============
+  // Right column, aligned under the green Gesamtsumme box (NOT left margin)
+  checkNewPage(45);
+  yPos += 10;
+
+  pdf.setTextColor(0, 0, 0);
+  pdf.setFontSize(11);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('Verbindliche Auftragserteilung', totalBoxX, yPos);
+  yPos += 25;
+
+  // Signature line — only spans the right column under the totals box
+  pdf.setDrawColor(0, 0, 0);
+  pdf.setLineWidth(0.4);
+  pdf.line(totalBoxX, yPos, pageWidth - margin, yPos);
+  yPos += 5;
+
+  pdf.setFontSize(9);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(80, 80, 80);
+  pdf.text('Datum, Unterschrift Kunde/Auftraggeber', totalBoxX, yPos);
+  pdf.setTextColor(0, 0, 0);
 
   // ============ FOOTER ============
   const pageCount = (pdf as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();

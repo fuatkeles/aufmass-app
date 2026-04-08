@@ -174,7 +174,7 @@ const FormPage = () => {
               productSelection = {
                 category: 'ÜBERDACHUNG',
                 productType: 'Glasdach',
-                model: 'Premiumline'
+                model: 'Arona'
               };
             }
             // Convert cm to mm for the form (form uses mm)
@@ -192,7 +192,7 @@ const FormPage = () => {
               id: `lead-wp-${index}`,
               category: 'ÜBERDACHUNG',
               productType: 'Glasdach',
-              model: 'Premiumline',
+              model: 'Arona',
               specifications: wpSpecs
             };
           });

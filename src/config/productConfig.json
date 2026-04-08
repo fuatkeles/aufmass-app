@@ -2,10 +2,14 @@
   "ÜBERDACHUNG": {
     "Glasdach": {
       "models": [
-        "Premiumline",
+        "Arona",
+        "Arona XL",
         "Orangeline",
         "Trendline",
+        "Trendline Plus",
         "Topline",
+        "Topline XL",
+        "SkyPort",
         "Designline",
         "Ultraline",
         "Skyline",
@@ -13,10 +17,14 @@
         "Murano Int. Zip"
       ],
       "modelColors": {
-        "Premiumline": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9016", "RAL 9006", "RAL 8014"],
+        "Arona": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9016", "RAL 9006", "RAL 8014"],
+        "Arona XL": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9016", "RAL 9006", "RAL 8014"],
         "Orangeline": ["RAL 7016", "RAL 9007", "RAL 9010"],
         "Trendline": ["RAL 7016", "RAL 9007"],
+        "Trendline Plus": ["RAL 7016", "RAL 9007", "RAL 9010"],
         "Topline": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9005"],
+        "Topline XL": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9005"],
+        "SkyPort": ["RAL 7016", "RAL 9007", "RAL 9010"],
         "Designline": ["RAL 9010", "RAL 9005", "DB703"],
         "Ultraline": ["RAL 7016", "RAL 9007", "RAL 9010", "RAL 9005"],
         "Skyline": ["RAL 7016"],
