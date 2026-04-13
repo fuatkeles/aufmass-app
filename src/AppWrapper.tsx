@@ -10,9 +10,10 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import AbnahmeSignPage from './pages/AbnahmeSignPage';
 import EsignatureAdmin from './components/EsignatureAdmin';
+import EmailSettings from './components/EmailSettings';
 import ProductPricing from './pages/ProductPricing';
-// isAdminBranch used in future feature flags
-// import { isAdminBranch } from './hooks/useBranchMeta';
+import BranchUebersicht from './pages/BranchUebersicht';
+import { isAdminBranch } from './hooks/useBranchMeta';
 import { getStats, getUsers, getInvitations, createInvitation, deleteInvitation, deleteUser, updateUser } from './services/api';
 import type { Stats, User, Invitation } from './services/api';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -32,9 +33,10 @@ export const useStats = () => useContext(StatsContext);
 interface AdminPanelContextType {
   openAdminPanel: () => void;
   openEsignatureAdmin: () => void;
+  openEmailSettings: () => void;
 }
 
-const AdminPanelContext = createContext<AdminPanelContextType>({ openAdminPanel: () => {}, openEsignatureAdmin: () => {} });
+const AdminPanelContext = createContext<AdminPanelContextType>({ openAdminPanel: () => {}, openEsignatureAdmin: () => {}, openEmailSettings: () => {} });
 export const useAdminPanel = () => useContext(AdminPanelContext);
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -42,7 +44,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { user, logout, isAdmin } = useAuth();
   const { stats } = useStats();
-  const { openAdminPanel } = useAdminPanel();
+  const { openAdminPanel, openEmailSettings } = useAdminPanel();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Theme state
@@ -210,6 +212,24 @@ function Layout({ children }: { children: React.ReactNode }) {
                 </svg>
                 <span>Produkte & Preise</span>
               </a>
+              {isAdminBranch() && (
+                <>
+                  <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); openEmailSettings(); setMobileMenuOpen(false); }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                      <polyline points="22,6 12,13 2,6" />
+                    </svg>
+                    <span>E-Mail Einstellungen</span>
+                  </a>
+                  <a href="#" className={`nav-item ${isActive('/filialen') ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); handleNavClick('/filialen'); }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                      <polyline points="9 22 9 12 15 12 15 22" />
+                    </svg>
+                    <span>Filialübersicht</span>
+                  </a>
+                </>
+              )}
               {isAdmin && (
                 <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); openAdminPanel(); setMobileMenuOpen(false); }}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -295,6 +315,7 @@ function ProtectedContent() {
   const [stats, setStats] = useState<Stats>({ total: 0, completed: 0, draft: 0 });
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [showEsignatureAdmin, setShowEsignatureAdmin] = useState(false);
+  const [showEmailSettings, setShowEmailSettings] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -336,6 +357,10 @@ function ProtectedContent() {
     setShowEsignatureAdmin(true);
   };
 
+  const openEmailSettings = () => {
+    setShowEmailSettings(true);
+  };
+
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail) return;
@@ -357,7 +382,7 @@ function ProtectedContent() {
 
   return (
     <StatsContext.Provider value={{ stats, refreshStats: loadStats }}>
-      <AdminPanelContext.Provider value={{ openAdminPanel, openEsignatureAdmin }}>
+      <AdminPanelContext.Provider value={{ openAdminPanel, openEsignatureAdmin, openEmailSettings }}>
         <Routes>
           {/* Form sayfası sidebar olmadan */}
           <Route path="/form/:id" element={<FormPage />} />
@@ -372,6 +397,7 @@ function ProtectedContent() {
                 <Route path="/angebot/new" element={<Angebote />} />
                 <Route path="/montageteam" element={<Montageteam />} />
                 <Route path="/produkte" element={<ProductPricing />} />
+                <Route path="/filialen" element={<BranchUebersicht />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>
@@ -499,6 +525,13 @@ function ProtectedContent() {
         <AnimatePresence>
           {showEsignatureAdmin && (
             <EsignatureAdmin onClose={() => setShowEsignatureAdmin(false)} />
+          )}
+        </AnimatePresence>
+
+        {/* Email Settings Modal */}
+        <AnimatePresence>
+          {showEmailSettings && (
+            <EmailSettings onClose={() => setShowEmailSettings(false)} />
           )}
         </AnimatePresence>
       </AdminPanelContext.Provider>

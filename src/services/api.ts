@@ -1117,3 +1117,142 @@ export const api = {
   }
 };
 
+// ============ EMAIL / SMTP ============
+export interface SmtpSettings {
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_from_name: string;
+  smtp_from_email: string;
+  smtp_secure: boolean;
+  smtp_enabled: boolean;
+}
+
+export interface EmailLogEntry {
+  id: number;
+  form_id: number | null;
+  lead_id: number | null;
+  branch_id: string;
+  email_type: string;
+  recipient_email: string;
+  subject: string;
+  status: 'sent' | 'failed' | 'pending';
+  error_message: string | null;
+  sent_by_name: string | null;
+  sent_at: string;
+}
+
+// Branch-level (admin only)
+export const getEmailSettings = (): Promise<SmtpSettings> => api.get('/email/settings');
+export const saveEmailSettings = (settings: SmtpSettings & { smtp_pass?: string }): Promise<{ success: boolean }> =>
+  api.put('/email/settings', settings);
+
+// User-level (any user)
+export interface UserSmtpSettings {
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_from_name: string;
+  smtp_from_email: string;
+  smtp_secure: boolean;
+  smtp_configured: boolean;
+}
+
+export const getMyEmailSettings = (): Promise<UserSmtpSettings> => api.get('/email/my-settings');
+export const saveMyEmailSettings = (settings: UserSmtpSettings & { smtp_pass?: string }): Promise<{ success: boolean }> =>
+  api.put('/email/my-settings', settings);
+
+// Status check (hybrid: user > branch)
+export interface EmailStatus {
+  configured: boolean;
+  source: 'user' | 'branch' | null;
+  from_email: string | null;
+  from_name: string | null;
+}
+export const getEmailStatus = (): Promise<EmailStatus> => api.get('/email/status');
+
+// Shared
+export const testEmailConnection = (settings: {
+  smtp_host: string; smtp_port: number; smtp_user: string; smtp_pass: string;
+  smtp_from_email?: string; smtp_secure?: boolean;
+}): Promise<{ success: boolean; message: string }> => api.post('/email/test', settings);
+
+export const sendEmail = (data: {
+  to: string; subject: string; body: string; body_html?: string;
+  form_id?: number; lead_id?: number; angebot_ids?: number[];
+  email_type?: string; attachment_name?: string;
+}): Promise<{ success: boolean; message: string }> => api.post('/email/send', data);
+
+export const getEmailLog = (): Promise<EmailLogEntry[]> => api.get('/email/log');
+
+// ============ BRANCH USAGE DASHBOARD ============
+export interface BranchUserStat {
+  id: number;
+  name: string;
+  aufmass_count: number;
+  angebot_count: number;
+}
+
+export interface BranchStat {
+  slug: string;
+  name: string;
+  aufmass_count: number;
+  angebot_count: number;
+  highest_invoice: number;
+  total_revenue: number;
+  users: BranchUserStat[];
+}
+
+export interface BranchStatsResponse {
+  branches: BranchStat[];
+  totals: {
+    aufmass_count: number;
+    angebot_count: number;
+    highest_invoice: number;
+    total_revenue: number;
+  };
+}
+
+export interface BranchFunnel {
+  aufmass: number;
+  angebot: number;
+  auftrag: number;
+  completed: number;
+}
+
+export interface ActivityEvent {
+  type: 'aufmass' | 'angebot';
+  id: number;
+  branch_id: string;
+  detail: string;
+  user_name: string | null;
+  event_time: string;
+  status: string;
+}
+
+export interface BranchDetailsResponse {
+  funnel: Record<string, BranchFunnel>;
+  trends: Record<string, Record<string, number>>;
+  angebotTrends: Record<string, Record<string, number>>;
+  months: string[];
+  pipeline: { status: string; count: number }[];
+  activity: ActivityEvent[];
+  speed: Record<string, number>;
+}
+
+export const getBranchDetails = (from?: string, to?: string): Promise<BranchDetailsResponse> => {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const qs = params.toString();
+  return api.get(`/admin/branch-details${qs ? `?${qs}` : ''}`);
+};
+
+export const getBranchStats = (from?: string, to?: string): Promise<BranchStatsResponse> => {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  const qs = params.toString();
+  return api.get(`/admin/branch-stats${qs ? `?${qs}` : ''}`);
+};
+

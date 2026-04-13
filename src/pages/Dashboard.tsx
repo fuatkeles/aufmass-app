@@ -8,6 +8,7 @@ import type { AbnahmeImage } from '../services/api';
 import type { FormData, MontageteamStats, Montageteam, StatusHistoryEntry, AbnahmeData } from '../services/api';
 import { useStats } from '../AppWrapper';
 import { useToast } from '../components/Toast';
+import EmailComposer from '../components/EmailComposer';
 import './Dashboard.css';
 
 // Check if current user is admin or office (both have elevated permissions)
@@ -82,6 +83,9 @@ const Dashboard = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [, setMontageteamStats] = useState<MontageteamStats[]>([]);
   const [montageteams, setMontageteams] = useState<Montageteam[]>([]);
+
+  // Email composer state
+  const [emailComposer, setEmailComposer] = useState<{ to: string; subject: string; body: string; formId?: number; emailType?: string } | null>(null);
   const [teamDropdownOpen, setTeamDropdownOpen] = useState<number | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<number | null>(null);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
@@ -495,18 +499,7 @@ const Dashboard = () => {
     return newStatus;
   };
 
-  const buildMailtoLink = (to: string, subject: string, body: string): string => {
-    const queryParts: string[] = [];
-
-    if (subject) {
-      queryParts.push(`subject=${encodeURIComponent(subject)}`);
-    }
-    if (body) {
-      queryParts.push(`body=${encodeURIComponent(body)}`);
-    }
-
-    return `mailto:${to}${queryParts.length > 0 ? `?${queryParts.join('&')}` : ''}`;
-  };
+  // buildMailtoLink removed - replaced by EmailComposer
 
   const getEmailTemplate = (form: FormData): { to: string; subject: string; body: string } => {
     const kundenName = `${form.kundeVorname} ${form.kundeNachname}`.trim();
@@ -585,26 +578,7 @@ Aylux Team`;
     };
   };
 
-  const buildAbnahmeSignMailtoLink = (form: FormData, signUrl: string): string | null => {
-    if (!form.kundeEmail) {
-      return null;
-    }
-
-    const kundenName = `${form.kundeVorname} ${form.kundeNachname}`.trim() || 'Kunde';
-    const template = getEmailTemplate(form);
-    const subject = template.subject || 'Bitte bestätigen Sie Ihre Abnahme';
-    const body = template.body
-      ? `${template.body}\n\nBitte bestätigen Sie die Abnahme über folgenden Link:\n${signUrl}`
-      : `Sehr geehrte/r ${kundenName},
-
-bitte bestätigen Sie die Abnahme über folgenden Link:
-${signUrl}
-
-Mit freundlichen Grüßen
-Aylux Team`;
-
-    return buildMailtoLink(form.kundeEmail, subject, body);
-  };
+  // buildAbnahmeSignMailtoLink removed - replaced by EmailComposer
 
   const handleSaveAbnahme = async () => {
     if (!abnahmeFormId) return;
@@ -620,7 +594,6 @@ Aylux Team`;
       const signRequest = await createAbnahmeSignRequest(abnahmeFormId);
       const currentForm = forms.find(f => f.id === abnahmeFormId);
       const updatedForm = currentForm ? { ...currentForm, status: newStatus, abnahmeSignPending: true } : null;
-      const mailtoLink = updatedForm ? buildAbnahmeSignMailtoLink(updatedForm, signRequest.signUrl) : null;
 
       setForms(prev => prev.map(f =>
         f.id === abnahmeFormId
@@ -633,9 +606,15 @@ Aylux Team`;
       setMaengelImages([]);
       refreshStats();
 
-      if (mailtoLink) {
-        window.location.href = mailtoLink;
-        toast.success('Abnahme gespeichert', 'Mail mit Signaturlink wurde vorbereitet.');
+      if (updatedForm?.kundeEmail) {
+        const kundenName = `${updatedForm.kundeVorname} ${updatedForm.kundeNachname}`.trim();
+        setEmailComposer({
+          to: updatedForm.kundeEmail,
+          subject: 'Bitte bestätigen Sie Ihre Abnahme',
+          body: `Sehr geehrte/r ${kundenName},\n\nbitte bestätigen Sie die Abnahme über folgenden Link:\n${signRequest.signUrl}\n\nMit freundlichen Grüßen\nAylux Team`,
+          formId: abnahmeFormId,
+          emailType: 'abnahme'
+        });
       } else {
         try {
           await navigator.clipboard.writeText(signRequest.signUrl);
@@ -974,11 +953,7 @@ Aylux Team`;
     });
   };
 
-  // Generate mailto link with status-based email template
-  const getEmailMailtoLink = (form: FormData): string => {
-    const template = getEmailTemplate(form);
-    return buildMailtoLink(template.to, template.subject, template.body);
-  };
+  // getEmailMailtoLink removed - replaced by EmailComposer
   // Open stored PDF in new tab - regenerate if outdated
   const [, setPdfGenerating] = useState<number | null>(null);
 
@@ -1669,14 +1644,23 @@ Aylux Team`;
                       </AnimatePresence>
                     </div>
                     {form.kundeEmail && (
-                      <a
-                        href={getEmailMailtoLink(form)}
+                      <button
                         className="action-btn email"
                         title={`E-Mail an ${form.kundeEmail}`}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const template = getEmailTemplate(form);
+                          setEmailComposer({
+                            to: template.to || form.kundeEmail || '',
+                            subject: template.subject || '',
+                            body: template.body || '',
+                            formId: form.id,
+                            emailType: getFormStatus(form)
+                          });
+                        }}
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
-                      </a>
+                      </button>
                     )}
                     {/* E-Signature button - only show if feature is enabled */}
                     {branchFeatures?.esignature_enabled && canSendEsignature(getFormStatus(form)) && (
@@ -2452,6 +2436,20 @@ Aylux Team`;
         accept=".pdf,.doc,.docx,.xls,.xlsx,.mp4,.mov,.avi,.webm,.jpg,.jpeg,.png,.gif"
         onChange={handleDocumentUpload}
       />
+
+      {/* Email Composer Modal */}
+      <AnimatePresence>
+        {emailComposer && (
+          <EmailComposer
+            to={emailComposer.to}
+            subject={emailComposer.subject}
+            body={emailComposer.body}
+            formId={emailComposer.formId}
+            emailType={emailComposer.emailType}
+            onClose={() => setEmailComposer(null)}
+          />
+        )}
+      </AnimatePresence>
 
     </>
   );

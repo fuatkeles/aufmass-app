@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -372,6 +373,48 @@ async function initializeTables() {
       );
       console.log('Default admin created: admin@aylux.de / admin123');
     }
+
+    // ============ EMAIL SMTP SETTINGS ============
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS smtp_host VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS smtp_port INT DEFAULT 587`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS smtp_user VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS smtp_pass_enc TEXT`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS smtp_from_name VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS smtp_from_email VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS smtp_secure BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS smtp_enabled BOOLEAN DEFAULT false`);
+    console.log('SMTP branch settings columns ready');
+
+    // User-level SMTP (hybrid: user override > branch default)
+    await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS smtp_host VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS smtp_port INT DEFAULT 587`);
+    await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS smtp_user VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS smtp_pass_enc TEXT`);
+    await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS smtp_from_name VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS smtp_from_email VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS smtp_secure BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS smtp_configured BOOLEAN DEFAULT false`);
+    console.log('SMTP user settings columns ready');
+
+    // Email log table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS aufmass_email_log (
+        id SERIAL PRIMARY KEY,
+        form_id INT,
+        lead_id INT,
+        branch_id VARCHAR(50),
+        email_type VARCHAR(50) NOT NULL,
+        recipient_email VARCHAR(255) NOT NULL,
+        subject VARCHAR(500),
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        error_message TEXT,
+        sent_by INT,
+        sent_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ix_email_log_branch ON aufmass_email_log(branch_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ix_email_log_form ON aufmass_email_log(form_id)`);
+    console.log('Email log table ready');
 
     console.log('Database tables initialized');
   } catch (err) {
@@ -1319,15 +1362,29 @@ if (!fs.existsSync(PDF_DIR)) {
 }
 
 // Save generated PDF for a form (to filesystem - much faster than database)
-app.post('/api/forms/:id/pdf', authenticateToken, upload.single('pdf'), async (req, res) => {
+app.post('/api/forms/:id/pdf', authenticateToken, (req, res, next) => {
+  upload.single('pdf')(req, res, (err) => {
+    if (err) {
+      console.error(`PDF upload error for form ${req.params.id}:`, err.message, err.code, 'field:', err.field);
+      return res.status(400).json({ error: `Upload fehlgeschlagen: ${err.message}` });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     const { id } = req.params;
 
     if (!req.file) {
+      console.error('PDF save: No file in request. Content-Type:', req.headers['content-type']);
       return res.status(400).json({ error: 'No PDF file provided' });
     }
 
+    console.log(`PDF save: form ${id}, size=${req.file.size}, mime=${req.file.mimetype}`);
+
     // Save PDF to filesystem
+    if (!fs.existsSync(PDF_DIR)) {
+      fs.mkdirSync(PDF_DIR, { recursive: true });
+    }
     const pdfPath = path.join(PDF_DIR, `${id}.pdf`);
     fs.writeFileSync(pdfPath, req.file.buffer);
 
@@ -4667,7 +4724,7 @@ app.put('/api/leads/:id/status', authenticateToken, async (req, res) => {
 
     // Role check: only admin/office can move status backward
     if (previousStatus && req.user.role !== 'admin' && req.user.role !== 'office') {
-      const statusOrder = ['unbearbeitet','wiedervorlage','aufmass_termin','showroom_termin','tag1_nicht_erreicht','tag2_nicht_erreicht','tag3_nicht_erreicht','tag4_email','auftrag_erteilt','aufmass_erstellt','abgelehnt','komplett_raus','offen'];
+      const statusOrder = ['unbearbeitet','wiedervorlage','aufmass_termin','aufmass_erstellt','showroom_termin','tag1_nicht_erreicht','tag2_nicht_erreicht','tag3_nicht_erreicht','tag4_email','auftrag_erteilt','abgelehnt','komplett_raus','offen'];
       const prevIdx = statusOrder.indexOf(previousStatus);
       const newIdx = statusOrder.indexOf(status);
       if (prevIdx >= 0 && newIdx >= 0 && newIdx < prevIdx) {
@@ -5049,6 +5106,661 @@ app.post('/api/lead-products/import', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Import products error:', err);
     res.status(500).json({ error: 'Failed to import products' });
+  }
+});
+
+// ============ EMAIL / SMTP ============
+
+// Simple AES-256 encryption for SMTP passwords
+const EMAIL_ENCRYPTION_KEY = process.env.EMAIL_ENCRYPTION_KEY || 'aylux-smtp-encryption-key-2026!!'; // 32 chars
+function encryptSmtpPass(text) {
+  const iv = crypto.randomBytes(16);
+  const key = crypto.scryptSync(EMAIL_ENCRYPTION_KEY, 'salt', 32);
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+function decryptSmtpPass(encryptedText) {
+  const [ivHex, encrypted] = encryptedText.split(':');
+  const iv = Buffer.from(ivHex, 'hex');
+  const key = crypto.scryptSync(EMAIL_ENCRYPTION_KEY, 'salt', 32);
+  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+// Get SMTP config for a user (user-level first, then branch fallback)
+async function getUserSmtpConfig(userId) {
+  const result = await pool.query(
+    `SELECT smtp_host, smtp_port, smtp_user, smtp_pass_enc, smtp_from_name, smtp_from_email, smtp_secure, smtp_configured
+     FROM aufmass_users WHERE id = $1`,
+    [userId]
+  );
+  if (result.rows.length === 0 || !result.rows[0].smtp_configured) return null;
+  const row = result.rows[0];
+  if (!row.smtp_host || !row.smtp_user || !row.smtp_pass_enc) return null;
+  return {
+    host: row.smtp_host,
+    port: row.smtp_port || 587,
+    secure: row.smtp_secure || false,
+    auth: { user: row.smtp_user, pass: decryptSmtpPass(row.smtp_pass_enc) },
+    fromName: row.smtp_from_name || 'AYLUX',
+    fromEmail: row.smtp_from_email || row.smtp_user,
+    source: 'user'
+  };
+}
+
+// Get SMTP settings for a branch
+async function getBranchSmtpConfig(branchSlug) {
+  const result = await pool.query(
+    `SELECT smtp_host, smtp_port, smtp_user, smtp_pass_enc, smtp_from_name, smtp_from_email, smtp_secure, smtp_enabled
+     FROM aufmass_branch_settings WHERE branch_slug = $1`,
+    [branchSlug]
+  );
+  if (result.rows.length === 0 || !result.rows[0].smtp_enabled) return null;
+  const row = result.rows[0];
+  if (!row.smtp_host || !row.smtp_user || !row.smtp_pass_enc) return null;
+  return {
+    host: row.smtp_host,
+    port: row.smtp_port || 587,
+    secure: row.smtp_secure || false,
+    auth: { user: row.smtp_user, pass: decryptSmtpPass(row.smtp_pass_enc) },
+    fromName: row.smtp_from_name || 'AYLUX',
+    fromEmail: row.smtp_from_email || row.smtp_user,
+    source: 'branch'
+  };
+}
+
+// Hybrid: user SMTP > branch SMTP
+async function getSmtpConfig(userId, branchSlug) {
+  const userConfig = await getUserSmtpConfig(userId);
+  if (userConfig) return userConfig;
+  return getBranchSmtpConfig(branchSlug);
+}
+
+// Create nodemailer transporter from branch config
+function createTransporter(smtpConfig) {
+  return nodemailer.createTransport({
+    host: smtpConfig.host,
+    port: smtpConfig.port,
+    secure: smtpConfig.secure,
+    auth: smtpConfig.auth,
+    tls: { rejectUnauthorized: false }
+  });
+}
+
+// GET /api/email/my-settings - Get user's own SMTP settings
+app.get('/api/email/my-settings', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT smtp_host, smtp_port, smtp_user, smtp_from_name, smtp_from_email, smtp_secure, smtp_configured
+       FROM aufmass_users WHERE id = $1`,
+      [req.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.json({ smtp_host: '', smtp_port: 587, smtp_user: '', smtp_from_name: '', smtp_from_email: '', smtp_secure: false, smtp_configured: false });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching user email settings:', err);
+    res.status(500).json({ error: 'Failed to fetch email settings' });
+  }
+});
+
+// PUT /api/email/my-settings - Save user's own SMTP settings
+app.put('/api/email/my-settings', authenticateToken, async (req, res) => {
+  try {
+    const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_secure, smtp_configured } = req.body;
+
+    if (smtp_pass) {
+      const encrypted = encryptSmtpPass(smtp_pass);
+      await pool.query(
+        `UPDATE aufmass_users
+         SET smtp_host = $2, smtp_port = $3, smtp_user = $4, smtp_pass_enc = $5,
+             smtp_from_name = $6, smtp_from_email = $7, smtp_secure = $8, smtp_configured = $9
+         WHERE id = $1`,
+        [req.user.id, smtp_host, smtp_port || 587, smtp_user, encrypted, smtp_from_name, smtp_from_email, smtp_secure || false, smtp_configured || false]
+      );
+    } else {
+      await pool.query(
+        `UPDATE aufmass_users
+         SET smtp_host = $2, smtp_port = $3, smtp_user = $4,
+             smtp_from_name = $5, smtp_from_email = $6, smtp_secure = $7, smtp_configured = $8
+         WHERE id = $1`,
+        [req.user.id, smtp_host, smtp_port || 587, smtp_user, smtp_from_name, smtp_from_email, smtp_secure || false, smtp_configured || false]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error saving user email settings:', err);
+    res.status(500).json({ error: 'Failed to save email settings' });
+  }
+});
+
+// GET /api/email/status - Check which SMTP is active for current user (any user)
+app.get('/api/email/status', authenticateToken, async (req, res) => {
+  try {
+    const branchSlug = req.branchId || 'koblenz';
+    const config = await getSmtpConfig(req.user.id, branchSlug);
+    if (!config) {
+      return res.json({ configured: false, source: null, from_email: null });
+    }
+    res.json({ configured: true, source: config.source, from_email: config.fromEmail, from_name: config.fromName });
+  } catch (err) {
+    console.error('Error checking email status:', err);
+    res.status(500).json({ error: 'Failed to check email status' });
+  }
+});
+
+// GET /api/email/settings - Get SMTP settings for current branch (admin only)
+app.get('/api/email/settings', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const branchSlug = req.branchId || 'koblenz';
+    const result = await pool.query(
+      `SELECT smtp_host, smtp_port, smtp_user, smtp_from_name, smtp_from_email, smtp_secure, smtp_enabled
+       FROM aufmass_branch_settings WHERE branch_slug = $1`,
+      [branchSlug]
+    );
+    if (result.rows.length === 0) {
+      return res.json({ smtp_host: '', smtp_port: 587, smtp_user: '', smtp_from_name: '', smtp_from_email: '', smtp_secure: false, smtp_enabled: false });
+    }
+    // Never return the password
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching email settings:', err);
+    res.status(500).json({ error: 'Failed to fetch email settings' });
+  }
+});
+
+// PUT /api/email/settings - Save SMTP settings for current branch (admin only)
+app.put('/api/email/settings', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const branchSlug = req.branchId || 'koblenz';
+    const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_name, smtp_from_email, smtp_secure, smtp_enabled } = req.body;
+
+    // Ensure branch_settings row exists
+    await pool.query(
+      `INSERT INTO aufmass_branch_settings (branch_slug) VALUES ($1) ON CONFLICT (branch_slug) DO NOTHING`,
+      [branchSlug]
+    );
+
+    // Build update - only update password if provided
+    if (smtp_pass) {
+      const encrypted = encryptSmtpPass(smtp_pass);
+      await pool.query(
+        `UPDATE aufmass_branch_settings
+         SET smtp_host = $2, smtp_port = $3, smtp_user = $4, smtp_pass_enc = $5,
+             smtp_from_name = $6, smtp_from_email = $7, smtp_secure = $8, smtp_enabled = $9
+         WHERE branch_slug = $1`,
+        [branchSlug, smtp_host, smtp_port || 587, smtp_user, encrypted, smtp_from_name, smtp_from_email, smtp_secure || false, smtp_enabled || false]
+      );
+    } else {
+      await pool.query(
+        `UPDATE aufmass_branch_settings
+         SET smtp_host = $2, smtp_port = $3, smtp_user = $4,
+             smtp_from_name = $5, smtp_from_email = $6, smtp_secure = $7, smtp_enabled = $8
+         WHERE branch_slug = $1`,
+        [branchSlug, smtp_host, smtp_port || 587, smtp_user, smtp_from_name, smtp_from_email, smtp_secure || false, smtp_enabled || false]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error saving email settings:', err);
+    res.status(500).json({ error: 'Failed to save email settings' });
+  }
+});
+
+// POST /api/email/test - Test SMTP connection (admin only)
+app.post('/api/email/test', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from_email, smtp_secure } = req.body;
+
+    if (!smtp_host || !smtp_user || !smtp_pass) {
+      return res.status(400).json({ error: 'SMTP Host, Benutzer und Passwort sind erforderlich' });
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: smtp_host,
+      port: smtp_port || 587,
+      secure: smtp_secure || false,
+      auth: { user: smtp_user, pass: smtp_pass },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 10000,
+      socketTimeout: 10000
+    });
+
+    // Verify connection
+    await transporter.verify();
+
+    // Send test email to the SMTP user themselves
+    const testTo = smtp_from_email || smtp_user;
+    await transporter.sendMail({
+      from: `"AYLUX Test" <${testTo}>`,
+      to: testTo,
+      subject: 'AYLUX E-Mail Test - Verbindung erfolgreich ✓',
+      text: 'Die SMTP-Verbindung wurde erfolgreich hergestellt. E-Mails können jetzt über die AYLUX Aufmaß App versendet werden.',
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        <h2 style="color:#7fa93d">✓ SMTP-Verbindung erfolgreich</h2>
+        <p>Die SMTP-Verbindung wurde erfolgreich hergestellt.</p>
+        <p>E-Mails können jetzt über die <strong>AYLUX Aufmaß App</strong> versendet werden.</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+        <small style="color:#999">Dies ist eine automatische Test-E-Mail.</small>
+      </div>`
+    });
+
+    res.json({ success: true, message: 'Verbindung erfolgreich! Test-E-Mail wurde gesendet.' });
+  } catch (err) {
+    console.error('SMTP test failed:', err);
+    let errorMessage = 'Verbindung fehlgeschlagen';
+    if (err.code === 'ECONNREFUSED') errorMessage = 'Verbindung abgelehnt - Host oder Port falsch';
+    else if (err.code === 'EAUTH' || err.responseCode === 535) errorMessage = 'Authentifizierung fehlgeschlagen - Benutzername oder Passwort falsch';
+    else if (err.code === 'ESOCKET') errorMessage = 'Verbindungsfehler - Prüfen Sie Host und Port';
+    else if (err.code === 'ETIMEDOUT') errorMessage = 'Zeitüberschreitung - Server nicht erreichbar';
+    else if (err.message) errorMessage = err.message;
+    res.status(400).json({ error: errorMessage });
+  }
+});
+
+// POST /api/email/send - Send email with optional PDF attachment
+app.post('/api/email/send', authenticateToken, async (req, res) => {
+  try {
+    const branchSlug = req.branchId || 'koblenz';
+    const { to, subject, body, body_html, form_id, lead_id, angebot_ids, email_type, attachment_name } = req.body;
+
+    if (!to || !subject || !body) {
+      return res.status(400).json({ error: 'Empfänger, Betreff und Nachricht sind erforderlich' });
+    }
+
+    const smtpConfig = await getSmtpConfig(req.user.id, branchSlug);
+    if (!smtpConfig) {
+      return res.status(400).json({ error: 'E-Mail ist nicht konfiguriert. Richten Sie Ihre persönlichen SMTP-Einstellungen ein oder bitten Sie den Admin, die Filial-E-Mail zu konfigurieren.' });
+    }
+
+    const transporter = createTransporter(smtpConfig);
+
+    // Build email
+    const mailOptions = {
+      from: `"${smtpConfig.fromName}" <${smtpConfig.fromEmail}>`,
+      to,
+      subject,
+      text: body,
+      html: body_html || body.replace(/\n/g, '<br>'),
+      attachments: []
+    };
+
+    // Attach PDF if form_id or lead_id provided
+    if (form_id) {
+      // Try filesystem first, then DB
+      const pdfPath = path.join(PDF_DIR, `${form_id}.pdf`);
+      if (fs.existsSync(pdfPath)) {
+        mailOptions.attachments.push({
+          filename: attachment_name || `Aufmass_${form_id}.pdf`,
+          path: pdfPath,
+          contentType: 'application/pdf'
+        });
+      } else {
+        const pdfResult = await pool.query('SELECT generated_pdf FROM aufmass_forms WHERE id = $1', [form_id]);
+        if (pdfResult.rows.length > 0 && pdfResult.rows[0].generated_pdf) {
+          mailOptions.attachments.push({
+            filename: attachment_name || `Aufmass_${form_id}.pdf`,
+            content: pdfResult.rows[0].generated_pdf,
+            contentType: 'application/pdf'
+          });
+        }
+      }
+    }
+
+    if (lead_id) {
+      const leadPdfDir = path.join(PDF_DIR, 'leads');
+
+      if (angebot_ids && Array.isArray(angebot_ids) && angebot_ids.length > 0) {
+        // Specific angebote requested - attach each one
+        for (const angId of angebot_ids) {
+          const angPdfPath = path.join(leadPdfDir, `${lead_id}_${angId}.pdf`);
+          if (fs.existsSync(angPdfPath)) {
+            // Look up angebot_nummer for filename
+            const angResult = await pool.query('SELECT angebot_nummer FROM aufmass_lead_angebote WHERE id = $1', [angId]);
+            const angNr = angResult.rows[0]?.angebot_nummer || angId;
+            mailOptions.attachments.push({
+              filename: `Angebot_${angNr}.pdf`,
+              path: angPdfPath,
+              contentType: 'application/pdf'
+            });
+          } else {
+            // Fallback: lead-level PDF
+            const leadPdfPath = path.join(leadPdfDir, `${lead_id}.pdf`);
+            if (fs.existsSync(leadPdfPath)) {
+              mailOptions.attachments.push({
+                filename: `Angebot_${angId}.pdf`,
+                path: leadPdfPath,
+                contentType: 'application/pdf'
+              });
+            }
+          }
+        }
+      } else {
+        // No specific angebote - attach latest
+        let pdfAttached = false;
+        if (fs.existsSync(leadPdfDir)) {
+          const files = fs.readdirSync(leadPdfDir).filter(f => f.startsWith(`${lead_id}_`) && f.endsWith('.pdf'));
+          if (files.length > 0) {
+            files.sort().reverse();
+            mailOptions.attachments.push({
+              filename: attachment_name || `Angebot_${lead_id}.pdf`,
+              path: path.join(leadPdfDir, files[0]),
+              contentType: 'application/pdf'
+            });
+            pdfAttached = true;
+          }
+        }
+        if (!pdfAttached) {
+          const leadPdfPath = path.join(leadPdfDir, `${lead_id}.pdf`);
+          if (fs.existsSync(leadPdfPath)) {
+            mailOptions.attachments.push({
+              filename: attachment_name || `Angebot_${lead_id}.pdf`,
+              path: leadPdfPath,
+              contentType: 'application/pdf'
+            });
+          }
+        }
+      }
+    }
+
+    // Send
+    await transporter.sendMail(mailOptions);
+
+    // Log
+    await pool.query(
+      `INSERT INTO aufmass_email_log (form_id, lead_id, branch_id, email_type, recipient_email, subject, status, sent_by)
+       VALUES ($1, $2, $3, $4, $5, $6, 'sent', $7)`,
+      [form_id || null, lead_id || null, branchSlug, email_type || 'manual', to, subject, req.user.id]
+    );
+
+    res.json({ success: true, message: 'E-Mail erfolgreich gesendet' });
+  } catch (err) {
+    console.error('Email send error:', err);
+
+    // Log failure
+    const branchSlug = req.branchId || 'koblenz';
+    const { to, subject, form_id, lead_id, email_type } = req.body;
+    await pool.query(
+      `INSERT INTO aufmass_email_log (form_id, lead_id, branch_id, email_type, recipient_email, subject, status, error_message, sent_by)
+       VALUES ($1, $2, $3, $4, $5, $6, 'failed', $7, $8)`,
+      [form_id || null, lead_id || null, branchSlug, email_type || 'manual', to || '', subject || '', err.message, req.user.id]
+    ).catch(() => {});
+
+    res.status(500).json({ error: 'E-Mail konnte nicht gesendet werden: ' + err.message });
+  }
+});
+
+// GET /api/email/log - Get email log for branch (admin only)
+app.get('/api/email/log', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const branchSlug = req.branchId || 'koblenz';
+    const result = await pool.query(
+      `SELECT el.*, u.name as sent_by_name
+       FROM aufmass_email_log el
+       LEFT JOIN aufmass_users u ON el.sent_by = u.id
+       WHERE el.branch_id = $1
+       ORDER BY el.sent_at DESC LIMIT 100`,
+      [branchSlug]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching email log:', err);
+    res.status(500).json({ error: 'Failed to fetch email log' });
+  }
+});
+
+// ============ BRANCH USAGE DASHBOARD (super admin only) ============
+
+app.get('/api/admin/branch-stats', authenticateToken, requireAdmin, async (req, res) => {
+  // Only accessible from admin domain (branchId = null)
+  if (req.branchId) {
+    return res.status(403).json({ error: 'Nur über die Admin-Domain verfügbar' });
+  }
+
+  try {
+    const { from, to } = req.query;
+    const dateFrom = from || '2020-01-01';
+    const dateTo = to || '2099-12-31';
+
+    // 1. All branches
+    const branchesResult = await pool.query('SELECT slug, name FROM aufmass_branches ORDER BY name');
+    const branches = branchesResult.rows;
+
+    // 2. Aufmaß counts per branch
+    const aufmassResult = await pool.query(`
+      SELECT branch_id, COUNT(*) as count
+      FROM aufmass_forms
+      WHERE status != 'papierkorb'
+        AND created_at >= $1 AND created_at <= ($2::date + interval '1 day')
+      GROUP BY branch_id
+    `, [dateFrom, dateTo]);
+    const aufmassMap = {};
+    for (const r of aufmassResult.rows) aufmassMap[r.branch_id] = parseInt(r.count);
+
+    // 3. Angebot counts + revenue per branch
+    const angebotResult = await pool.query(`
+      SELECT l.branch_id,
+             COUNT(DISTINCT la.id) as angebot_count,
+             COALESCE(MAX(la.total_price), 0) as highest_invoice,
+             COALESCE(SUM(la.total_price), 0) as total_revenue
+      FROM aufmass_lead_angebote la
+      JOIN aufmass_leads l ON la.lead_id = l.id
+      WHERE la.created_at >= $1 AND la.created_at <= ($2::date + interval '1 day')
+      GROUP BY l.branch_id
+    `, [dateFrom, dateTo]);
+    const angebotMap = {};
+    for (const r of angebotResult.rows) {
+      angebotMap[r.branch_id] = {
+        count: parseInt(r.angebot_count),
+        highest: parseFloat(r.highest_invoice),
+        total: parseFloat(r.total_revenue)
+      };
+    }
+
+    // 4. User breakdown per branch
+    const userAufmassResult = await pool.query(`
+      SELECT u.id, u.name, u.branch_id, COUNT(f.id) as aufmass_count
+      FROM aufmass_users u
+      LEFT JOIN aufmass_forms f ON f.created_by = u.id
+        AND f.status != 'papierkorb'
+        AND f.created_at >= $1 AND f.created_at <= ($2::date + interval '1 day')
+      WHERE u.is_active = true
+      GROUP BY u.id, u.name, u.branch_id
+      ORDER BY u.branch_id, aufmass_count DESC
+    `, [dateFrom, dateTo]);
+
+    const userAngebotResult = await pool.query(`
+      SELECT l.created_by as user_id, COUNT(DISTINCT la.id) as angebot_count
+      FROM aufmass_lead_angebote la
+      JOIN aufmass_leads l ON la.lead_id = l.id
+      WHERE la.created_at >= $1 AND la.created_at <= ($2::date + interval '1 day')
+      GROUP BY l.created_by
+    `, [dateFrom, dateTo]);
+    const userAngebotMap = {};
+    for (const r of userAngebotResult.rows) userAngebotMap[r.user_id] = parseInt(r.angebot_count);
+
+    // Build per-branch user lists
+    const usersByBranch = {};
+    for (const u of userAufmassResult.rows) {
+      const bid = u.branch_id || '_global';
+      if (!usersByBranch[bid]) usersByBranch[bid] = [];
+      usersByBranch[bid].push({
+        id: u.id,
+        name: u.name,
+        aufmass_count: parseInt(u.aufmass_count),
+        angebot_count: userAngebotMap[u.id] || 0
+      });
+    }
+
+    // 5. Assemble response
+    const branchStats = branches.map(b => ({
+      slug: b.slug,
+      name: b.name,
+      aufmass_count: aufmassMap[b.slug] || 0,
+      angebot_count: angebotMap[b.slug]?.count || 0,
+      highest_invoice: angebotMap[b.slug]?.highest || 0,
+      total_revenue: angebotMap[b.slug]?.total || 0,
+      users: (usersByBranch[b.slug] || []).filter(u => u.aufmass_count > 0 || u.angebot_count > 0)
+    }));
+
+    // Sort by total activity descending
+    branchStats.sort((a, b) => (b.aufmass_count + b.angebot_count) - (a.aufmass_count + a.angebot_count));
+
+    const totals = {
+      aufmass_count: branchStats.reduce((s, b) => s + b.aufmass_count, 0),
+      angebot_count: branchStats.reduce((s, b) => s + b.angebot_count, 0),
+      highest_invoice: Math.max(0, ...branchStats.map(b => b.highest_invoice)),
+      total_revenue: branchStats.reduce((s, b) => s + b.total_revenue, 0)
+    };
+
+    res.json({ branches: branchStats, totals });
+  } catch (err) {
+    console.error('Branch stats error:', err);
+    res.status(500).json({ error: 'Failed to fetch branch stats' });
+  }
+});
+
+// GET /api/admin/branch-details - Conversion funnel, trends, pipeline, activity
+app.get('/api/admin/branch-details', authenticateToken, requireAdmin, async (req, res) => {
+  if (req.branchId) {
+    return res.status(403).json({ error: 'Nur über die Admin-Domain verfügbar' });
+  }
+
+  try {
+    const { from, to } = req.query;
+    const dateFrom = from || '2020-01-01';
+    const dateTo = to || '2099-12-31';
+
+    // 1. Conversion funnel per branch (Aufmaß statuses)
+    const funnelResult = await pool.query(`
+      SELECT branch_id,
+        COUNT(*) FILTER (WHERE status NOT IN ('papierkorb','entwurf')) as total_aufmass,
+        COUNT(*) FILTER (WHERE status IN ('angebot_versendet','auftrag_erteilt','bauantrag','anzahlung','bestellt','montage_geplant','montage_gestartet','abnahme','reklamation_eingegangen','reklamation_bestellt')) as has_angebot,
+        COUNT(*) FILTER (WHERE status IN ('auftrag_erteilt','bauantrag','anzahlung','bestellt','montage_geplant','montage_gestartet','abnahme')) as has_auftrag,
+        COUNT(*) FILTER (WHERE status IN ('abnahme')) as completed
+      FROM aufmass_forms
+      WHERE created_at >= $1 AND created_at <= ($2::date + interval '1 day')
+      GROUP BY branch_id
+    `, [dateFrom, dateTo]);
+
+    const funnel = {};
+    for (const r of funnelResult.rows) {
+      funnel[r.branch_id] = {
+        aufmass: parseInt(r.total_aufmass),
+        angebot: parseInt(r.has_angebot),
+        auftrag: parseInt(r.has_auftrag),
+        completed: parseInt(r.completed)
+      };
+    }
+
+    // 2. Monthly trend (last 12 months)
+    const trendResult = await pool.query(`
+      SELECT branch_id,
+        TO_CHAR(created_at, 'YYYY-MM') as month,
+        COUNT(*) as aufmass_count
+      FROM aufmass_forms
+      WHERE status != 'papierkorb'
+        AND created_at >= (CURRENT_DATE - interval '12 months')
+      GROUP BY branch_id, TO_CHAR(created_at, 'YYYY-MM')
+      ORDER BY month
+    `);
+
+    const trends = {};
+    for (const r of trendResult.rows) {
+      if (!trends[r.branch_id]) trends[r.branch_id] = {};
+      trends[r.branch_id][r.month] = parseInt(r.aufmass_count);
+    }
+
+    // Angebot trend
+    const angebotTrendResult = await pool.query(`
+      SELECT l.branch_id,
+        TO_CHAR(la.created_at, 'YYYY-MM') as month,
+        COUNT(*) as count
+      FROM aufmass_lead_angebote la
+      JOIN aufmass_leads l ON la.lead_id = l.id
+      WHERE la.created_at >= (CURRENT_DATE - interval '12 months')
+      GROUP BY l.branch_id, TO_CHAR(la.created_at, 'YYYY-MM')
+      ORDER BY month
+    `);
+
+    const angebotTrends = {};
+    for (const r of angebotTrendResult.rows) {
+      if (!angebotTrends[r.branch_id]) angebotTrends[r.branch_id] = {};
+      angebotTrends[r.branch_id][r.month] = parseInt(r.count);
+    }
+
+    // 3. Status pipeline (all branches combined)
+    const pipelineResult = await pool.query(`
+      SELECT status, COUNT(*) as count
+      FROM aufmass_forms
+      WHERE status NOT IN ('papierkorb','entwurf')
+        AND created_at >= $1 AND created_at <= ($2::date + interval '1 day')
+      GROUP BY status
+      ORDER BY count DESC
+    `, [dateFrom, dateTo]);
+
+    const pipeline = pipelineResult.rows.map(r => ({ status: r.status, count: parseInt(r.count) }));
+
+    // 4. Recent activity (last 20 events)
+    const activityResult = await pool.query(`
+      (
+        SELECT 'aufmass' as type, f.id, f.branch_id,
+          COALESCE(f.kunde_vorname,'') || ' ' || COALESCE(f.kunde_nachname,'') as detail,
+          u.name as user_name, f.created_at as event_time,
+          f.status
+        FROM aufmass_forms f
+        LEFT JOIN aufmass_users u ON f.created_by = u.id
+        WHERE f.status != 'papierkorb'
+        ORDER BY f.created_at DESC LIMIT 10
+      )
+      UNION ALL
+      (
+        SELECT 'angebot' as type, la.id, l.branch_id,
+          COALESCE(l.customer_firstname,'') || ' ' || COALESCE(l.customer_lastname,'') as detail,
+          u.name as user_name, la.created_at as event_time,
+          la.angebot_nummer as status
+        FROM aufmass_lead_angebote la
+        JOIN aufmass_leads l ON la.lead_id = l.id
+        LEFT JOIN aufmass_users u ON l.created_by = u.id
+        ORDER BY la.created_at DESC LIMIT 10
+      )
+      ORDER BY event_time DESC LIMIT 20
+    `);
+
+    // 5. Processing speed: avg days from form creation to angebot_versendet
+    const speedResult = await pool.query(`
+      SELECT f.branch_id,
+        AVG(EXTRACT(DAY FROM (sh.changed_at - f.created_at))) as avg_days
+      FROM aufmass_forms f
+      JOIN aufmass_status_history sh ON sh.form_id = f.id AND sh.status = 'angebot_versendet'
+      WHERE f.created_at >= $1 AND f.created_at <= ($2::date + interval '1 day')
+      GROUP BY f.branch_id
+    `, [dateFrom, dateTo]);
+
+    const speed = {};
+    for (const r of speedResult.rows) {
+      speed[r.branch_id] = Math.round(parseFloat(r.avg_days) || 0);
+    }
+
+    // Build 12-month labels
+    const months = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(d.toISOString().slice(0, 7));
+    }
+
+    res.json({ funnel, trends, angebotTrends, months, pipeline, activity: activityResult.rows, speed });
+  } catch (err) {
+    console.error('Branch details error:', err);
+    res.status(500).json({ error: 'Failed to fetch branch details' });
   }
 });
 

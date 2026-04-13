@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion';
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import productConfigData from '../config/productConfig.json';
 import type { ProductConfig } from '../types/productConfig';
 import './ProductSelectionSection.css';
@@ -26,6 +27,35 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
     : [];
   const requiresModelSelection = selection.category !== 'MARKISE';
   const selectedModel = Array.isArray(selection.model) ? (selection.model[0] || '') : (selection.model || '');
+
+  // Glasdach gets multi-select, others get single dropdown
+  const isMultiModelSelect = selection.category === 'ÜBERDACHUNG' && selection.productType === 'Glasdach';
+  const selectedModels: string[] = Array.isArray(selection.model) ? selection.model : (selection.model ? [selection.model] : []);
+
+  // Multi-select dropdown state
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleModelToggle = (model: string) => {
+    const current = [...selectedModels];
+    const idx = current.indexOf(model);
+    if (idx >= 0) {
+      current.splice(idx, 1);
+    } else {
+      current.push(model);
+    }
+    updateSelection('model', current);
+  };
 
   const handleCategorySelect = (category: string) => {
     updateSelection('category', category);
@@ -127,7 +157,7 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
         </motion.div>
       )}
 
-      {/* ARCHIVED: Model Selection - removed as model selection is no longer needed in first measurement */}
+      {/* Model Selection */}
       {selection.productType && requiresModelSelection && models.length > 0 && (
         <motion.div
           className="selection-step"
@@ -135,80 +165,76 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
-          <h3 className="step-title">3. Modell wÃ¤hlen</h3>
-          <select
-            className="model-select"
-            value={selectedModel}
-            onChange={(e) => updateSelection('model', e.target.value)}
-          >
-            <option value="">Bitte Modell wÃ¤hlen...</option>
-            {models.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
+          {isMultiModelSelect ? (
+            <>
+              <h3 className="step-title">3. Modell wählen <span className="multi-hint">(Mehrfachauswahl möglich)</span></h3>
+              <div className="model-dropdown-container" ref={dropdownRef}>
+                <div
+                  className={`model-dropdown-trigger ${isModelDropdownOpen ? 'open' : ''}`}
+                  onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                >
+                  <span className="model-dropdown-placeholder">
+                    {selectedModels.length === 0
+                      ? 'Bitte Modell(e) wählen...'
+                      : selectedModels.join(', ')}
+                  </span>
+                  <span className={`model-dropdown-arrow ${isModelDropdownOpen ? 'open' : ''}`}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="6,9 12,15 18,9" />
+                    </svg>
+                  </span>
+                </div>
+                <AnimatePresence>
+                  {isModelDropdownOpen && (
+                    <motion.div
+                      className="model-dropdown-menu"
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      {models.map((model) => {
+                        const isSelected = selectedModels.includes(model);
+                        return (
+                          <div
+                            key={model}
+                            className={`model-dropdown-item ${isSelected ? 'selected' : ''}`}
+                            onClick={() => handleModelToggle(model)}
+                          >
+                            <span className={`model-dropdown-checkbox ${isSelected ? 'checked' : ''}`}>
+                              {isSelected && '✓'}
+                            </span>
+                            <span className="model-dropdown-label">{model}</span>
+                          </div>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="step-title">3. Modell wählen</h3>
+              <select
+                className="model-select"
+                value={selectedModel}
+                onChange={(e) => updateSelection('model', e.target.value)}
+              >
+                <option value="">Bitte Modell wählen...</option>
+                {models.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </motion.div>
       )}
 
-      {/* Legacy multi-select model dropdown kept for reference */}
-      {/* {selection.productType && models.length > 0 && (
-        <motion.div
-          className="selection-step"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          <h3 className="step-title">3. Modell wählen <span className="multi-hint">(Mehrfachauswahl möglich)</span></h3>
-          <div className="model-dropdown-container" ref={dropdownRef}>
-            <div
-              className={`model-dropdown-trigger ${isModelDropdownOpen ? 'open' : ''}`}
-              onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-            >
-              <span className="model-dropdown-placeholder">
-                {selectedModels.length === 0
-                  ? 'Bitte Modell(e) wählen...'
-                  : selectedModels.join(', ')}
-              </span>
-              <span className={`model-dropdown-arrow ${isModelDropdownOpen ? 'open' : ''}`}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="6,9 12,15 18,9" />
-                </svg>
-              </span>
-            </div>
-            <AnimatePresence>
-              {isModelDropdownOpen && (
-                <motion.div
-                  className="model-dropdown-menu"
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {models.map((model) => {
-                    const isSelected = selectedModels.includes(model);
-                    return (
-                      <div
-                        key={model}
-                        className={`model-dropdown-item ${isSelected ? 'selected' : ''}`}
-                        onClick={() => handleModelToggle(model)}
-                      >
-                        <span className={`model-dropdown-checkbox ${isSelected ? 'checked' : ''}`}>
-                          {isSelected && '✓'}
-                        </span>
-                        <span className="model-dropdown-label">{model}</span>
-                      </div>
-                    );
-                  })}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </motion.div>
-      )} */}
-
       {/* Selection Summary */}
-      {selection.category && selection.productType && (!requiresModelSelection || !!selectedModel) && (
+      {selection.category && selection.productType && (!requiresModelSelection || (isMultiModelSelect ? selectedModels.length > 0 : !!selectedModel)) && (
         <motion.div
           className="selection-summary"
           initial={{ opacity: 0, scale: 0.95 }}
@@ -228,7 +254,7 @@ const ProductSelectionSection = ({ selection, updateSelection }: ProductSelectio
             {requiresModelSelection && (
               <div className="summary-item">
                 <span className="summary-label">Modell:</span>
-                <span className="summary-value">{selectedModel}</span>
+                <span className="summary-value">{isMultiModelSelect ? selectedModels.join(', ') : selectedModel}</span>
               </div>
             )}
           </div>

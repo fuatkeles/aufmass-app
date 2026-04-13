@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { api, getLeadPdfUrl, getAngebotPdfUrl, getStoredUser, saveLeadPdf, saveAngebotPdf } from '../services/api';
 import { generateAngebotPDF } from '../utils/angebotPdfGenerator';
 import LeadFormModal from '../components/LeadFormModal';
+import EmailComposer from '../components/EmailComposer';
 import { useToast } from '../components/Toast';
 import './Angebote.css';
 
@@ -83,13 +84,13 @@ const LEAD_STATUS_OPTIONS = [
   { value: 'unbearbeitet', label: 'Unbearbeitet', color: '#6b7280' },
   { value: 'wiedervorlage', label: 'Wiedervorlage', color: '#f59e0b' },
   { value: 'aufmass_termin', label: 'Aufmaß Termin', color: '#8b5cf6' },
+  { value: 'aufmass_erstellt', label: 'Aufmaß Erstellt', color: '#10b981' },
   { value: 'showroom_termin', label: 'Showroom Termin', color: '#a78bfa' },
   { value: 'tag1_nicht_erreicht', label: '1.Tag nicht Erreicht', color: '#fb923c' },
   { value: 'tag2_nicht_erreicht', label: '2.Tag nicht Erreicht', color: '#f97316' },
   { value: 'tag3_nicht_erreicht', label: '3.Tag nicht Erreicht', color: '#ea580c' },
   { value: 'tag4_email', label: '4.Tag E-Mail Geschrieben', color: '#c2410c' },
   { value: 'auftrag_erteilt', label: 'Auftrag Erteilt', color: '#3b82f6' },
-  { value: 'aufmass_erstellt', label: 'Aufmaß Erstellt', color: '#10b981' },
   { value: 'abgelehnt', label: 'Abgelehnt', color: '#ef4444' },
   { value: 'komplett_raus', label: 'Komplett Raus', color: '#71717a' },
   { value: 'offen', label: 'Offen', color: '#fbbf24' },
@@ -123,6 +124,7 @@ export default function Angebote() {
   const [loading, setLoading] = useState(true);
   const [leadModalOpen, setLeadModalOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<number | null>(null);
+  const [emailComposer, setEmailComposer] = useState<{ to: string; subject: string; body: string; leadId?: number; emailType?: string; attachmentName?: string; angebote?: import('../components/EmailComposer').AngebotAttachment[] } | null>(null);
   const [editLeadData, setEditLeadData] = useState<LeadDetail | null>(null);
   const [editAngebotId, setEditAngebotId] = useState<number | null>(null);
   const [newAngebotLeadId, setNewAngebotLeadId] = useState<number | null>(null);
@@ -433,27 +435,9 @@ export default function Angebote() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  // Build mailto URL with prefilled subject/body for an angebot
-  const buildAngebotMailto = (
-    customerEmail: string,
-    customerName: string,
-    angebotNummer: string | undefined
-  ) => {
-    const nrPart = angebotNummer ? ` Nr. ${angebotNummer}` : '';
-    const subject = `Ihr Angebot${nrPart} - AYLUX Sonnenschutzsysteme`;
-    const greeting = customerName ? `Sehr geehrte/r ${customerName},` : 'Sehr geehrte Damen und Herren,';
-    const body =
-      `${greeting}\n\n` +
-      `vielen Dank für Ihre Anfrage. In der Anlage erhalten Sie unser Angebot${nrPart}.\n\n` +
-      `Bei Rückfragen stehen wir Ihnen gerne zur Verfügung.\n\n` +
-      `Mit freundlichen Grüßen\n` +
-      `Ihr AYLUX Team`;
-    return `mailto:${encodeURIComponent(customerEmail)}` +
-      `?subject=${encodeURIComponent(subject)}` +
-      `&body=${encodeURIComponent(body)}`;
-  };
+  // buildAngebotMailto removed - replaced by EmailComposer
 
-  // Send the latest angebot for a lead by e-mail (downloads PDF + opens mail client)
+  // Send the latest angebot for a lead by e-mail (opens in-app composer)
   const handleSendLeadByEmail = async (lead: Lead | LeadDetail) => {
     if (!lead.customer_email) {
       toast.warning('Keine E-Mail', 'Für diesen Kunden ist keine E-Mail-Adresse hinterlegt.');
@@ -463,34 +447,51 @@ export default function Angebote() {
       const leadDetail: LeadDetail = 'items' in lead
         ? lead
         : await api.get<LeadDetail>(`/leads/${lead.id}`);
-      const latestAngebot = getLatestAngebot(leadDetail);
-      const pdfResult = await generateAngebotPDF(
-        buildPdfPayload(leadDetail, latestAngebot),
-        { returnBlob: true }
-      );
-      if (!pdfResult?.blob) throw new Error('PDF blob could not be generated');
 
-      // Persist freshly-generated PDF so the cache stays in sync
-      if (latestAngebot) {
-        await saveAngebotPdf(leadDetail.id, latestAngebot.id, pdfResult.blob);
-      } else {
-        await saveLeadPdf(leadDetail.id, pdfResult.blob);
+      const angeboteList = leadDetail.angebote || [];
+      const angeboteAttachments: import('../components/EmailComposer').AngebotAttachment[] = [];
+
+      // Generate and save PDF for each angebot
+      for (const ang of angeboteList) {
+        try {
+          const pdfResult = await generateAngebotPDF(
+            buildPdfPayload(leadDetail, ang),
+            { returnBlob: true }
+          );
+          if (pdfResult?.blob) {
+            await saveAngebotPdf(leadDetail.id, ang.id, pdfResult.blob);
+            angeboteAttachments.push({ id: ang.id, angebot_nummer: ang.angebot_nummer || `#${ang.id}`, ready: true });
+          } else {
+            angeboteAttachments.push({ id: ang.id, angebot_nummer: ang.angebot_nummer || `#${ang.id}`, ready: false });
+          }
+        } catch {
+          angeboteAttachments.push({ id: ang.id, angebot_nummer: ang.angebot_nummer || `#${ang.id}`, ready: false });
+        }
       }
 
-      downloadPdfBlob(pdfResult.blob, pdfResult.fileName);
+      // If no angebote, generate lead-level PDF
+      if (angeboteList.length === 0) {
+        const pdfResult = await generateAngebotPDF(
+          buildPdfPayload(leadDetail, undefined),
+          { returnBlob: true }
+        );
+        if (pdfResult?.blob) {
+          await saveLeadPdf(leadDetail.id, pdfResult.blob);
+        }
+      }
 
       const customerName = `${leadDetail.customer_firstname || ''} ${leadDetail.customer_lastname || ''}`.trim();
-      const mailto = buildAngebotMailto(
-        leadDetail.customer_email,
-        customerName,
-        latestAngebot?.angebot_nummer || leadDetail.angebot_nummer
-      );
-      window.location.href = mailto;
+      const greeting = customerName ? `Sehr geehrte/r ${customerName},` : 'Sehr geehrte Damen und Herren,';
+      const angCount = angeboteAttachments.length;
 
-      toast.success(
-        'PDF heruntergeladen',
-        'Bitte fügen Sie die heruntergeladene PDF als Anhang in Ihrer E-Mail hinzu.'
-      );
+      setEmailComposer({
+        to: leadDetail.customer_email,
+        subject: `Ihr Angebot - AYLUX Sonnenschutzsysteme`,
+        body: `${greeting}\n\nvielen Dank für Ihre Anfrage. In der Anlage erhalten Sie ${angCount > 1 ? 'unsere Angebote' : 'unser Angebot'}.\n\nBei Rückfragen stehen wir Ihnen gerne zur Verfügung.\n\nMit freundlichen Grüßen\nIhr AYLUX Team`,
+        leadId: leadDetail.id,
+        emailType: 'angebot',
+        angebote: angeboteAttachments.length > 0 ? angeboteAttachments : undefined,
+      });
     } catch (err) {
       console.error('Send lead by e-mail failed:', err);
       toast.error('Fehler', 'E-Mail konnte nicht vorbereitet werden.');
@@ -515,20 +516,19 @@ export default function Angebote() {
       if (!pdfResult?.blob) throw new Error('PDF blob could not be generated');
 
       await saveAngebotPdf(leadId, angebotId, pdfResult.blob);
-      downloadPdfBlob(pdfResult.blob, pdfResult.fileName);
 
       const customerName = `${leadDetail.customer_firstname || ''} ${leadDetail.customer_lastname || ''}`.trim();
-      const mailto = buildAngebotMailto(
-        leadDetail.customer_email,
-        customerName,
-        angebot.angebot_nummer
-      );
-      window.location.href = mailto;
+      const nrPart = angebot.angebot_nummer ? ` Nr. ${angebot.angebot_nummer}` : '';
+      const greeting = customerName ? `Sehr geehrte/r ${customerName},` : 'Sehr geehrte Damen und Herren,';
 
-      toast.success(
-        'PDF heruntergeladen',
-        'Bitte fügen Sie die heruntergeladene PDF als Anhang in Ihrer E-Mail hinzu.'
-      );
+      setEmailComposer({
+        to: leadDetail.customer_email,
+        subject: `Ihr Angebot${nrPart} - AYLUX Sonnenschutzsysteme`,
+        body: `${greeting}\n\nvielen Dank für Ihre Anfrage. In der Anlage erhalten Sie unser Angebot${nrPart}.\n\nBei Rückfragen stehen wir Ihnen gerne zur Verfügung.\n\nMit freundlichen Grüßen\nIhr AYLUX Team`,
+        leadId: leadDetail.id,
+        emailType: 'angebot',
+        angebote: [{ id: angebotId, angebot_nummer: angebot.angebot_nummer || `#${angebotId}`, ready: true }],
+      });
     } catch (err) {
       console.error('Send angebot by e-mail failed:', err);
       toast.error('Fehler', 'E-Mail konnte nicht vorbereitet werden.');
@@ -1135,6 +1135,22 @@ export default function Angebote() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Email Composer Modal */}
+      <AnimatePresence>
+        {emailComposer && (
+          <EmailComposer
+            to={emailComposer.to}
+            subject={emailComposer.subject}
+            body={emailComposer.body}
+            leadId={emailComposer.leadId}
+            angebote={emailComposer.angebote}
+            emailType={emailComposer.emailType}
+            attachmentName={emailComposer.attachmentName}
+            onClose={() => setEmailComposer(null)}
+          />
         )}
       </AnimatePresence>
     </div>
