@@ -212,23 +212,21 @@ function Layout({ children }: { children: React.ReactNode }) {
                 </svg>
                 <span>Produkte & Preise</span>
               </a>
+              <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); openEmailSettings(); setMobileMenuOpen(false); }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                  <polyline points="22,6 12,13 2,6" />
+                </svg>
+                <span>E-Mail Einstellungen</span>
+              </a>
               {isAdminBranch() && (
-                <>
-                  <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); openEmailSettings(); setMobileMenuOpen(false); }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                      <polyline points="22,6 12,13 2,6" />
-                    </svg>
-                    <span>E-Mail Einstellungen</span>
-                  </a>
-                  <a href="#" className={`nav-item ${isActive('/filialen') ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); handleNavClick('/filialen'); }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                      <polyline points="9 22 9 12 15 12 15 22" />
-                    </svg>
-                    <span>Filialübersicht</span>
-                  </a>
-                </>
+                <a href="#" className={`nav-item ${isActive('/filialen') ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); handleNavClick('/filialen'); }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                  </svg>
+                  <span>Filialübersicht</span>
+                </a>
               )}
               {isAdmin && (
                 <a href="#" className="nav-item" onClick={(e) => { e.preventDefault(); openAdminPanel(); setMobileMenuOpen(false); }}>
