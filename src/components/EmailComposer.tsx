@@ -48,7 +48,7 @@ const EmailComposer = ({ to, subject: initialSubject, body: initialBody, formId,
     return new Set();
   });
   const hasMultiAngebote = !!(angebote && angebote.length > 1);
-  const hasSingleAngebot = !!(angebote && angebote.length === 1);
+  const _hasSingleAngebot = !!(angebote && angebote.length === 1);
 
   // For leads with pre-saved PDFs
   const isLeadPdfPreSaved = !!leadId && !!(angebote && angebote.some(a => a.ready));

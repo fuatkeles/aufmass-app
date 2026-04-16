@@ -424,16 +424,7 @@ export default function Angebote() {
   };
 
   // Trigger browser download of a PDF blob
-  const downloadPdfBlob = (blob: Blob, fileName: string) => {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
+  // downloadPdfBlob removed - emails now sent via EmailComposer
 
   // buildAngebotMailto removed - replaced by EmailComposer
 
