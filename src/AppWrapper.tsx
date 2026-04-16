@@ -397,7 +397,7 @@ function ProtectedContent() {
                 <Route path="/angebot/new" element={<Angebote />} />
                 <Route path="/montageteam" element={<Montageteam />} />
                 <Route path="/produkte" element={<ProductPricing />} />
-                <Route path="/filialen" element={<BranchUebersicht />} />
+                <Route path="/filialen" element={isAdminBranch() ? <BranchUebersicht /> : <Navigate to="/" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>
