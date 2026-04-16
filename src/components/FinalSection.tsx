@@ -17,6 +17,7 @@ interface FinalSectionProps {
   onExport: () => Promise<void> | void;
   onSave: () => Promise<void> | void;
   onNewForm: () => void;
+  onSendEmail?: () => void;
   customerSignature?: string | null;
   signatureName?: string | null;
   onSignatureSave?: (signatureData: string, signerName: string) => void;
@@ -32,6 +33,7 @@ const FinalSection = ({
   onExport,
   onSave,
   onNewForm,
+  onSendEmail,
   customerSignature,
   signatureName,
   onSignatureSave,
@@ -399,10 +401,10 @@ const FinalSection = ({
           {!isSaved && (
             <>
               <div className="export-info">
-                <h3>Bereit zum Absenden</h3>
+                <h3>Aufmaß speichern</h3>
                 <p>
                   {isValid
-                    ? 'Alle Daten wurden erfasst. Bitte zuerst absenden, dann können Sie das PDF exportieren.'
+                    ? 'Alle Daten wurden erfasst. Speichern Sie das Aufmaß, um fortzufahren.'
                     : 'Bitte laden Sie mindestens 2 Bilder hoch, um fortzufahren.'}
                 </p>
               </div>
@@ -420,21 +422,37 @@ const FinalSection = ({
                       <span className="button-text">Wird gespeichert...</span>
                     </span>
                   ) : (
-                    <span className="button-text">Absenden</span>
+                    <span className="button-text">Aufmaß speichern</span>
                   )}
                 </motion.button>
               </div>
             </>
           )}
 
-          {/* Durum 2: Kaydedildi, PDF henüz indirilmedi */}
+          {/* Durum 2: Kaydedildi */}
           {isSaved && !pdfExported && (
             <>
               <div className="export-info success">
                 <h3>Erfolgreich gespeichert!</h3>
-                <p>Das Aufmaß wurde gespeichert. Sie können jetzt das PDF exportieren.</p>
+                <p>Das Aufmaß wurde gespeichert. Möchten Sie eine E-Mail an den Kunden senden?</p>
               </div>
               <div className="action-buttons three-buttons">
+                {onSendEmail && (
+                  <motion.button
+                    className="save-button primary"
+                    onClick={onSendEmail}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <span className="button-text">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16" style={{ marginRight: 6, verticalAlign: 'middle' }}>
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                        <polyline points="22,6 12,13 2,6" />
+                      </svg>
+                      E-Mail senden
+                    </span>
+                  </motion.button>
+                )}
                 <motion.button
                   className={`export-button ${isExporting ? 'disabled' : ''}`}
                   onClick={handleExport}

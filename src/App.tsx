@@ -44,12 +44,13 @@ interface AufmassFormProps {
   onDraftSave?: (data: FormData) => Promise<void>;
   onSignaturePersist?: (signatureData: string, signatureName: string) => Promise<void> | void;
   onCancel?: () => void;
+  onSendEmail?: () => void;
   formStatus?: string;
   onStatusChange?: (status: string) => void;
   isExistingForm?: boolean;
 }
 
-function AufmassForm({ initialData, onSave, onDraftSave, onSignaturePersist, onCancel, formStatus, onStatusChange, isExistingForm }: AufmassFormProps) {
+function AufmassForm({ initialData, onSave, onDraftSave, onSignaturePersist, onCancel, onSendEmail, formStatus, onStatusChange, isExistingForm }: AufmassFormProps) {
   const [formData, setFormData] = useState<FormData>(initialData || {
     datum: new Date().toISOString().split('T')[0],
     aufmasser: '',
@@ -1330,6 +1331,7 @@ function AufmassForm({ initialData, onSave, onDraftSave, onSignaturePersist, onC
             onExport={handleExport}
             onSave={handleSaveOnly}
             onNewForm={handleNewForm}
+            onSendEmail={onSendEmail}
             customerSignature={formData.customerSignature}
             signatureName={formData.signatureName}
             onSignatureSave={(sigData, sigName) => {

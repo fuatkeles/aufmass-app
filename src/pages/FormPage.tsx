@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { AufmassForm } from '../App';
 import { FormData } from '../types';
 import { DynamicFormData } from '../types/productConfig';
 import { getForm, createForm, updateForm, uploadImages, savePdf, updateLeadStatus, getAbnahme, getAbnahmeImages, FormData as ApiFormData } from '../services/api';
 import { generatePDF } from '../utils/pdfGenerator';
+import EmailComposer from '../components/EmailComposer';
 import { useToast } from '../components/Toast';
 
 interface LeadItem {
@@ -42,6 +44,10 @@ const FormPage = () => {
   const { id } = useParams<{ id: string }>();
   const toast = useToast();
   const [initialData, setInitialData] = useState<FormData | null>(null);
+  const [emailComposer, setEmailComposer] = useState<{ to: string; subject: string; body: string; formId: number } | null>(null);
+  const [savedFormId, setSavedFormId] = useState<number | null>(null);
+  const [savedKundeEmail, setSavedKundeEmail] = useState('');
+  const [savedKundeName, setSavedKundeName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formStatus, setFormStatus] = useState<string>('neu');
@@ -153,7 +159,7 @@ const FormPage = () => {
       await persistStoredPdf(formId);
     } catch (err) {
       console.error('Error persisting signature:', err);
-      toast.warning('PDF', 'Unterschrift lokal eklendi, fakat sofortiges PDF-Update başarısız oldu. Absenden ile tekrar kaydedebilirsiniz.');
+      toast.warning('PDF', 'Unterschrift lokal eklendi, fakat sofortiges PDF-Update başarısız oldu. Speichern ile tekrar kaydedebilirsiniz.');
     }
   };
 
@@ -339,6 +345,11 @@ const FormPage = () => {
         toast.warning('PDF', 'Form kaydedildi ancak PDF kaydı başarısız oldu.');
       }
 
+      // Store for email sending
+      setSavedFormId(formId);
+      setSavedKundeEmail(data.kundeEmail || '');
+      setSavedKundeName(`${data.kundeVorname || ''} ${data.kundeNachname || ''}`.trim());
+
       return formId;
     } catch (err) {
       console.error('Error saving form:', err);
@@ -438,17 +449,44 @@ const FormPage = () => {
     );
   }
 
+  const handleSendEmail = () => {
+    const fid = savedFormId || (id && id !== 'new' ? Number(id) : null);
+    if (!fid) return;
+    // PDF is already generated during handleSave, just open composer
+    setEmailComposer({
+      to: savedKundeEmail || initialData?.kundeEmail || '',
+      subject: `Ihr Aufmaß - AYLUX`,
+      body: `Sehr geehrte/r ${savedKundeName || 'Kunde'},\n\nanbei erhalten Sie die Dokumentation Ihres Aufmaßes.\n\nBei Rückfragen stehen wir Ihnen gerne zur Verfügung.\n\nMit freundlichen Grüßen\nIhr AYLUX Team`,
+      formId: fid
+    });
+  };
+
   return (
-    <AufmassForm
-      initialData={initialData}
-      onSave={handleSave}
-      onDraftSave={handleDraftSave}
-      onSignaturePersist={handleSignaturePersist}
-      onCancel={handleCancel}
-      formStatus={formStatus}
-      onStatusChange={handleStatusChange}
-      isExistingForm={id !== 'new'}
-    />
+    <>
+      <AufmassForm
+        initialData={initialData}
+        onSave={handleSave}
+        onDraftSave={handleDraftSave}
+        onSignaturePersist={handleSignaturePersist}
+        onCancel={handleCancel}
+        onSendEmail={handleSendEmail}
+        formStatus={formStatus}
+        onStatusChange={handleStatusChange}
+        isExistingForm={id !== 'new'}
+      />
+      <AnimatePresence>
+        {emailComposer && (
+          <EmailComposer
+            to={emailComposer.to}
+            subject={emailComposer.subject}
+            body={emailComposer.body}
+            formId={emailComposer.formId}
+            emailType="aufmass"
+            onClose={() => setEmailComposer(null)}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 
