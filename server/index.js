@@ -385,6 +385,23 @@ async function initializeTables() {
     await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS smtp_enabled BOOLEAN DEFAULT false`);
     console.log('SMTP branch settings columns ready');
 
+    // ============ BRANCH COMPANY INFO (Firmenangaben) ============
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_name VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_strasse VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_plz VARCHAR(20)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_ort VARCHAR(100)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_telefon VARCHAR(50)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_email VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_ust_id VARCHAR(50)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_web VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_steuernr VARCHAR(50)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_iban VARCHAR(50)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_bic VARCHAR(20)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_bank_name VARCHAR(100)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_geschaeftsfuehrer VARCHAR(255)`);
+    await pool.query(`ALTER TABLE aufmass_branch_settings ADD COLUMN IF NOT EXISTS company_handelsregister VARCHAR(100)`);
+    console.log('Branch company info columns ready');
+
     // User-level SMTP (hybrid: user override > branch default)
     await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS smtp_host VARCHAR(255)`);
     await pool.query(`ALTER TABLE aufmass_users ADD COLUMN IF NOT EXISTS smtp_port INT DEFAULT 587`);
@@ -5513,6 +5530,102 @@ app.get('/api/email/log', authenticateToken, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('Error fetching email log:', err);
     res.status(500).json({ error: 'Failed to fetch email log' });
+  }
+});
+
+// ============ BRANCH COMPANY INFO (Firmenangaben) ============
+
+// GET /api/branch/company-info — get company info for current branch (admin only)
+app.get('/api/branch/company-info', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const branchSlug = req.branchId || 'koblenz';
+    const result = await pool.query(
+      `SELECT company_name, company_strasse, company_plz, company_ort, company_telefon,
+              company_email, company_ust_id, company_web, company_steuernr, company_iban,
+              company_bic, company_bank_name, company_geschaeftsfuehrer, company_handelsregister
+       FROM aufmass_branch_settings WHERE branch_slug = $1`,
+      [branchSlug]
+    );
+    if (result.rows.length === 0) {
+      return res.json({
+        company_name: '', company_strasse: '', company_plz: '', company_ort: '',
+        company_telefon: '', company_email: '', company_ust_id: '', company_web: '',
+        company_steuernr: '', company_iban: '', company_bic: '', company_bank_name: '',
+        company_geschaeftsfuehrer: '', company_handelsregister: ''
+      });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching company info:', err);
+    res.status(500).json({ error: 'Failed to fetch company info' });
+  }
+});
+
+// PUT /api/branch/company-info — save company info for current branch (admin only)
+app.put('/api/branch/company-info', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const branchSlug = req.branchId || 'koblenz';
+    const {
+      company_name, company_strasse, company_plz, company_ort, company_telefon,
+      company_email, company_ust_id, company_web, company_steuernr, company_iban,
+      company_bic, company_bank_name, company_geschaeftsfuehrer, company_handelsregister
+    } = req.body;
+
+    // Required field validation
+    if (!company_name || !company_strasse || !company_plz || !company_ort ||
+        !company_telefon || !company_email || !company_ust_id) {
+      return res.status(400).json({ error: 'Pflichtfelder fehlen (Firmenname, Adresse, Telefon, E-Mail, USt-IdNr)' });
+    }
+
+    // Ensure branch_settings row exists
+    await pool.query(
+      `INSERT INTO aufmass_branch_settings (branch_slug) VALUES ($1) ON CONFLICT (branch_slug) DO NOTHING`,
+      [branchSlug]
+    );
+
+    await pool.query(
+      `UPDATE aufmass_branch_settings SET
+        company_name = $2, company_strasse = $3, company_plz = $4, company_ort = $5,
+        company_telefon = $6, company_email = $7, company_ust_id = $8, company_web = $9,
+        company_steuernr = $10, company_iban = $11, company_bic = $12, company_bank_name = $13,
+        company_geschaeftsfuehrer = $14, company_handelsregister = $15
+       WHERE branch_slug = $1`,
+      [branchSlug, company_name, company_strasse, company_plz, company_ort,
+       company_telefon, company_email, company_ust_id, company_web || '',
+       company_steuernr || '', company_iban || '', company_bic || '', company_bank_name || '',
+       company_geschaeftsfuehrer || '', company_handelsregister || '']
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error saving company info:', err);
+    res.status(500).json({ error: 'Failed to save company info' });
+  }
+});
+
+// GET /api/branch/company-info-public — public read for PDF generation (any authenticated user)
+app.get('/api/branch/company-info-public', authenticateToken, async (req, res) => {
+  try {
+    const branchSlug = req.branchId || 'koblenz';
+    const result = await pool.query(
+      `SELECT company_name, company_strasse, company_plz, company_ort, company_telefon,
+              company_email, company_ust_id, company_web, company_steuernr, company_iban,
+              company_bic, company_bank_name, company_geschaeftsfuehrer, company_handelsregister
+       FROM aufmass_branch_settings WHERE branch_slug = $1`,
+      [branchSlug]
+    );
+    if (result.rows.length === 0) {
+      return res.json({
+        company_name: '', company_strasse: '', company_plz: '', company_ort: '',
+        company_telefon: '', company_email: '', company_ust_id: '', company_web: '',
+        company_steuernr: '', company_iban: '', company_bic: '', company_bank_name: '',
+        company_geschaeftsfuehrer: '', company_handelsregister: ''
+      });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching public company info:', err);
+    res.status(500).json({ error: 'Failed to fetch company info' });
   }
 });
 

@@ -1185,6 +1185,34 @@ export const sendEmail = (data: {
 
 export const getEmailLog = (): Promise<EmailLogEntry[]> => api.get('/email/log');
 
+// ============ BRANCH COMPANY INFO (Firmenangaben) ============
+export interface BranchCompanyInfo {
+  company_name: string;
+  company_strasse: string;
+  company_plz: string;
+  company_ort: string;
+  company_telefon: string;
+  company_email: string;
+  company_ust_id: string;
+  company_web: string;
+  company_steuernr: string;
+  company_iban: string;
+  company_bic: string;
+  company_bank_name: string;
+  company_geschaeftsfuehrer: string;
+  company_handelsregister: string;
+}
+
+export const getBranchCompanyInfo = (): Promise<BranchCompanyInfo> =>
+  api.get('/branch/company-info');
+
+export const saveBranchCompanyInfo = (info: BranchCompanyInfo): Promise<{ success: boolean }> =>
+  api.put('/branch/company-info', info);
+
+// Public read for PDF generation (any authenticated user)
+export const getBranchCompanyInfoPublic = (): Promise<BranchCompanyInfo> =>
+  api.get('/branch/company-info-public');
+
 // ============ BRANCH USAGE DASHBOARD ============
 export interface BranchUserStat {
   id: number;

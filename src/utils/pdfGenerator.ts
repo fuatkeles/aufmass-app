@@ -238,9 +238,24 @@ const isServerImage = (obj: unknown): obj is ServerImage => {
          typeof (obj as ServerImage).id === 'number';
 };
 
-export const generatePDF = async (formData: FormData, options?: { returnBlob?: boolean; forSignature?: boolean; abnahmeOnly?: boolean }): Promise<{ blob: Blob; fileName: string } | void> => {
+export interface BranchCompanyInfoForPdf {
+  company_name: string;
+  company_strasse?: string;
+  company_plz?: string;
+  company_ort?: string;
+  company_telefon?: string;
+  company_email?: string;
+}
+
+export const generatePDF = async (
+  formData: FormData,
+  options?: { returnBlob?: boolean; forSignature?: boolean; abnahmeOnly?: boolean; companyInfo?: BranchCompanyInfoForPdf }
+): Promise<{ blob: Blob; fileName: string } | void> => {
   const forSignature = options?.forSignature || false;
   const abnahmeOnly = options?.abnahmeOnly || false;
+  const { getCompanyInfoForPdf } = await import('./companyInfoCache');
+  const companyInfo = options?.companyInfo || (await getCompanyInfoForPdf()) || undefined;
+  const companyName = companyInfo?.company_name || 'AYLUX Sonnenschutzsysteme';
   const pdf = new jsPDF();
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -257,7 +272,7 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
     return false;
   };
 
-  // Header - AYLUX Logo
+  // Header - AYLUX Logo (sabit, branch'a göre değişmez)
   pdf.setFillColor(127, 169, 61);
   pdf.rect(pageWidth - 70, 10, 50, 25, 'F');
   pdf.setTextColor(255, 255, 255);
@@ -266,6 +281,23 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
   pdf.text('AYLUX', pageWidth - 60, 22);
   pdf.setFontSize(7);
   pdf.text('SONNENSCHUTZSYSTEME', pageWidth - 65, 28);
+
+  // Absender line (branch firma bilgileri — küçük tek satır üstte)
+  if (companyInfo && companyInfo.company_name) {
+    const absenderParts: string[] = [companyInfo.company_name];
+    if (companyInfo.company_strasse) absenderParts.push(companyInfo.company_strasse);
+    if (companyInfo.company_plz || companyInfo.company_ort) {
+      absenderParts.push(`${companyInfo.company_plz || ''} ${companyInfo.company_ort || ''}`.trim());
+    }
+    if (companyInfo.company_telefon) absenderParts.push(`Tel: ${companyInfo.company_telefon}`);
+    pdf.setTextColor(120, 120, 120);
+    pdf.setFontSize(7);
+    pdf.setFont('helvetica', 'normal');
+    const absenderText = absenderParts.join('  ·  ');
+    const maxAbsenderWidth = pageWidth - 70 - margin - 4;
+    const absenderLines = pdf.splitTextToSize(absenderText, maxAbsenderWidth);
+    pdf.text(absenderLines, margin, 14);
+  }
 
   // Title
   pdf.setTextColor(0, 0, 0);
@@ -1795,6 +1827,12 @@ export const generatePDF = async (formData: FormData, options?: { returnBlob?: b
       `Erstellt am: ${new Date().toLocaleDateString('de-DE')}`,
       margin,
       pageHeight - 10
+    );
+    pdf.text(
+      companyName,
+      pageWidth - margin,
+      pageHeight - 10,
+      { align: 'right' }
     );
   }
 
